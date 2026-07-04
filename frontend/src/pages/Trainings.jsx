@@ -1,12 +1,18 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { Navigate, useSearchParams } from 'react-router-dom';
+import { Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Play, FileText, Presentation, Image as ImageIcon, Music, CheckCircle2, Circle, Plus, Trash2, ShieldAlert, Video, ExternalLink } from 'lucide-react';
 import CalendarWidget from '../components/CalendarWidget';
 
 export default function Trainings() {
   const { token, user } = useContext(AuthContext);
+
+  const location = useLocation();
+
+  if (!token) {
+    return <Navigate to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  }
 
   const backendUrl = '';
   const [trainings, setTrainings] = useState([]);
@@ -14,8 +20,9 @@ export default function Trainings() {
   const [selectedTraining, setSelectedTraining] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const trainingIdParam = searchParams.get('id');
+  const autoJoinParam = searchParams.get('autoJoin');
 
   // Meeting Attendance States
   const [isAttendingMeeting, setIsAttendingMeeting] = useState(false);
@@ -24,7 +31,7 @@ export default function Trainings() {
 
   // New Training Form
   const [newTraining, setNewTraining] = useState({
-    title: '', description: '', type: 'Video', url: '', duration: '', projectId: '', scheduledAt: ''
+    title: '', description: '', type: 'Video', url: '', duration: '', projectId: '', scheduledAt: '', file: null
   });
 
   const isTrainee = !['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(user?.role);
@@ -63,9 +70,21 @@ export default function Trainings() {
     }
   }, [newTraining.type, newTraining.projectId, projects]);
 
+  useEffect(() => {
+    // Check if we need to auto-join a meeting
+    if (autoJoinParam === 'true' && selectedTraining && selectedTraining.type === 'Meeting' && !isAttendingMeeting) {
+      handleStartMeeting(selectedTraining.id, selectedTraining.url);
+      
+      // Clean up the URL so it doesn't auto-join again on refresh
+      searchParams.delete('autoJoin');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [autoJoinParam, selectedTraining, isAttendingMeeting]);
+
   const fetchTrainings = async () => {
     try {
-      const response = await axios.get(`${backendUrl}/api/trainings`, {
+      const queryParam = trainingIdParam ? `?id=${trainingIdParam}` : '';
+      const response = await axios.get(`${backendUrl}/api/trainings${queryParam}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setTrainings(response.data);
@@ -94,15 +113,32 @@ export default function Trainings() {
   const handleCreateTraining = async (e) => {
     e.preventDefault();
     try {
+      const formData = new FormData();
+      formData.append('title', newTraining.title);
+      formData.append('description', newTraining.description);
+      formData.append('type', newTraining.type);
+      formData.append('duration', newTraining.duration);
+      if (newTraining.projectId) formData.append('projectId', newTraining.projectId);
+      if (newTraining.scheduledAt) formData.append('scheduledAt', newTraining.scheduledAt);
+      
       let formattedUrl = newTraining.url.trim();
-      if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
+      if (formattedUrl && !/^https?:\/\//i.test(formattedUrl) && !newTraining.file) {
         formattedUrl = 'https://' + formattedUrl;
       }
-      await axios.post(`${backendUrl}/api/trainings`, { ...newTraining, url: formattedUrl }, {
-        headers: { Authorization: `Bearer ${token}` }
+      formData.append('url', formattedUrl);
+
+      if (newTraining.file) {
+        formData.append('file', newTraining.file);
+      }
+
+      await axios.post(`${backendUrl}/api/trainings`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
       });
       setIsCreating(false);
-      setNewTraining({ title: '', description: '', type: 'Video', url: '', duration: '', projectId: '', scheduledAt: '' });
+      setNewTraining({ title: '', description: '', type: 'Video', url: '', duration: '', projectId: '', scheduledAt: '', file: null });
       fetchTrainings();
     } catch (error) {
       console.error('Failed to create training', error);
@@ -545,8 +581,9 @@ export default function Trainings() {
                           <button
                             type="button"
                             onClick={() => {
-                              navigator.clipboard.writeText(selectedTraining.url);
-                              alert('Link copied to clipboard!');
+                              const guestLink = `${window.location.origin}/guest-join?id=${selectedTraining.id}`;
+                              navigator.clipboard.writeText(guestLink);
+                              alert('Guest Link copied! Please share THIS link with your attendees. They will NOT need to register or log in.');
                             }}
                             style={{
                               background: 'var(--bg-tertiary)',
@@ -709,27 +746,42 @@ export default function Trainings() {
                 <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                   {newTraining.type === 'Meeting' ? "Meeting URL (Auto-generated room, or paste custom Google Meet link) *" : "URL / File Location *"}
                 </label>
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <input 
-                    type="text" 
-                    value={newTraining.url}
-                    onChange={(e) => setNewTraining({ ...newTraining, url: e.target.value })}
-                    placeholder={newTraining.type === 'Meeting' ? "https://meet.google.com/abc-defg-hij" : "https://example.com/video.mp4"}
-                    style={{ flex: 1, padding: '10px', border: '1px solid var(--border-glass)', borderRadius: '8px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
-                    required
-                  />
-                  {newTraining.type === 'Meeting' && newTraining.url && (
-                    <button 
-                      type="button" 
-                      onClick={() => {
-                        navigator.clipboard.writeText(newTraining.url);
-                        alert("Meeting link copied to clipboard!");
-                      }}
-                      className="btn btn-secondary"
-                      style={{ padding: '0 12px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-glass)', borderRadius: '8px', cursor: 'pointer' }}
-                    >
-                      Copy
-                    </button>
+                <div style={{ display: 'flex', gap: '8px', flexDirection: 'column' }}>
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {!newTraining.file && (
+                      <input 
+                        type="text" 
+                        value={newTraining.url}
+                        onChange={(e) => setNewTraining({ ...newTraining, url: e.target.value })}
+                        placeholder={newTraining.type === 'Meeting' ? "https://meet.google.com/abc-defg-hij" : "https://example.com/video.mp4"}
+                        style={{ flex: 1, padding: '10px', border: '1px solid var(--border-glass)', borderRadius: '8px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                        required={!newTraining.file}
+                      />
+                    )}
+                    {newTraining.type === 'Meeting' && newTraining.url && (
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(newTraining.url);
+                          alert("Meeting link copied to clipboard!");
+                        }}
+                        className="btn btn-secondary"
+                        style={{ padding: '0 12px', height: '42px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-glass)', borderRadius: '8px', cursor: 'pointer' }}
+                      >
+                        Copy
+                      </button>
+                    )}
+                  </div>
+                  {newTraining.type !== 'Meeting' && !newTraining.url && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>OR Upload File:</span>
+                      <input 
+                        type="file" 
+                        onChange={(e) => setNewTraining({ ...newTraining, file: e.target.files[0] })}
+                        style={{ flex: 1, padding: '8px', border: '1px solid var(--border-glass)', borderRadius: '8px', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.85rem' }}
+                        required={!newTraining.url}
+                      />
+                    </div>
                   )}
                 </div>
                 {newTraining.type === 'Meeting' && (

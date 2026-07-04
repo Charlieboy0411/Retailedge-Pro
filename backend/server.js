@@ -149,53 +149,42 @@ const { spawn } = require('child_process');
 let tunnelProcess = null;
 
 async function startTunnel(port) {
-  console.log('\n🌐 Starting public Cloudflare tunnel (so participants can join via mobile data)...');
+  console.log('\n🌐 Starting public tunnel (so participants can join via mobile data)...');
+  const localtunnel = require('localtunnel');
 
   try {
-    // Spawn cloudflared tunnel pointing to the local port
-    const child = spawn('npx', ['--yes', 'cloudflared', 'tunnel', '--url', `http://localhost:${port}`], {
-      shell: true
-    });
-    tunnelProcess = child;
+    // Start localtunnel pointing to the local port with custom subdomain
+    const tunnel = await localtunnel({ port: port, subdomain: 'retailedge-pro' });
+    tunnelProcess = tunnel;
 
-    let urlFound = false;
+    publicTunnelUrl = tunnel.url;
+    tunnelStatus = 'active';
+    console.log(`\n✅ PUBLIC TUNNEL ACTIVE (via localtunnel)`);
+    console.log(`   Join URL: ${publicTunnelUrl}`);
+    console.log(`   Participants can join from any network (mobile data, other Wi-Fi, etc.)\n`);
 
-    child.stderr.on('data', (data) => {
-      const output = data.toString();
-      // Look for trycloudflare.com URL in stderr output
-      const match = output.match(/https:\/\/[a-z0-9-]+\.trycloudflare\.com/);
-      if (match && !urlFound) {
-        urlFound = true;
-        publicTunnelUrl = match[0];
-        tunnelStatus = 'active';
-        console.log(`\n✅ PUBLIC TUNNEL ACTIVE (via Cloudflare)`);
-        console.log(`   Join URL: ${publicTunnelUrl}`);
-        console.log(`   Participants can join from any network (mobile data, other Wi-Fi, etc.)\n`);
-      }
-    });
-
-    child.on('close', (code) => {
-      console.log(`[Cloudflared] Process exited with code ${code}. Reconnecting in 10s...`);
+    tunnel.on('close', () => {
+      console.log(`[Localtunnel] Tunnel closed. Reconnecting in 10s...`);
       publicTunnelUrl = null;
       tunnelStatus = 'connecting';
       tunnelProcess = null;
       setTimeout(() => startTunnel(port), 10000);
     });
 
-    child.on('error', (err) => {
-      console.error('[Cloudflared] Process error:', err);
+    tunnel.on('error', (err) => {
+      console.error('[Localtunnel] Tunnel error:', err);
     });
 
-    process.on('SIGINT', () => {
+    process.once('SIGINT', () => {
       if (tunnelProcess) {
-        tunnelProcess.kill();
+        tunnelProcess.close();
       }
       process.exit(0);
     });
 
   } catch (err) {
     tunnelStatus = 'failed';
-    console.warn(`\n⚠️  Cloudflare Tunnel failed to start: ${err.message}`);
+    console.warn(`\n⚠️  Localtunnel failed to start: ${err.message}`);
     console.warn('   Retrying in 15 seconds...');
     console.warn('   OR manually set a tunnel URL via: POST /api/set-tunnel-url { url: "..." }\n');
     setTimeout(() => startTunnel(port), 15000);

@@ -224,10 +224,29 @@ export default function Dashboard() {
     }
   };
 
-  const handleCopyLink = (text) => {
-    navigator.clipboard.writeText(text);
-    setLinkCopied(true);
-    setTimeout(() => setLinkCopied(false), 2000);
+  const handleCopyLink = async (text) => {
+    try {
+      if (window.ClipboardItem) {
+        const html = `<a href="${text}">${text}</a>`;
+        const blobText = new Blob([text], { type: 'text/plain' });
+        const blobHtml = new Blob([html], { type: 'text/html' });
+        const data = [new ClipboardItem({
+            'text/plain': blobText,
+            'text/html': blobHtml
+        })];
+        await navigator.clipboard.write(data);
+      } else {
+        await navigator.clipboard.writeText(text);
+      }
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Clipboard write failed, falling back to writeText:', err);
+      navigator.clipboard.writeText(text).then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      }).catch(e => console.error(e));
+    }
   };
 
   const handleOpenOfflineModal = (quiz) => {
@@ -899,18 +918,26 @@ export default function Dashboard() {
                     <div style={{ display: 'flex', gap: '8px' }}>
                       <input 
                         type="text" 
-                        value={scheduledMeetingDetails?.url || ''} 
+                        value={scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : ''} 
                         readOnly 
                         style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'var(--bg-primary)', color: 'var(--text-secondary)', fontSize: '0.85rem' }} 
                       />
                       <button 
                         type="button" 
                         className="btn btn-secondary" 
-                        onClick={() => handleCopyLink(scheduledMeetingDetails?.url || '')}
+                        onClick={() => handleCopyLink(scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : '')}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '8px 12px' }}
                       >
                         {linkCopied ? <Check size={14} color="var(--success)" /> : <Copy size={14} />}
                         {linkCopied ? "Copied" : "Copy"}
+                      </button>
+                      <button 
+                        type="button" 
+                        className="btn btn-primary" 
+                        onClick={() => window.open(scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : '', '_blank')}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '8px 12px' }}
+                      >
+                        Open
                       </button>
                     </div>
                   </div>

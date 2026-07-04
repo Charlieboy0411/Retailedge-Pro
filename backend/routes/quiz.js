@@ -9,6 +9,14 @@ const Response = require('../models/Response');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const { Op } = require('sequelize');
 
+const multer = require('multer');
+const fs = require('fs');
+const pdfParse = require('pdf-parse');
+const officeParser = require('officeparser');
+const { OpenAI } = require('openai');
+const path = require('path');
+const upload = multer({ dest: 'uploads/' });
+
 router.get('/', requireAuth, async (req, res) => {
   try {
     const quizzes = await Quiz.findAll({
@@ -55,6 +63,110 @@ router.post('/', requireAuth, async (req, res) => {
     res.status(201).json(createdQuiz);
   } catch (err) {
     res.status(400).json({ error: 'Failed to create quiz', details: err.message });
+  }
+});
+
+// POST /api/quizzes/generate
+// Expects multipart form data: prompt (string), file (optional file)
+router.post('/generate', requireAuth, upload.single('file'), async (req, res) => {
+  try {
+    const { prompt } = req.body;
+    let fileContentText = '';
+    
+    if (req.file) {
+      const ext = path.extname(req.file.originalname).toLowerCase();
+      try {
+        if (ext === '.pdf') {
+          const dataBuffer = fs.readFileSync(req.file.path);
+          // Handle both function export and object export of pdf-parse
+          const parseFn = typeof pdfParse === 'function' ? pdfParse : (pdfParse.default || (pdfParse.PDFParse ? (d) => new pdfParse.PDFParse(d).parse() : null));
+          if (parseFn) {
+             const pdfData = await parseFn(dataBuffer);
+             fileContentText = pdfData.text || '';
+          }
+        } else if (ext === '.ppt' || ext === '.pptx') {
+          fileContentText = await officeParser.parseOfficeAsync(req.file.path);
+        }
+      } catch (parseErr) {
+        console.error('Failed to parse file:', parseErr);
+      } finally {
+        fs.unlink(req.file.path, () => {}); // clean up the temp file
+      }
+    }
+    
+    const openaiKey = process.env.OPENAI_API_KEY;
+    const deepseekKey = process.env.DEEPSEEK_API_KEY;
+
+    if (!openaiKey && !deepseekKey) {
+      return res.status(500).json({ error: 'Neither OPENAI_API_KEY nor DEEPSEEK_API_KEY is configured on the server. Please add one to the .env file.' });
+    }
+
+    let aiClient;
+    let aiModel;
+
+    if (openaiKey) {
+      aiClient = new OpenAI({ apiKey: openaiKey });
+      aiModel = 'gpt-4o-mini';
+    } else {
+      aiClient = new OpenAI({ 
+        baseURL: 'https://api.deepseek.com/v1',
+        apiKey: deepseekKey 
+      });
+      aiModel = 'deepseek-chat';
+    }
+
+    const finalPrompt = `
+You are an expert quiz generator. Generate a set of exactly 3 quiz questions based on the following instructions and content.
+
+User Prompt/Instructions:
+${prompt || 'Generate some random questions.'}
+
+${fileContentText ? `Source Content:\n${fileContentText}\n` : ''}
+
+You must return ONLY a JSON array of question objects matching the provided schema.
+Ensure options are provided for mcq and true_false types.
+Do NOT wrap the JSON in markdown code blocks like \`\`\`json. Return the raw JSON array ONLY.
+
+Schema per object:
+{
+  "type": "mcq" | "true_false" | "open_text",
+  "text": "The actual question text",
+  "options": ["Option 1", "Option 2"],
+  "correct_answer": "Option 1",
+  "time_limit": 30,
+  "points": 5,
+  "media_url": "",
+  "difficulty": "Medium"
+}
+`;
+
+    try {
+      const completion = await aiClient.chat.completions.create({
+        model: aiModel,
+        messages: [{ role: "user", content: finalPrompt }],
+      });
+
+      let responseText = completion.choices[0].message.content;
+      // Strip markdown code blocks if any
+      responseText = responseText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      const generatedQuestions = JSON.parse(responseText);
+      res.json(generatedQuestions);
+    } catch (apiErr) {
+      console.error('AI API Error:', apiErr.message);
+      // Fallback for quota limits or high demand
+      if (apiErr.status === 429 || apiErr.status === 503) {
+        return res.status(503).json({ 
+          error: 'The AI model is currently overloaded or your API key has reached its quota limit. Please try again later or check your API billing/quotas.',
+          details: apiErr.message
+        });
+      }
+      throw apiErr;
+    }
+
+  } catch (err) {
+    console.error('AI Generation Error:', err);
+    res.status(500).json({ error: 'Failed to generate questions with AI: ' + (err.message || 'Unknown error'), details: err.message });
   }
 });
 

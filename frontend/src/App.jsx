@@ -7,6 +7,7 @@ import PMDashboard from './pages/PMDashboard';
 import QuizBuilder from './pages/QuizBuilder';
 import LandingPage from './pages/LandingPage';
 import Join from './pages/Join';
+import GuestJoin from './pages/GuestJoin';
 import LiveQuiz from './pages/LiveQuiz';
 import OfflineQuiz from './pages/OfflineQuiz';
 import Reports from './pages/Reports';
@@ -38,6 +39,7 @@ function App() {
 
           {/* Standalone Learner Routes */}
           <Route path="/join" element={<Join />} />
+          <Route path="/guest-join" element={<GuestJoin />} />
           <Route path="/live/:roomCode" element={<LiveQuiz />} />
           <Route path="/offline-quiz/:quizId" element={<OfflineQuiz />} />
 

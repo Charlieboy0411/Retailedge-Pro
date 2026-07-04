@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 
@@ -14,6 +14,7 @@ const SHELFY_TIPS = [
 
 export default function Login() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { login } = useContext(AuthContext);
 
   // Login form
@@ -56,7 +57,8 @@ export default function Login() {
     try {
       const response = await axios.post('/api/auth/login', { email, password });
       login(response.data.token, response.data.user);
-      navigate('/dashboard');
+      const returnUrl = searchParams.get('returnUrl') || '/dashboard';
+      navigate(returnUrl);
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
     }
@@ -70,6 +72,7 @@ export default function Login() {
       Client:     'client@quizhive.com',
       Supervisor: 'supervisor@quizhive.com',
       Marketing:  'marketing@quizhive.com',
+      Employee:   'staff@quizhive.com',
     };
     setEmail(creds[role] || '');
     setPassword('password123');
@@ -259,7 +262,7 @@ export default function Login() {
           <div style={{ marginBottom: '24px' }}>
             <p style={{ fontSize: '0.75rem', fontWeight: 600, color: '#94A3B8', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '10px' }}>Quick Login As</p>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {['Admin', 'Trainer', 'PM', 'Client', 'Supervisor', 'Marketing'].map(role => (
+              {['Admin', 'Trainer', 'PM', 'Client', 'Supervisor', 'Marketing', 'Employee'].map(role => (
                 <button key={role} type="button" onClick={() => quickFill(role)}
                   style={{ padding: '6px 14px', borderRadius: '20px', border: '1.5px solid #E2E8F0', background: 'transparent', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' }}
                   onMouseOver={e => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#2563EB'; e.currentTarget.style.background = 'rgba(37,99,235,0.05)'; }}

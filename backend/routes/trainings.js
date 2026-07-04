@@ -6,6 +6,18 @@ const Certificate = require('../models/Certificate');
 const Project = require('../models/Project');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const nodemailer = require('nodemailer');
+const multer = require('multer');
+const path = require('path');
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/');
+  },
+  filename: function (req, file, cb) {
+    cb(null, 'training-' + Date.now() + path.extname(file.originalname));
+  }
+});
+const upload = multer({ storage: storage });
 
 let cachedTransporter = null;
 
@@ -183,6 +195,13 @@ router.get('/', requireAuth, async (req, res) => {
         });
       }
 
+      // If a specific training ID was requested (e.g. via direct LMS link), allow viewing it
+      if (req.query.id) {
+        orConditions.push({
+          id: req.query.id
+        });
+      }
+
       whereClause = { [Op.or]: orConditions };
     } else {
       // For Admins/Trainers/PMs, support filter by project if query is passed
@@ -219,15 +238,21 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // POST /api/trainings - Create new training material (Admin/Trainer/PM only)
-router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), upload.single('file'), async (req, res) => {
   try {
     const { title, description, type, url, duration, projectId, scheduledAt } = req.body;
-    if (!title || !url) {
-      return res.status(400).json({ error: 'Title and URL are required' });
+    let finalUrl = url;
+
+    if (req.file) {
+      finalUrl = `/uploads/${req.file.filename}`;
     }
 
-    let formattedUrl = url.trim();
-    if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
+    if (!title || !finalUrl) {
+      return res.status(400).json({ error: 'Title and URL/File are required' });
+    }
+
+    let formattedUrl = finalUrl.trim();
+    if (formattedUrl && !req.file && !/^https?:\/\//i.test(formattedUrl) && !formattedUrl.startsWith('/uploads/')) {
       formattedUrl = 'https://' + formattedUrl;
     }
 
@@ -244,6 +269,64 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
     res.status(201).json(newTraining);
   } catch (error) {
     res.status(400).json({ error: 'Failed to create training', details: error.message });
+  }
+});
+
+// POST /api/trainings/:id/guest-join - Create a guest user and return token for a specific meeting
+router.post('/:id/guest-join', async (req, res) => {
+  try {
+    const trainingId = req.params.id;
+    const { name } = req.body;
+    
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const training = await Training.findByPk(trainingId);
+    if (!training) {
+      return res.status(404).json({ error: 'Training material not found' });
+    }
+
+    const User = require('../models/User');
+    const Role = require('../models/Role');
+    const jwt = require('jsonwebtoken');
+    const bcrypt = require('bcrypt');
+
+    const employeeRole = await Role.findOne({ where: { role_name: 'Employee' } });
+    if (!employeeRole) {
+      return res.status(500).json({ error: 'Employee role not found' });
+    }
+
+    const guestEmail = `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}@guest.quizhive.com`;
+    const tempPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+
+    const guestUser = await User.create({
+      name: name.trim(),
+      email: guestEmail,
+      password: tempPassword,
+      roleId: employeeRole.id,
+      projectId: training.projectId || null,
+      department: 'Guest Attendee'
+    });
+
+    // Create initial progress to track that they joined
+    await TrainingProgress.create({
+      userId: guestUser.id,
+      trainingId: training.id,
+      completed: false,
+      timeSpent: 1
+    });
+
+    const token = jwt.sign(
+      { id: guestUser.id, email: guestUser.email, role: 'Employee', projectId: guestUser.projectId },
+      process.env.JWT_SECRET || 'fallback_secret',
+      { expiresIn: '24h' }
+    );
+
+    // Return the token and user so the frontend can log them in
+    res.json({ token, user: guestUser });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to process guest join', details: error.message });
   }
 });
 

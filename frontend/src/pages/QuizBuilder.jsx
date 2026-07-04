@@ -393,58 +393,45 @@ export default function QuizBuilder() {
 
   const activeQuestion = questions.find(q => q.id === activeQuestionId);
 
-  // AI Generator Simulator
-  const handleGenerateWithAi = () => {
-    if (!aiInputText.trim()) {
+  // AI Generator Integration
+  const handleGenerateWithAi = async () => {
+    if (!aiInputText.trim() && !aiUploadFile) {
       alert("Please upload a file, transcribe a video, or describe what questions you want to generate.");
       return;
     }
     setAiGenerating(true);
-    setTimeout(() => {
-      // Simulate generating 3 questions
-      const generated = [
-        {
-          id: `ai-1-${Date.now()}`,
-          type: 'mcq',
-          text: `Based on the ${aiSourceType} content, what is the core requirement for standard brand compliance?`,
-          options: ['Logo sizing under 30px', 'Consistent hex values matching brand system', 'Unregulated typography scales', 'Monochrome imagery only'],
-          correct_answer: 'Consistent hex values matching brand system',
-          time_limit: 30,
-          points: 5,
-          media_url: '',
-          difficulty: 'Medium'
-        },
-        {
-          id: `ai-2-${Date.now()}`,
-          type: 'true_false',
-          text: `True or False: Standard compliance regulations apply to all regional campaigns without exceptions.`,
-          options: ['True', 'False'],
-          correct_answer: 'True',
-          time_limit: 15,
-          points: 2,
-          media_url: '',
-          difficulty: 'Easy'
-        },
-        {
-          id: `ai-3-${Date.now()}`,
-          type: 'open_text',
-          text: `Explain what negative outcomes are expected if brand guideline colors are shifted.`,
-          options: [],
-          correct_answer: 'customer trust drop, brand dilution',
-          time_limit: 60,
-          points: 10,
-          media_url: '',
-          difficulty: 'Hard'
+    
+    try {
+      const formData = new FormData();
+      if (aiInputText) formData.append('prompt', aiInputText);
+      if (aiUploadFile) formData.append('file', aiUploadFile);
+
+      const res = await axios.post('/api/quizzes/generate', formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
         }
-      ];
+      });
+
+      const generated = res.data.map((q, index) => ({
+        ...q,
+        id: `ai-${index}-${Date.now()}`
+      }));
 
       setQuestions([...questions, ...generated]);
-      setActiveQuestionId(generated[0].id);
+      if (generated.length > 0) setActiveQuestionId(generated[0].id);
       setAiGenerating(false);
       setIsAiModalOpen(false);
       setAiInputText('');
-      alert("Successfully generated and inserted 3 questions using AI!");
-    }, 2000);
+      setAiUploadFile(null);
+      alert(`Successfully generated and inserted ${generated.length} questions using AI!`);
+    } catch (err) {
+      console.error(err);
+      setAiGenerating(false);
+      
+      const errorMessage = err.response?.data?.error || "Failed to generate questions. Ensure the API key is configured and try again.";
+      alert(errorMessage);
+    }
   };
 
   // Bulk Upload questions parser simulator
@@ -1499,6 +1486,7 @@ export default function QuizBuilder() {
                       onChange={(e) => {
                         const file = e.target.files[0];
                         if (file) {
+                          setAiUploadFile(file);
                           setAiInputText(`[Uploaded File: ${file.name}]\nGenerate questions based on this slide deck.`);
                         }
                       }}
