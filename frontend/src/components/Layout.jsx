@@ -121,7 +121,7 @@ export default function Layout() {
       <nav className="sidebar">
         {/* Brand */}
         <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '20px 16px', borderBottom: '1px solid var(--border-sidebar)' }}>
-          <div style={{ width: '100%', background: '#FFFFFF', padding: '10px 14px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.15)', height: '54px' }}>
+          <div style={{ width: '100%', background: 'var(--bg-glass)', padding: '10px 14px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', height: '54px' }}>
             <img src="/logo.png" alt="Idonneous Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', marginTop: '4px' }}>
@@ -129,7 +129,7 @@ export default function Layout() {
               fontFamily: 'Poppins, sans-serif',
               fontWeight: 800,
               fontSize: '0.95rem',
-              background: 'linear-gradient(135deg, #fff 30%, #93C5FD 100%)',
+              background: 'var(--bg-glass)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent'
             }}>RetailEdge Pro</span>
@@ -162,11 +162,11 @@ export default function Layout() {
                         fontSize: '0.8rem',
                         borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === myProjectId ? '#2563EB' : 'var(--text-secondary)',
+                        color: searchParams.get('projectId') === myProjectId ? 'var(--primary)' : 'var(--text-secondary)',
                         background: searchParams.get('projectId') === myProjectId ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
                         fontWeight: searchParams.get('projectId') === myProjectId ? 700 : 500,
                         transition: 'all 0.15s',
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? '#2563EB' : 'transparent'}`,
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? 'var(--primary)' : 'transparent'}`,
                       }}
                       onMouseOver={e => { if (searchParams.get('projectId') !== myProjectId) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; } }}
                       onMouseOut={e => { if (searchParams.get('projectId') !== myProjectId) { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; } }}
@@ -190,11 +190,11 @@ export default function Layout() {
                         fontSize: '0.8rem',
                         borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === cp.id ? '#2563EB' : 'var(--text-secondary)',
+                        color: searchParams.get('projectId') === cp.id ? 'var(--primary)' : 'var(--text-secondary)',
                         background: searchParams.get('projectId') === cp.id ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
                         fontWeight: searchParams.get('projectId') === cp.id ? 700 : 500,
                         transition: 'all 0.15s',
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? '#2563EB' : 'transparent'}`,
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? 'var(--primary)' : 'transparent'}`,
                       }}
                       onMouseOver={e => { if (searchParams.get('projectId') !== cp.id) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; } }}
                       onMouseOut={e => { if (searchParams.get('projectId') !== cp.id) { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; } }}
@@ -359,7 +359,7 @@ export default function Layout() {
             <div className="profile-role" style={{ color: 'var(--text-muted)' }}>{user?.role || 'Viewer'}</div>
           </div>
           <button onClick={handleLogout} style={{ color: 'var(--text-sidebar)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', transition: 'all 0.2s', borderRadius: '4px' }}
-            onMouseOver={e => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
+            onMouseOver={e => { e.currentTarget.style.color = 'var(--bg-glass)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
             onMouseOut={e => { e.currentTarget.style.color = 'var(--text-sidebar)'; e.currentTarget.style.background = 'none'; }}
             title="Log Out"
           >
@@ -421,9 +421,9 @@ export default function Layout() {
               padding: '6px 14px',
               fontSize: '0.8rem',
               fontWeight: 600,
-              color: '#2563EB'
+              color: 'var(--primary)'
             }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: '#2563EB', display: 'inline-block', animation: 'pulse-badge 1.5s infinite' }}></span>
+              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', animation: 'pulse-badge 1.5s infinite' }}></span>
               RetailEdge Pro
             </div>
           </div>
@@ -503,7 +503,7 @@ export default function Layout() {
                 </div>
                 <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
                   <button type="button" onClick={() => setIsQueryModalOpen(false)} style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                  <button type="submit" disabled={querySubmitting} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #EF4444, #F87171)', color: 'white', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.25)' }}>
+                  <button type="submit" disabled={querySubmitting} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #EF4444, #F87171)', color: 'white', fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
                     {querySubmitting ? 'Submitting...' : 'Submit Query'}
                   </button>
                 </div>

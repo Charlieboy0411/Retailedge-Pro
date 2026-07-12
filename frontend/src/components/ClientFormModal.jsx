@@ -140,13 +140,13 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
       background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', backdropFilter: 'blur(4px)'
     }}>
       <div className="glass-card" style={{
-        background: '#FFFFFF', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: '12px', display: 'flex', flexDirection: 'column'
+        background: 'var(--bg-glass)', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: '12px', display: 'flex', flexDirection: 'column'
       }}>
         
         {/* Header */}
-        <div style={{ padding: '24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#FFFFFF', zIndex: 10 }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1F2328' }}>{editingClient ? 'Edit Client Details' : 'Add New Client'}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+        <div style={{ padding: '24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--bg-glass)', zIndex: 10 }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-primary)' }}>{editingClient ? 'Edit Client Details' : 'Add New Client'}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
             <X size={24} />
           </button>
         </div>
@@ -154,14 +154,14 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
         {/* Body */}
         <div style={{ padding: '24px' }}>
           {error && (
-            <div style={{ padding: '12px', background: '#FEF2F2', color: '#EF4444', borderRadius: '8px', marginBottom: '24px', border: '1px solid #FEE2E2' }}>
+            <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', borderRadius: '8px', marginBottom: '24px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
               {error}
             </div>
           )}
 
           <form id="clientForm" onSubmit={handleSubmit}>
             {/* Section: Basic Info */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>1. Basic Information</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>1. Basic Information</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Client Name *</label>
@@ -177,7 +177,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ 
                     width: '60px', height: '60px', border: '1px dashed #CBD5E1', borderRadius: '8px', 
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: '#F8FAFC'
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: 'var(--bg-glass)'
                   }}>
                     {logoPreview ? <img src={logoPreview} alt="Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon color="#94A3B8" />}
                   </div>
@@ -224,7 +224,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
             </div>
 
             {/* Section: Contact Info */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>2. Contact Information</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>2. Contact Information</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Primary Contact Name *</label>
@@ -249,7 +249,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
             </div>
 
             {/* Section: Address Info */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>3. Address Information</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>3. Address Information</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div style={{ gridColumn: 'span 2' }}>
                 <label className="form-label">Address</label>
@@ -274,7 +274,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
             </div>
 
             {/* Section: Commercial Details */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>4. Commercial Details</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>4. Commercial Details</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">SLA Agreement</label>
@@ -313,7 +313,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
             </div>
 
             {/* Section: Additional Information */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>5. Additional Information</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>5. Additional Information</h3>
             <div style={{ marginBottom: '32px' }}>
               <label className="form-label">Notes</label>
               <textarea name="notes" className="form-control" rows="3" value={formData.notes} onChange={handleChange}></textarea>
@@ -322,7 +322,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '24px', borderTop: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', gap: '16px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
+        <div style={{ padding: '24px', borderTop: '1px solid #E2E8F0', background: 'var(--bg-glass)', display: 'flex', justifyContent: 'flex-end', gap: '16px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
           <button type="submit" form="clientForm" className="btn btn-primary" disabled={loading}>
             {loading ? 'Saving...' : 'Save Client'}

@@ -25,12 +25,12 @@ function Toggle({ value, onChange, id }) {
       <span style={{
         position: 'absolute', inset: 0, borderRadius: '12px', transition: 'all 0.2s',
         background: value ? 'linear-gradient(135deg,#2563EB,#60A5FA)' : 'var(--bg-tertiary)',
-        border: `1.5px solid ${value ? '#2563EB' : 'var(--border-glass)'}`,
+        border: `1.5px solid ${value ? 'var(--primary)' : 'var(--border-glass)'}`,
       }}>
         <span style={{
           position: 'absolute', left: value ? '22px' : '2px', top: '2px',
-          width: '16px', height: '16px', borderRadius: '50%', background: 'white',
-          transition: 'left 0.2s', boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+          width: '16px', height: '16px', borderRadius: '50%', background: 'var(--bg-tertiary)',
+          transition: 'left 0.2s', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
         }} />
       </span>
     </label>
@@ -55,7 +55,7 @@ function SectionHeader({ icon, title, desc }) {
   return (
     <div style={{ marginBottom: '28px', paddingBottom: '20px', borderBottom: '2px solid var(--border-glass)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg,rgba(37,99,235,0.2),rgba(96,165,250,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+        <div style={{ width: '44px', height: '44px', borderRadius: '12px', background: 'linear-gradient(135deg,rgba(37,99,235,0.2),rgba(96,165,250,0.1))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
           {icon}
         </div>
         <div>
@@ -183,7 +183,7 @@ function OrganizationSettings() {
 
 function BrandingSettings() {
   const [form, setForm] = useState(load('branding', {
-    primaryColor: '#2563EB', secondaryColor: '#93C5FD',
+    primaryColor: 'var(--primary)', secondaryColor: '#93C5FD',
     fontStyle: 'Poppins', welcomeMsg: 'Welcome to RetailEdge Pro Training Arena!',
     footerText: '© 2025 RetailEdge Pro · Powered by QuizHive LMS',
   }));
@@ -203,7 +203,7 @@ function BrandingSettings() {
           { label: 'Login Background', sub: '1920×1080px · JPG', icon: '🖼️' },
         ].map(({ label, sub, icon }) => (
           <div key={label} style={{ border: '2px dashed var(--border-glass)', borderRadius: '12px', padding: '28px 16px', textAlign: 'center', cursor: 'pointer', transition: 'border-color 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.borderColor = '#2563EB'}
+            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--primary)'}
             onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border-glass)'}
           >
             <div style={{ fontSize: '2.5rem', marginBottom: '10px' }}>{icon}</div>
@@ -279,7 +279,7 @@ function UserManagementSettings() {
 
       <div style={{ marginTop: '24px', marginBottom: '8px' }}>
         <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <Upload size={18} color="#2563EB" /> Bulk User Upload
+          <Upload size={18} color='var(--primary)' /> Bulk User Upload
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           {['Excel Upload (.xlsx)', 'CSV Upload (.csv)'].map(label => (
@@ -288,7 +288,7 @@ function UserManagementSettings() {
               background: 'transparent', cursor: 'pointer', textAlign: 'left', transition: 'all 0.2s',
               color: 'var(--text-secondary)',
             }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#2563EB'; }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
               onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
             >
               <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '4px' }}>{label}</div>
@@ -333,7 +333,7 @@ function RolesPermissions() {
   };
   const handleSave = () => { save('roles', matrix); setSaved(true); setTimeout(() => setSaved(false), 2500); };
 
-  const roleColors = { 'Super Admin': '#2563EB', 'Admin': '#93C5FD', 'Program Manager': '#22C55E', 'Trainer': '#F59E0B', 'Client': '#0F172A', 'Supervisor': '#93C5FD', 'T&D Manager': '#F59E0B' };
+  const roleColors = { 'Super Admin': 'var(--primary)', 'Admin': '#93C5FD', 'Program Manager': '#22C55E', 'Trainer': '#F59E0B', 'Client': 'var(--text-primary)', 'Supervisor': '#93C5FD', 'T&D Manager': '#F59E0B' };
 
 
   return (
@@ -405,8 +405,8 @@ function TrainingSettings() {
           <div key={key}>
             <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{label}</label>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <input type="range" min={min} max={max} value={form[key]} onChange={set(key)} style={{ flex: 1, accentColor: '#2563EB' }} />
-              <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2563EB', minWidth: '40px', textAlign: 'right', fontFamily: 'Poppins,sans-serif' }}>{form[key]}{key !== 'retakeLimit' ? '%' : 'x'}</span>
+              <input type="range" min={min} max={max} value={form[key]} onChange={set(key)} style={{ flex: 1, accentColor: 'var(--primary)' }} />
+              <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', minWidth: '40px', textAlign: 'right', fontFamily: 'Poppins,sans-serif' }}>{form[key]}{key !== 'retakeLimit' ? '%' : 'x'}</span>
             </div>
           </div>
         ))}
@@ -443,7 +443,7 @@ function QuizSettings() {
       <SectionHeader icon={<Radio size={22} />} title="Quiz & Live Session Settings" desc="Configure quiz behaviour, live session controls, and interactive features." />
 
       <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-        <Zap size={16} color="#2563EB" /> Quiz Configuration
+        <Zap size={16} color='var(--primary)' /> Quiz Configuration
       </div>
       {[
         ['Timer', 'timer', 'Show countdown timer during quiz'], ['Random Questions', 'randomQ', 'Shuffle question order per participant'],
@@ -459,9 +459,9 @@ function QuizSettings() {
         🏆 Leaderboard Mode
       </div>
       {[['realtime', 'Real-time Leaderboard', 'Updates live after each question'], ['final', 'Final Leaderboard Only', 'Show ranking only at session end'], ['anonymous', 'Anonymous Leaderboard', 'Hide participant names']].map(([val, label, desc]) => (
-        <div key={val} onClick={() => setForm(f => ({ ...f, leaderboard: val }))} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: `1.5px solid ${form.leaderboard === val ? '#2563EB' : 'var(--border-glass)'}`, marginBottom: '8px', cursor: 'pointer', background: form.leaderboard === val ? 'rgba(37,99,235,0.06)' : 'transparent', transition: 'all 0.2s' }}>
-          <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${form.leaderboard === val ? '#2563EB' : 'var(--border-glass)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            {form.leaderboard === val && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563EB' }} />}
+        <div key={val} onClick={() => setForm(f => ({ ...f, leaderboard: val }))} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 16px', borderRadius: '10px', border: `1.5px solid ${form.leaderboard === val ? 'var(--primary)' : 'var(--border-glass)'}`, marginBottom: '8px', cursor: 'pointer', background: form.leaderboard === val ? 'rgba(37,99,235,0.06)' : 'transparent', transition: 'all 0.2s' }}>
+          <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: `2px solid ${form.leaderboard === val ? 'var(--primary)' : 'var(--border-glass)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {form.leaderboard === val && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)' }} />}
           </div>
           <div>
             <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{label}</div>
@@ -507,7 +507,7 @@ function NotificationSettings() {
       <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '12px' }}>📡 Delivery Channels</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '28px' }}>
         {[['Email', 'email', '📧'], ['SMS', 'sms', '📱'], ['WhatsApp', 'whatsapp', '💬'], ['Push Notification', 'push', '🔔']].map(([label, key, icon]) => (
-          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderRadius: '12px', border: `1.5px solid ${form[key] ? '#2563EB' : 'var(--border-glass)'}`, background: form[key] ? 'rgba(37,99,235,0.05)' : 'transparent', transition: 'all 0.2s' }}>
+          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 18px', borderRadius: '12px', border: `1.5px solid ${form[key] ? 'var(--primary)' : 'var(--border-glass)'}`, background: form[key] ? 'rgba(37,99,235,0.05)' : 'transparent', transition: 'all 0.2s' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <span style={{ fontSize: '1.4rem' }}>{icon}</span>
               <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>{label}</span>
@@ -546,7 +546,7 @@ function CertificateSettings() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '28px' }}>
         {[['🏅 Certificate Logo', 'Upload organization logo'], ['✍️ Signature', 'Upload authorized signature'], ['🎨 Background Design', 'Upload certificate background']].map(([label, hint]) => (
           <div key={label} style={{ border: '2px dashed var(--border-glass)', borderRadius: '12px', padding: '24px 16px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.borderColor = '#2563EB'}
+            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--primary)'}
             onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border-glass)'}
           >
             <div style={{ fontSize: '2rem', marginBottom: '8px' }}>{label.split(' ')[0]}</div>
@@ -580,10 +580,10 @@ function ReportsSettings() {
       <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '14px' }}>📤 Export Formats</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '28px' }}>
         {[['PDF', 'pdf', '📄'], ['Excel', 'excel', '📊'], ['PowerPoint', 'ppt', '📑'], ['CSV', 'csv', '📋']].map(([label, key, icon]) => (
-          <div key={key} onClick={() => toggle(key)(!form[key])} style={{ padding: '18px 14px', borderRadius: '12px', border: `1.5px solid ${form[key] ? '#2563EB' : 'var(--border-glass)'}`, background: form[key] ? 'rgba(37,99,235,0.08)' : 'transparent', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}>
+          <div key={key} onClick={() => toggle(key)(!form[key])} style={{ padding: '18px 14px', borderRadius: '12px', border: `1.5px solid ${form[key] ? 'var(--primary)' : 'var(--border-glass)'}`, background: form[key] ? 'rgba(37,99,235,0.08)' : 'transparent', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}>
             <div style={{ fontSize: '1.8rem', marginBottom: '8px' }}>{icon}</div>
-            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: form[key] ? '#2563EB' : 'var(--text-primary)' }}>{label}</div>
-            <div style={{ fontSize: '0.72rem', color: form[key] ? '#2563EB' : 'var(--text-muted)', marginTop: '4px' }}>{form[key] ? 'Enabled' : 'Disabled'}</div>
+            <div style={{ fontWeight: 700, fontSize: '0.88rem', color: form[key] ? 'var(--primary)' : 'var(--text-primary)' }}>{label}</div>
+            <div style={{ fontSize: '0.72rem', color: form[key] ? 'var(--primary)' : 'var(--text-muted)', marginTop: '4px' }}>{form[key] ? 'Enabled' : 'Disabled'}</div>
           </div>
         ))}
       </div>
@@ -741,7 +741,7 @@ function SecuritySettings() {
             <div style={{ position: 'relative' }}>
               <input type={cpShow.current ? 'text' : 'password'} value={cpForm.current} onChange={cpSet('current')}
                 placeholder="Enter current password" required style={pwFieldStyle}
-                onFocus={e => e.target.style.borderColor = '#2563EB'}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
               <button type="button" onClick={cpToggle('current')} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
                 {cpShow.current ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -755,7 +755,7 @@ function SecuritySettings() {
             <div style={{ position: 'relative' }}>
               <input type={cpShow.newPw ? 'text' : 'password'} value={cpForm.newPw} onChange={cpSet('newPw')}
                 placeholder="Enter new password (min 6 characters)" required style={pwFieldStyle}
-                onFocus={e => e.target.style.borderColor = '#2563EB'}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
                 onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
               <button type="button" onClick={cpToggle('newPw')} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
                 {cpShow.newPw ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -783,7 +783,7 @@ function SecuritySettings() {
                   ...pwFieldStyle,
                   borderColor: cpForm.confirm && cpForm.newPw !== cpForm.confirm ? '#EF4444' : 'var(--border-glass)'
                 }}
-                onFocus={e => e.target.style.borderColor = '#2563EB'}
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
                 onBlur={e => e.target.style.borderColor = cpForm.confirm && cpForm.newPw !== cpForm.confirm ? '#EF4444' : 'var(--border-glass)'} />
               <button type="button" onClick={cpToggle('confirm')} style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: '2px' }}>
                 {cpShow.confirm ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -814,8 +814,8 @@ function SecuritySettings() {
         <div style={{ marginBottom: '16px' }}>
           <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Minimum Length</label>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <input type="range" min="6" max="20" value={form.minLength} onChange={set('minLength')} style={{ flex: 1, accentColor: '#2563EB' }} />
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2563EB', minWidth: '32px', fontFamily: 'Poppins,sans-serif' }}>{form.minLength}</span>
+            <input type="range" min="6" max="20" value={form.minLength} onChange={set('minLength')} style={{ flex: 1, accentColor: 'var(--primary)' }} />
+            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', minWidth: '32px', fontFamily: 'Poppins,sans-serif' }}>{form.minLength}</span>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
@@ -838,8 +838,8 @@ function SecuritySettings() {
       <div style={{ marginTop: '16px' }}>
         <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Session Timeout (minutes)</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-          <input type="range" min="5" max="120" step="5" value={form.sessionTimeout} onChange={set('sessionTimeout')} style={{ flex: 1, accentColor: '#2563EB' }} />
-          <span style={{ fontWeight: 800, fontSize: '1.1rem', color: '#2563EB', minWidth: '48px', fontFamily: 'Poppins,sans-serif' }}>{form.sessionTimeout}m</span>
+          <input type="range" min="5" max="120" step="5" value={form.sessionTimeout} onChange={set('sessionTimeout')} style={{ flex: 1, accentColor: 'var(--primary)' }} />
+          <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', minWidth: '48px', fontFamily: 'Poppins,sans-serif' }}>{form.sessionTimeout}m</span>
         </div>
       </div>
       <SaveBtn onClick={handleSave} saved={saved} />
@@ -856,7 +856,7 @@ function BillingSettings() {
       <SectionHeader icon={<CreditCard size={22} />} title="Billing & Subscription" desc="View your current plan, usage metrics, and manage add-ons." />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-        {[['Plan Name', plan.name, '#2563EB'], ['Expiry Date', plan.expiry, '#F59E0B'], ['Active Users', `${plan.users} / ${plan.maxUsers}`, '#38BDF8'], ['Storage Used', `${plan.storage}%`, '#22C55E']].map(([label, val, color]) => (
+        {[['Plan Name', plan.name, 'var(--primary)'], ['Expiry Date', plan.expiry, '#F59E0B'], ['Active Users', `${plan.users} / ${plan.maxUsers}`, '#38BDF8'], ['Storage Used', `${plan.storage}%`, '#22C55E']].map(([label, val, color]) => (
           <div key={label} style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '14px', border: '1px solid var(--border-glass)' }}>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600, marginBottom: '8px' }}>{label}</div>
             <div style={{ fontSize: '1.6rem', fontWeight: 800, color, fontFamily: 'Poppins,sans-serif' }}>{val}</div>
@@ -867,7 +867,7 @@ function BillingSettings() {
       <div style={{ marginBottom: '24px', padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '14px', border: '1px solid var(--border-glass)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
           <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>User Seats Used</span>
-          <span style={{ color: '#2563EB', fontWeight: 700 }}>{used}%</span>
+          <span style={{ color: 'var(--primary)', fontWeight: 700 }}>{used}%</span>
         </div>
         <div style={{ height: '12px', background: 'var(--bg-primary)', borderRadius: '6px', overflow: 'hidden' }}>
           <div style={{ height: '100%', width: `${used}%`, background: `linear-gradient(90deg,#2563EB,#60A5FA)`, borderRadius: '6px', transition: 'width 1s ease' }} />
@@ -984,7 +984,7 @@ function SystemPreferences() {
         ))}
       </div>
 
-      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><Database size={16} color="#2563EB" /> Backup Configuration</div>
+      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><Database size={16} color='var(--primary)' /> Backup Configuration</div>
       {[['Daily Backup', 'dailyBackup', 'Automatic backup every day at midnight'], ['Weekly Backup', 'weeklyBackup', 'Full backup every Sunday at 2 AM'], ['Monthly Backup', 'monthlyBackup', 'Archive backup on 1st of each month']].map(([label, key, desc]) => (
         <SettingRow key={key} label={label} desc={desc}>
           <Toggle value={form[key]} onChange={toggle(key)} id={`sp-${key}`} />
@@ -992,7 +992,7 @@ function SystemPreferences() {
       ))}
 
       <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-        {[['💾 Storage', '68.4 GB / 100 GB', '#2563EB', 68], ['⚡ Server Health', '99.7% uptime', '#22C55E', 99.7], ['📡 API Usage', '12,840 req/day', '#38BDF8', 43]].map(([label, val, color, pct]) => (
+        {[['💾 Storage', '68.4 GB / 100 GB', 'var(--primary)', 68], ['⚡ Server Health', '99.7% uptime', '#22C55E', 99.7], ['📡 API Usage', '12,840 req/day', '#38BDF8', 43]].map(([label, val, color, pct]) => (
           <div key={label} style={{ padding: '18px', background: 'var(--bg-tertiary)', borderRadius: '14px', border: '1px solid var(--border-glass)' }}>
             <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '6px' }}>{label}</div>
             <div style={{ fontWeight: 800, fontSize: '1rem', color, marginBottom: '10px', fontFamily: 'Poppins,sans-serif' }}>{val}</div>
@@ -1072,9 +1072,9 @@ export default function Settings() {
                 display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 14px',
                 borderRadius: '10px', border: 'none', cursor: 'pointer', textAlign: 'left',
                  background: active === item.id ? 'linear-gradient(135deg,rgba(37,99,235,0.15),rgba(147,197,253,0.08))' : 'transparent',
-                color: active === item.id ? '#2563EB' : 'var(--text-secondary)',
+                color: active === item.id ? 'var(--primary)' : 'var(--text-secondary)',
                 fontWeight: active === item.id ? 700 : 500, fontSize: '0.85rem',
-                transition: 'all 0.18s', borderLeft: `3px solid ${active === item.id ? '#2563EB' : 'transparent'}`,
+                transition: 'all 0.18s', borderLeft: `3px solid ${active === item.id ? 'var(--primary)' : 'transparent'}`,
               }}
                 onMouseOver={e => { if (active !== item.id) { e.currentTarget.style.background = 'var(--bg-tertiary)'; e.currentTarget.style.color = 'var(--text-primary)'; } }}
                 onMouseOut={e => { if (active !== item.id) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = 'var(--text-secondary)'; } }}

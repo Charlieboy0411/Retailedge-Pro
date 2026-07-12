@@ -368,7 +368,7 @@ export default function SchedulePage() {
                       <span style={{ 
                         fontSize: '0.85rem', 
                         fontWeight: (isSelected || isToday) ? 800 : 600, 
-                        color: isSelected ? 'var(--primary)' : isToday ? '#2563EB' : 'var(--text-primary)',
+                        color: isSelected ? 'var(--primary)' : isToday ? 'var(--primary)' : 'var(--text-primary)',
                         marginBottom: '4px'
                       }}>
                         {day}

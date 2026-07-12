@@ -154,13 +154,13 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
       background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', backdropFilter: 'blur(4px)'
     }}>
       <div className="glass-card" style={{
-        background: '#FFFFFF', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: '12px', display: 'flex', flexDirection: 'column'
+        background: 'var(--bg-glass)', width: '100%', maxWidth: '900px', maxHeight: '90vh', overflowY: 'auto', padding: 0, borderRadius: '12px', display: 'flex', flexDirection: 'column'
       }}>
         
         {/* Header */}
-        <div style={{ padding: '24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: '#FFFFFF', zIndex: 10 }}>
-          <h2 style={{ margin: 0, fontSize: '1.25rem', color: '#1F2328' }}>{editingProject ? 'Edit Project Details' : 'Add New Project'}</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}>
+        <div style={{ padding: '24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', position: 'sticky', top: 0, background: 'var(--bg-glass)', zIndex: 10 }}>
+          <h2 style={{ margin: 0, fontSize: '1.25rem', color: 'var(--text-primary)' }}>{editingProject ? 'Edit Project Details' : 'Add New Project'}</h2>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
             <X size={24} />
           </button>
         </div>
@@ -168,14 +168,14 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
         {/* Body */}
         <div style={{ padding: '24px' }}>
           {error && (
-            <div style={{ padding: '12px', background: '#FEF2F2', color: '#EF4444', borderRadius: '8px', marginBottom: '24px', border: '1px solid #FEE2E2' }}>
+            <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', borderRadius: '8px', marginBottom: '24px', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
               {error}
             </div>
           )}
 
           <form id="projectForm" onSubmit={handleSubmit}>
             {/* Hierarchy Section */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>Hierarchy</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>Hierarchy</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Mother Project (Optional)</label>
@@ -185,12 +185,12 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
                 </select>
-                <small style={{ color: '#64748B' }}>Select an existing project to make this a sub-project under it.</small>
+                <small style={{ color: 'var(--text-secondary)' }}>Select an existing project to make this a sub-project under it.</small>
               </div>
             </div>
 
             {/* Section: Basic Info */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>1. Basic Information</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>1. Basic Information</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Project Name *</label>
@@ -245,7 +245,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                   <div style={{ 
                     width: '60px', height: '60px', border: '1px dashed #CBD5E1', borderRadius: '8px', 
-                    display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: '#F8FAFC'
+                    display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', background: 'var(--bg-glass)'
                   }}>
                     {logoPreview ? <img src={logoPreview} alt="Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> : <ImageIcon color="#94A3B8" />}
                   </div>
@@ -258,7 +258,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
             </div>
 
             {/* Section: Project Duration */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>2. Project Duration</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>2. Project Duration</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Start Date *</label>
@@ -298,7 +298,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
             </div>
 
             {/* Section: Geography Mapping */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>3. Geography Mapping</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>3. Geography Mapping</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Country</label>
@@ -335,7 +335,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
             </div>
 
             {/* Section: Project Targets */}
-            <h3 style={{ color: '#3E5C8A', marginBottom: '16px', fontSize: '1rem' }}>4. Project Targets</h3>
+            <h3 style={{ color: 'var(--primary)', marginBottom: '16px', fontSize: '1rem' }}>4. Project Targets</h3>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '32px' }}>
               <div>
                 <label className="form-label">Participants Planned</label>
@@ -367,7 +367,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '24px', borderTop: '1px solid #E2E8F0', background: '#F8FAFC', display: 'flex', justifyContent: 'flex-end', gap: '16px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
+        <div style={{ padding: '24px', borderTop: '1px solid #E2E8F0', background: 'var(--bg-glass)', display: 'flex', justifyContent: 'flex-end', gap: '16px', borderBottomLeftRadius: '12px', borderBottomRightRadius: '12px', position: 'sticky', bottom: 0 }}>
           <button type="button" className="btn btn-secondary" onClick={onClose} disabled={loading}>Cancel</button>
           <button type="submit" form="projectForm" className="btn btn-primary" disabled={loading}>
             {loading ? 'Saving...' : 'Save Project'}

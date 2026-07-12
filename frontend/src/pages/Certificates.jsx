@@ -123,10 +123,10 @@ export default function Certificates() {
 
             {/* High Fidelity Certificate Template Card */}
             <div id="certificate-download-node" className="certificate-print-area" style={{
-              background: '#FFFFFF',
+              background: 'var(--bg-glass)',
               border: 'none',
               padding: '24px',
-              color: '#1F2328',
+              color: 'var(--text-primary)',
               boxShadow: '0 15px 40px rgba(0,0,0,0.15)',
               borderRadius: '2px',
               fontFamily: '"Montserrat", sans-serif',
@@ -163,17 +163,17 @@ export default function Certificates() {
                 <div style={{ position: 'absolute', bottom: -1, right: -1, width: 30, height: 30, borderBottom: '4px solid #D71920', borderRight: '4px solid #D71920' }}></div>
 
                 {/* Seal on Top Left */}
-                <div style={{ position: 'absolute', top: '20px', left: '20px', width: '90px', height: '90px', background: '#D71920', borderRadius: '50%', border: '4px solid #FFFFFF', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', boxShadow: '0 4px 10px rgba(215, 25, 32, 0.3)' }}>
+                <div style={{ position: 'absolute', top: '20px', left: '20px', width: '90px', height: '90px', background: '#D71920', borderRadius: '50%', border: '4px solid var(--bg-tertiary)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-glass)', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
                   <span style={{ fontSize: '0.65rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px', textAlign: 'center', lineHeight: '1.2' }}>OFFICIAL<br/>CERT</span>
                   {/* Ribbon tails */}
-                  <div style={{ position: 'absolute', bottom: '-20px', left: '10px', width: '20px', height: '30px', background: '#1F2328', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)', zIndex: -1 }}></div>
-                  <div style={{ position: 'absolute', bottom: '-20px', right: '10px', width: '20px', height: '30px', background: '#1F2328', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)', zIndex: -1 }}></div>
+                  <div style={{ position: 'absolute', bottom: '-20px', left: '10px', width: '20px', height: '30px', background: 'var(--text-primary)', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)', zIndex: -1 }}></div>
+                  <div style={{ position: 'absolute', bottom: '-20px', right: '10px', width: '20px', height: '30px', background: 'var(--text-primary)', clipPath: 'polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%)', zIndex: -1 }}></div>
                 </div>
 
                 {/* Brand */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '12px', marginBottom: '16px' }}>
                   <img src="/logo.png" alt="Idonneous Logo" style={{ height: '36px' }} />
-                  <div style={{ letterSpacing: '3px', fontSize: '1rem', fontWeight: 800, color: '#1F2328', textTransform: 'uppercase' }}>
+                  <div style={{ letterSpacing: '3px', fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', textTransform: 'uppercase' }}>
                     RetailEdge Pro
                   </div>
                 </div>
@@ -181,19 +181,19 @@ export default function Certificates() {
                 <h1 style={{ fontSize: '3.5rem', fontWeight: 900, margin: '0 0 4px 0', color: '#D71920', letterSpacing: '2px', textTransform: 'uppercase' }}>
                   CERTIFICATE
                 </h1>
-                <div style={{ fontSize: '1.4rem', letterSpacing: '4px', color: '#1F2328', marginBottom: '40px', fontWeight: 700 }}>
+                <div style={{ fontSize: '1.4rem', letterSpacing: '4px', color: 'var(--text-primary)', marginBottom: '40px', fontWeight: 700 }}>
                   OF COMPLETION
                 </div>
 
-                <p style={{ fontSize: '1rem', color: '#5F6875', margin: '0 0 24px 0', fontWeight: 500 }}>
+                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', margin: '0 0 24px 0', fontWeight: 500 }}>
                   This certificate is proudly presented to
                 </p>
 
-                <h2 style={{ fontFamily: '"Sacramento", cursive', fontSize: '4.5rem', fontWeight: 'bold', margin: '0 0 16px 0', color: '#1F2328', borderBottom: '2px solid #D71920', paddingBottom: '8px', minWidth: '500px', display: 'inline-block' }}>
+                <h2 style={{ fontFamily: '"Sacramento", cursive', fontSize: '4.5rem', fontWeight: 'bold', margin: '0 0 16px 0', color: 'var(--text-primary)', borderBottom: '2px solid #D71920', paddingBottom: '8px', minWidth: '500px', display: 'inline-block' }}>
                   {selectedCert.User?.name}
                 </h2>
 
-                <p style={{ fontSize: '1.1rem', lineHeight: '1.6', color: '#5F6875', maxWidth: '650px', margin: '16px auto 50px auto' }}>
+                <p style={{ fontSize: '1.1rem', lineHeight: '1.6', color: 'var(--text-secondary)', maxWidth: '650px', margin: '16px auto 50px auto' }}>
                   For successfully completing the rigorous program requirements, live interactive training sessions, and achieving superior performance benchmarks in:
                   <br />
                   <strong style={{ fontSize: '1.25rem', color: '#D71920', display: 'block', marginTop: '12px', fontWeight: 800 }}>
@@ -206,9 +206,9 @@ export default function Certificates() {
                   
                   {/* Left Signature */}
                   <div style={{ textAlign: 'center', minWidth: '200px' }}>
-                    <div style={{ fontFamily: '"Sacramento", cursive', fontSize: '2.5rem', color: '#1F2328', fontWeight: 'bold', marginBottom: '8px' }}>Mohit Tiku</div>
+                    <div style={{ fontFamily: '"Sacramento", cursive', fontSize: '2.5rem', color: 'var(--text-primary)', fontWeight: 'bold', marginBottom: '8px' }}>Mohit Tiku</div>
                     <div style={{ height: '2px', background: '#D71920', margin: '4px 0' }}></div>
-                    <div style={{ fontSize: '0.85rem', color: '#5F6875', fontWeight: 600 }}>Managing Director<br/>RetailEdge Pro</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Managing Director<br/>RetailEdge Pro</div>
                   </div>
 
                   {/* Center Flourish */}
@@ -218,9 +218,9 @@ export default function Certificates() {
 
                   {/* Right Signature / Date */}
                   <div style={{ textAlign: 'center', minWidth: '200px' }}>
-                    <div style={{ fontSize: '1.2rem', color: '#1F2328', paddingBottom: '6px', marginBottom: '8px', paddingTop: '10px', fontWeight: 700 }}>{selectedCert.issueDate}</div>
+                    <div style={{ fontSize: '1.2rem', color: 'var(--text-primary)', paddingBottom: '6px', marginBottom: '8px', paddingTop: '10px', fontWeight: 700 }}>{selectedCert.issueDate}</div>
                     <div style={{ height: '2px', background: '#D71920', margin: '4px 0' }}></div>
-                    <div style={{ fontSize: '0.85rem', color: '#5F6875', fontWeight: 600 }}>Date of Issue<br/>Verified Credential</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Date of Issue<br/>Verified Credential</div>
                   </div>
 
                 </div>

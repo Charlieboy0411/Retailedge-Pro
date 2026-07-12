@@ -73,7 +73,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
     }}>
       {/* Calendar Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: '#071B36', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
           <CalendarIcon size={18} color="#F36F21" />
           {title}
         </h3>
@@ -81,19 +81,19 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
           <button 
             type="button"
             onClick={handlePrevMonth}
-            style={{ background: 'rgba(0,0,0,0.03)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748B' }}
+            style={{ background: 'rgba(0,0,0,0.03)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
             onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
             onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
           >
             <ChevronLeft size={16} />
           </button>
-          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#071B36', minWidth: '100px', textAlign: 'center' }}>
+          <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--text-primary)', minWidth: '100px', textAlign: 'center' }}>
             {monthNames[month]} {year}
           </span>
           <button 
             type="button"
             onClick={handleNextMonth}
-            style={{ background: 'rgba(0,0,0,0.03)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#64748B' }}
+            style={{ background: 'rgba(0,0,0,0.03)', border: 'none', borderRadius: '50%', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: 'var(--text-secondary)' }}
             onMouseOver={e => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
             onMouseOut={e => e.currentTarget.style.background = 'rgba(0,0,0,0.03)'}
           >
@@ -139,12 +139,12 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
                       ? 'rgba(37, 99, 235, 0.08)' 
                       : 'transparent',
                 color: isSelected 
-                  ? '#FFFFFF' 
+                  ? 'var(--bg-glass)' 
                   : hasMeetings 
                     ? '#E05A0E' 
                     : isToday 
-                      ? '#2563EB' 
-                      : '#1E293B',
+                      ? 'var(--primary)' 
+                      : 'var(--text-primary)',
                 fontWeight: (hasMeetings || isSelected || isToday) ? 700 : 500,
                 fontSize: '0.8rem',
                 cursor: 'pointer',
@@ -198,7 +198,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
         maxHeight: '220px',
         overflowY: 'auto'
       }}>
-        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           Schedule for {new Date(selectedDateStr).toLocaleDateString([], { dateStyle: 'medium' })}
         </div>
         
@@ -217,7 +217,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
                   gap: '4px'
                 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <strong style={{ fontSize: '0.8rem', color: '#071B36', fontWeight: 700 }}>{meeting.title}</strong>
+                    <strong style={{ fontSize: '0.8rem', color: 'var(--text-primary)', fontWeight: 700 }}>{meeting.title}</strong>
                     <span style={{
                       fontSize: '0.7rem',
                       padding: '2px 6px',
@@ -230,7 +230,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
                     </span>
                   </div>
                   {meeting.description && (
-                    <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{meeting.description}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{meeting.description}</div>
                   )}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '4px', fontSize: '0.7rem', color: '#94A3B8' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
@@ -242,7 +242,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
                         href={meeting.url} 
                         target="_blank" 
                         rel="noreferrer" 
-                        style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#2563EB', textDecoration: 'none', fontWeight: 600 }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '3px', color: 'var(--primary)', textDecoration: 'none', fontWeight: 600 }}
                       >
                         Join Meeting <ExternalLink size={10} />
                       </a>

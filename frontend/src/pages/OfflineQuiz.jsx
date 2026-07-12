@@ -8,12 +8,12 @@ const ZONES = ['North', 'East', 'West', 'South'];
 
 // ─── Design Tokens (standalone — never inherits from app theme) ───────────────
 const C = {
-  bg:          '#F8FAFC',      // page background (light grey-blue)
-  card:        '#FFFFFF',      // card background (white card)
+  bg:          'var(--bg-glass)',      // page background (light grey-blue)
+  card:        'var(--bg-glass)',      // card background (white card)
   cardAlt:     '#EEF2F7',      // slightly darker light background
   border:      '#E2E8F0',
   borderHover: '#CBD5E1',
-  accent:      '#2563EB',      // royal blue brand (Primary Royal Blue)
+  accent:      'var(--primary)',      // royal blue brand (Primary Royal Blue)
   accentGlow:  'rgba(37,99,235,0.15)',
   accentBg:    'rgba(37,99,235,0.06)',
   accentBgSel: 'rgba(37,99,235,0.12)',
@@ -24,11 +24,11 @@ const C = {
   redBg:       'rgba(239,68,68,0.08)',
   amber:       '#F59E0B',      // Warning Amber (Gold)
   amberBg:     'rgba(245,158,11,0.08)',
-  textPrimary: '#1E293B',      // Text Dark
-  textSub:     '#475569',
+  textPrimary: 'var(--text-primary)',      // Text Dark
+  textSub:     'var(--text-secondary)',
   textMuted:   '#94A3B8',
-  inputBg:     '#FFFFFF',
-  optionBg:    '#F8FAFC',
+  inputBg:     'var(--bg-glass)',
+  optionBg:    'var(--bg-glass)',
   optionBgSel: 'rgba(37,99,235,0.12)',
 };
 
@@ -400,7 +400,7 @@ const optBtn = (active) => ({
   width: '100%', padding: '14px 18px', borderRadius: '12px', textAlign: 'left',
   cursor: 'pointer', outline: 'none', transition: 'all 0.15s',
   fontSize: '0.95rem', fontWeight: active ? 700 : 500,
-  color: active ? '#ffffff' : C.textPrimary,
+  color: active ? 'var(--bg-glass)' : C.textPrimary,
   background: active ? C.accent : C.optionBg,
   border: `1.5px solid ${active ? C.accent : C.border}`,
   boxShadow: active ? `0 0 0 1px ${C.accent}` : 'none',

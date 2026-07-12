@@ -35,6 +35,21 @@ const upload = multer({
   }
 });
 
+// GET /api/clients/public (Unprotected, returns only safe data for landing page marquee)
+router.get('/public', async (req, res) => {
+  try {
+    const clients = await Client.findAll({
+      where: { status: 'Active' },
+      attributes: ['id', 'name', 'client_logo'],
+      order: [['name', 'ASC']]
+    });
+    res.json(clients);
+  } catch (error) {
+    console.error('Fetch Public Clients Error:', error);
+    res.status(500).json({ error: 'Failed to fetch public clients' });
+  }
+});
+
 // GET /api/clients
 router.get('/', requireAuth, async (req, res) => {
   try {

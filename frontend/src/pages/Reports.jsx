@@ -77,6 +77,7 @@ export default function Reports() {
   const [activeMenuId, setActiveMenuId] = useState(null); // For session cards dropdown menu
 
   const [leaderboard, setLeaderboard] = useState([]);
+  const [trendPeriod, setTrendPeriod] = useState('Monthly');
 
   const handleDateFilterChange = (filterType) => {
     setDateFilter(filterType);
@@ -126,10 +127,10 @@ export default function Reports() {
       
       if (response.data && response.data.length > 0) {
         const mapped = response.data.map((u, index) => {
-          let bg = '#F1F5F9';
-          let col = '#475569';
+          let bg = 'var(--bg-tertiary)';
+          let col = 'var(--text-secondary)';
           if (index === 0) { bg = '#FEF08A'; col = '#A16207'; }
-          else if (index === 1) { bg = '#E2E8F0'; col = '#475569'; }
+          else if (index === 1) { bg = '#E2E8F0'; col = 'var(--text-secondary)'; }
           else if (index === 2) { bg = '#FFEDD5'; col = '#C2410C'; }
           return {
             rank: index + 1,
@@ -144,20 +145,20 @@ export default function Reports() {
       } else {
         setLeaderboard([
           { rank: 1, name: 'Rahul Sharma', score: '95%', completion: '100%', bg: '#FEF08A', col: '#A16207' },
-          { rank: 2, name: 'Neha Singh', score: '92%', completion: '100%', bg: '#E2E8F0', col: '#475569' },
+          { rank: 2, name: 'Neha Singh', score: '92%', completion: '100%', bg: '#E2E8F0', col: 'var(--text-secondary)' },
           { rank: 3, name: 'Amit Kumar', score: '90%', completion: '100%', bg: '#FFEDD5', col: '#C2410C' },
-          { rank: 4, name: 'Priya Patel', score: '88%', completion: '100%', bg: '#F1F5F9', col: '#475569' },
-          { rank: 5, name: 'Suresh Yadav', score: '86%', completion: '100%', bg: '#F1F5F9', col: '#475569' }
+          { rank: 4, name: 'Priya Patel', score: '88%', completion: '100%', bg: 'var(--bg-tertiary)', col: 'var(--text-secondary)' },
+          { rank: 5, name: 'Suresh Yadav', score: '86%', completion: '100%', bg: 'var(--bg-tertiary)', col: 'var(--text-secondary)' }
         ]);
       }
     } catch (err) {
       console.error('Failed to fetch leaderboard data', err);
       setLeaderboard([
         { rank: 1, name: 'Rahul Sharma', score: '95%', completion: '100%', bg: '#FEF08A', col: '#A16207' },
-        { rank: 2, name: 'Neha Singh', score: '92%', completion: '100%', bg: '#E2E8F0', col: '#475569' },
+        { rank: 2, name: 'Neha Singh', score: '92%', completion: '100%', bg: '#E2E8F0', col: 'var(--text-secondary)' },
         { rank: 3, name: 'Amit Kumar', score: '90%', completion: '100%', bg: '#FFEDD5', col: '#C2410C' },
-        { rank: 4, name: 'Priya Patel', score: '88%', completion: '100%', bg: '#F1F5F9', col: '#475569' },
-        { rank: 5, name: 'Suresh Yadav', score: '86%', completion: '100%', bg: '#F1F5F9', col: '#475569' }
+        { rank: 4, name: 'Priya Patel', score: '88%', completion: '100%', bg: 'var(--bg-tertiary)', col: 'var(--text-secondary)' },
+        { rank: 5, name: 'Suresh Yadav', score: '86%', completion: '100%', bg: 'var(--bg-tertiary)', col: 'var(--text-secondary)' }
       ]);
     }
   };
@@ -415,7 +416,7 @@ export default function Reports() {
           { id: 'mp5', name: 'Suresh Yadav', employeeId: 'EMP105', score: '2/3', percentage: '66%', timeSpent: '55s', storeName: 'Store #101 (Delhi)' }
         ],
         questions: mock.questions.length > 0 ? mock.questions : [
-          { id: 'mq1', text: 'Core Brand Hex Code Value?', type: 'mcq', correct_answer: '#F36F21', options: ['#F36F21', '#071B36', '#2563EB', '#22C55E'] },
+          { id: 'mq1', text: 'Core Brand Hex Code Value?', type: 'mcq', correct_answer: '#F36F21', options: ['#F36F21', 'var(--text-primary)', 'var(--primary)', '#22C55E'] },
           { id: 'mq2', text: 'Operational guidelines apply to all stores.', type: 'true_false', correct_answer: 'True', options: ['True', 'False'] },
           { id: 'mq3', text: 'Name the primary brand font.', type: 'open_text', correct_answer: 'Poppins', options: [] }
         ]
@@ -864,16 +865,63 @@ export default function Reports() {
     </svg>
   );
 
+  
+  const getTrendData = () => {
+    if (trendPeriod === 'Daily') {
+      return [
+        { label: '30 May', p: 150, c: 88, s: 72 },
+        { label: '31 May', p: 170, c: 90, s: 74 },
+        { label: '01 Jun', p: 220, c: 92, s: 80 },
+        { label: '02 Jun', p: 180, c: 89, s: 76 },
+        { label: '03 Jun', p: 250, c: 91, s: 78 },
+        { label: '04 Jun', p: 200, c: 90, s: 77 },
+        { label: '05 Jun', p: 190, c: 92, s: 81 },
+      ];
+    } else if (trendPeriod === 'Weekly') {
+      return [
+        { label: 'W4 Apr', p: 800, c: 85, s: 70 },
+        { label: 'W1 May', p: 850, c: 87, s: 71 },
+        { label: 'W2 May', p: 920, c: 88, s: 74 },
+        { label: 'W3 May', p: 890, c: 86, s: 73 },
+        { label: 'W4 May', p: 950, c: 89, s: 76 },
+        { label: 'W1 Jun', p: 1100, c: 91, s: 78 },
+        { label: 'W2 Jun', p: 1050, c: 92, s: 80 },
+      ];
+    } else {
+      return [
+        { label: 'Dec', p: 3200, c: 80, s: 68 },
+        { label: 'Jan', p: 3500, c: 82, s: 70 },
+        { label: 'Feb', p: 3100, c: 85, s: 72 },
+        { label: 'Mar', p: 3800, c: 86, s: 74 },
+        { label: 'Apr', p: 4100, c: 88, s: 75 },
+        { label: 'May', p: 4500, c: 90, s: 77 },
+        { label: 'Jun', p: 4800, c: 92, s: 79 },
+      ];
+    }
+  };
+  const trendData = getTrendData();
+  const maxP = Math.max(...trendData.map(d => d.p)) * 1.2;
+
+  // Chart coordinates calculation
+  const getX = (index) => 35 + index * 65;
+  const getPY = (p) => 155 - (p / maxP) * 140; // Participants Y
+  const getCY = (c) => 155 - (c / 100) * 140; // Completion Y
+  const getSY = (s) => 155 - (s / 100) * 140; // Score Y
+
+  const cPath = trendData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getCY(d.c)}`).join(' ');
+  const sPath = trendData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getSY(d.s)}`).join(' ');
+
+
   return (
-    <div style={{ padding: '24px', background: '#F8FAFC', minHeight: '100%', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>
+    <div style={{ padding: '24px', background: 'var(--bg-glass)', minHeight: '100%', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>
       
       {/* ─── HEADER SECTION ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#071B36', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             Training Intelligence Center <span style={{ textShadow: '0 0 10px rgba(243,111,33,0.3)' }}>📈</span>
           </h1>
-          <p style={{ color: '#64748B', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Track engagement, performance, certification and learning outcomes.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Track engagement, performance, certification and learning outcomes.</p>
         </div>
 
         {/* Global Controls & Simulator Mode */}
@@ -884,7 +932,7 @@ export default function Reports() {
             onClick={handleExportExcel}
             disabled={loading}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#FFFFFF',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--bg-glass)',
               border: '1px solid #E2E8F0', borderRadius: '10px', color: '#16A34A', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s'
             }}
           >
@@ -897,7 +945,7 @@ export default function Reports() {
             onClick={handleExportPPT}
             disabled={loading}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#FFFFFF',
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--bg-glass)',
               border: '1px solid #E2E8F0', borderRadius: '10px', color: '#7C3AED', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s'
             }}
           >
@@ -914,8 +962,8 @@ export default function Reports() {
             }}
             disabled={syncing}
             style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: '#FFFFFF',
-              border: '1px solid #E2E8F0', borderRadius: '10px', color: '#475569', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s'
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'var(--bg-glass)',
+              border: '1px solid #E2E8F0', borderRadius: '10px', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.15s'
             }}
           >
             <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear' : 'none' }} />
@@ -925,28 +973,28 @@ export default function Reports() {
       </div>
 
       {/* ─── FILTERS & CONTROLS ROW ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#FFFFFF', padding: '12px 18px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-glass)', padding: '12px 18px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         
         {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F8FAFC', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', width: '280px' }}>
-          <Search size={15} color="#64748B" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-glass)', padding: '8px 14px', borderRadius: '8px', border: '1px solid #E2E8F0', width: '280px' }}>
+          <Search size={15} color='var(--text-secondary)' />
           <input 
             type="text" 
             placeholder="Search sessions, supervisors, trainings..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', color: '#071B36', width: '100%' }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.8rem', color: 'var(--text-primary)', width: '100%' }}
           />
         </div>
 
         {/* Date Filters Selectors */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '6px 12px', borderRadius: '8px', marginRight: '6px' }}>
-            <Calendar size={14} color="#64748B" />
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#071B36' }}>{dateRange}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-glass)', border: '1px solid #E2E8F0', padding: '6px 12px', borderRadius: '8px', marginRight: '6px' }}>
+            <Calendar size={14} color='var(--text-secondary)' />
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{dateRange}</span>
           </div>
 
-          <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '3px' }}>
             {['Today', '7 Days', '30 Days', 'Quarter', 'Custom'].map(item => {
               const isActive = dateFilter === item;
               return (
@@ -955,7 +1003,7 @@ export default function Reports() {
                   onClick={() => handleDateFilterChange(item)}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '0.75rem', fontWeight: 700,
-                    cursor: 'pointer', background: isActive ? '#F36F21' : 'transparent', color: isActive ? 'white' : '#64748B',
+                    cursor: 'pointer', background: isActive ? '#F36F21' : 'transparent', color: isActive ? 'white' : 'var(--text-secondary)',
                     transition: 'all 0.15s'
                   }}
                 >
@@ -971,29 +1019,29 @@ export default function Reports() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         
         {/* KPI 1: Participants */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Participants</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Participants</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <Users size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.participants}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.participants}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.participantsGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
-            {renderSparkline('#2563EB')}
+            {renderSparkline('var(--primary)')}
           </div>
         </div>
 
         {/* KPI 2: Trainings */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Trainings</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Trainings</span>
             <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED' }}>
               <Play size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.trainings}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.trainings}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.trainingsGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
             {renderSparkline('#7C3AED')}
@@ -1001,14 +1049,14 @@ export default function Reports() {
         </div>
 
         {/* KPI 3: Completion Rate */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Completion Rate</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#F0FDF4', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Completion Rate</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(34, 197, 94, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#16A34A' }}>
               <CheckCircle size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.completion}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.completion}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.completionGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
             {renderSparkline('#16A34A')}
@@ -1016,14 +1064,14 @@ export default function Reports() {
         </div>
 
         {/* KPI 4: Average Score */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Average Score</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#FFF7ED', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EA580C' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Average Score</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(234, 88, 12, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EA580C' }}>
               <Award size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.score}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.score}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.scoreGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
             {renderSparkline('#EA580C')}
@@ -1031,29 +1079,29 @@ export default function Reports() {
         </div>
 
         {/* KPI 5: Certificates Issued */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Certificates Issued</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Certificates Issued</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)' }}>
               <Shield size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.certs}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.certs}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.certsGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
-            {renderSparkline('#2563EB')}
+            {renderSparkline('var(--primary)')}
           </div>
         </div>
 
         {/* KPI 6: Engagement Score */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B' }}>Engagement Score</span>
-            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Engagement Score</span>
+            <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EF4444' }}>
               <Heart size={16} />
             </div>
           </div>
-          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: '#071B36', margin: '4px 0' }}>{kpis.engagement}</strong>
+          <strong style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{kpis.engagement}</strong>
           <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#22C55E', display: 'block', marginBottom: '8px' }}>{kpis.engagementGrowth}</span>
           <div style={{ marginTop: 'auto' }}>
             {renderSparkline('#EF4444')}
@@ -1066,25 +1114,25 @@ export default function Reports() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
         
         {/* Performance Trend Combined Chart Card */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gridColumn: 'span 2' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', gridColumn: 'span 2' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Performance Trend</h3>
-              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Combined participants, scores, and completion rate trend</span>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Performance Trend</h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Combined participants, scores, and completion rate trend</span>
             </div>
             
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               {/* Chart Legend */}
-              <div style={{ display: 'flex', gap: '10px', fontSize: '0.68rem', fontWeight: 600, color: '#475569', marginRight: '8px' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '8px', height: '8px', background: '#2563EB', borderRadius: '2px' }} /> Participants</span>
+              <div style={{ display: 'flex', gap: '10px', fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-secondary)', marginRight: '8px' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '2px' }} /> Participants</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '8px', height: '1.5px', background: '#16A34A' }} /> Completion %</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '8px', height: '1.5px', background: '#EA580C' }} /> Avg Score</span>
               </div>
 
-              <select style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.72rem', fontWeight: 700, color: '#475569' }}>
-                <option>Daily</option>
-                <option>Weekly</option>
-                <option>Monthly</option>
+              <select value={trendPeriod} onChange={(e) => setTrendPeriod(e.target.value)} style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', outline: 'none' }}>
+                <option value="Daily">Daily</option>
+                <option value="Weekly">Weekly</option>
+                <option value="Monthly">Monthly</option>
               </select>
             </div>
           </div>
@@ -1093,96 +1141,58 @@ export default function Reports() {
           <div style={{ flex: 1, height: '180px', minHeight: '180px', position: 'relative' }}>
             <svg viewBox="0 0 460 180" width="100%" height="100%" style={{ overflow: 'visible' }}>
               {/* Y Axis Gridlines */}
-              <line x1="35" y1="15" x2="425" y2="15" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="35" y1="50" x2="425" y2="50" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="35" y1="85" x2="425" y2="85" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="35" y1="120" x2="425" y2="120" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="35" y1="155" x2="425" y2="155" stroke="#E2E8F0" strokeWidth="1.5" />
+              <line x1="35" y1="15" x2="425" y2="15" stroke="var(--border-glass)" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+              <line x1="35" y1="50" x2="425" y2="50" stroke="var(--border-glass)" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+              <line x1="35" y1="85" x2="425" y2="85" stroke="var(--border-glass)" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+              <line x1="35" y1="120" x2="425" y2="120" stroke="var(--border-glass)" strokeWidth="1" strokeDasharray="4 4" opacity="0.3" />
+              <line x1="35" y1="155" x2="425" y2="155" stroke="var(--border-glass)" strokeWidth="1.5" />
 
-              {/* Y Labels Left (Participants 0 - 300) */}
-              <text x="25" y="20" fill="#94A3B8" fontSize="8" textAnchor="end">300</text>
-              <text x="25" y="55" fill="#94A3B8" fontSize="8" textAnchor="end">200</text>
-              <text x="25" y="90" fill="#94A3B8" fontSize="8" textAnchor="end">100</text>
-              <text x="25" y="125" fill="#94A3B8" fontSize="8" textAnchor="end">50</text>
-              <text x="25" y="158" fill="#94A3B8" fontSize="8" textAnchor="end">0</text>
+              {/* Y Labels Left (Participants) */}
+              <text x="25" y="20" fill="var(--text-secondary)" fontSize="8" textAnchor="end">{Math.round(maxP)}</text>
+              <text x="25" y="55" fill="var(--text-secondary)" fontSize="8" textAnchor="end">{Math.round(maxP * 0.75)}</text>
+              <text x="25" y="90" fill="var(--text-secondary)" fontSize="8" textAnchor="end">{Math.round(maxP * 0.5)}</text>
+              <text x="25" y="125" fill="var(--text-secondary)" fontSize="8" textAnchor="end">{Math.round(maxP * 0.25)}</text>
+              <text x="25" y="158" fill="var(--text-secondary)" fontSize="8" textAnchor="end">0</text>
 
-              {/* Y Labels Right (Percentages 0% - 100%) */}
-              <text x="435" y="20" fill="#94A3B8" fontSize="8">100%</text>
-              <text x="435" y="55" fill="#94A3B8" fontSize="8">75%</text>
-              <text x="435" y="90" fill="#94A3B8" fontSize="8">50%</text>
-              <text x="435" y="125" fill="#94A3B8" fontSize="8">25%</text>
-              <text x="435" y="158" fill="#94A3B8" fontSize="8">0%</text>
+              {/* Y Labels Right (Percentages) */}
+              <text x="435" y="20" fill="var(--text-secondary)" fontSize="8">100%</text>
+              <text x="435" y="55" fill="var(--text-secondary)" fontSize="8">75%</text>
+              <text x="435" y="90" fill="var(--text-secondary)" fontSize="8">50%</text>
+              <text x="435" y="125" fill="var(--text-secondary)" fontSize="8">25%</text>
+              <text x="435" y="158" fill="var(--text-secondary)" fontSize="8">0%</text>
 
-              {/* X Labels (Dates) */}
-              <text x="35" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">30 May</text>
-              <text x="100" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">31 May</text>
-              <text x="165" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">01 Jun</text>
-              <text x="230" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">02 Jun</text>
-              <text x="295" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">03 Jun</text>
-              <text x="360" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">04 Jun</text>
-              <text x="425" y="170" fill="#94A3B8" fontSize="8" textAnchor="middle">05 Jun</text>
-
-              {/* Participants Bar Chart */}
-              {/* May 30: 150 */}
-              <rect x="23" y="85" width="24" height="70" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* May 31: 170 */}
-              <rect x="88" y="76" width="24" height="79" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* Jun 01: 220 */}
-              <rect x="153" y="53" width="24" height="102" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* Jun 02: 180 */}
-              <rect x="218" y="71" width="24" height="84" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* Jun 03: 250 */}
-              <rect x="283" y="39" width="24" height="116" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* Jun 04: 200 */}
-              <rect x="348" y="62" width="24" height="93" rx="3" fill="#2563EB" fillOpacity="0.85" />
-              {/* Jun 05: 190 */}
-              <rect x="413" y="67" width="24" height="88" rx="3" fill="#2563EB" fillOpacity="0.85" />
+              {/* Dynamic X Labels and Bars */}
+              {trendData.map((d, i) => {
+                const x = getX(i);
+                const barY = getPY(d.p);
+                const barH = 155 - barY;
+                return (
+                  <g key={'bar'+i}>
+                    <text x={x} y="170" fill="var(--text-secondary)" fontSize="8" textAnchor="middle" fontWeight={600}>{d.label}</text>
+                    <rect x={x - 12} y={barY} width="24" height={barH} rx="3" fill="var(--primary)" fillOpacity="0.85" />
+                  </g>
+                );
+              })}
 
               {/* Completion Rate Line (Green) */}
-              <path
-                d="M 35,32 L 100,29 L 165,26 L 230,30 L 295,27 L 360,29 L 425,26"
-                fill="none"
-                stroke="#16A34A"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="35" cy="32" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="100" cy="29" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="165" cy="26" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="230" cy="30" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="295" cy="27" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="360" cy="29" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="425" cy="26" r="3" fill="#16A34A" stroke="#FFFFFF" strokeWidth="1" />
+              <path d={cPath} fill="none" stroke="#16A34A" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {trendData.map((d, i) => <circle key={'cc'+i} cx={getX(i)} cy={getCY(d.c)} r="3" fill="#16A34A" stroke="var(--bg-glass)" strokeWidth="1" />)}
 
               {/* Avg Score Line (Orange) */}
-              <path
-                d="M 35,54 L 100,50 L 165,37 L 230,46 L 295,40 L 360,43 L 425,37"
-                fill="none"
-                stroke="#EA580C"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-              <circle cx="35" cy="54" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="100" cy="50" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="165" cy="37" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="230" cy="46" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="295" cy="40" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="360" cy="43" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
-              <circle cx="425" cy="37" r="3" fill="#EA580C" stroke="#FFFFFF" strokeWidth="1" />
+              <path d={sPath} fill="none" stroke="#EA580C" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              {trendData.map((d, i) => <circle key={'sc'+i} cx={getX(i)} cy={getSY(d.s)} r="3" fill="#EA580C" stroke="var(--bg-glass)" strokeWidth="1" />)}
             </svg>
           </div>
         </div>
 
         {/* AI Insights Engine Card */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#071B36', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <Sparkles size={16} color="#7C3AED" /> AI Insights
               </h3>
-              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Smart performance notifications</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Smart performance notifications</span>
             </div>
             <span style={{ fontSize: '0.62rem', background: '#F5F3FF', color: '#7C3AED', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>AI Powered</span>
           </div>
@@ -1190,32 +1200,32 @@ export default function Reports() {
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
             
             {/* KPI insights */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-glass)', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#22C55E' }} />
               <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', fontWeight: 500 }}>Strongest Topic</span>
-                <strong style={{ fontSize: '0.78rem', color: '#071B36' }}>Product Knowledge (92% Accuracy)</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 500 }}>Strongest Topic</span>
+                <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>Product Knowledge (92% Accuracy)</strong>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-glass)', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EF4444' }} />
               <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', fontWeight: 500 }}>Weakest Topic</span>
-                <strong style={{ fontSize: '0.78rem', color: '#071B36' }}>Compliance Module (64% Accuracy)</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 500 }}>Weakest Topic</span>
+                <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>Compliance Module (64% Accuracy)</strong>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F8FAFC', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-glass)', padding: '10px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
               <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#EA580C' }} />
               <div style={{ flex: 1 }}>
-                <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', fontWeight: 500 }}>Most Difficult Question</span>
-                <strong style={{ fontSize: '0.78rem', color: '#071B36' }}>Question #8 (32% Accuracy)</strong>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', display: 'block', fontWeight: 500 }}>Most Difficult Question</span>
+                <strong style={{ fontSize: '0.78rem', color: 'var(--text-primary)' }}>Question #8 (32% Accuracy)</strong>
               </div>
             </div>
 
             {/* Recommendation Alert Box */}
-            <div style={{ display: 'flex', gap: '10px', background: '#FFF7ED', border: '1px solid rgba(234,88,12,0.2)', padding: '12px', borderRadius: '10px', marginTop: '4px' }}>
+            <div style={{ display: 'flex', gap: '10px', background: 'rgba(234, 88, 12, 0.15)', border: '1px solid rgba(234,88,12,0.2)', padding: '12px', borderRadius: '10px', marginTop: '4px' }}>
               <Target size={20} color="#EA580C" style={{ flexShrink: 0, marginTop: '2px' }} />
               <div>
                 <strong style={{ fontSize: '0.78rem', color: '#EA580C', display: 'block', fontWeight: 700 }}>Recommended Action</strong>
@@ -1230,7 +1240,7 @@ export default function Reports() {
               style={{
                 width: '100%', border: 'none', background: '#F36F21', color: 'white', fontWeight: 700,
                 fontSize: '0.8rem', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(243,111,33,0.2)'
+                alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
               }}
             >
               View Detailed Analysis
@@ -1239,22 +1249,22 @@ export default function Reports() {
         </div>
 
         {/* Report Generator Customizer Card */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', minWidth: '320px' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column', minWidth: '320px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Report Generator</h3>
-              <span style={{ fontSize: '0.72rem', color: '#64748B' }}>Create client presentation decks</span>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Report Generator</h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Create client presentation decks</span>
             </div>
-            <span style={{ fontSize: '0.65rem', background: '#F0FDF4', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>v1.0 Standard</span>
+            <span style={{ fontSize: '0.65rem', background: 'rgba(34, 197, 94, 0.15)', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>v1.0 Standard</span>
           </div>
 
           {/* Sub-tabs selector */}
-          <div style={{ display: 'flex', gap: '4px', background: '#F1F5F9', padding: '4px', borderRadius: '8px', marginBottom: '12px' }}>
+          <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '8px', marginBottom: '12px' }}>
             <button 
               onClick={() => setGeneratorTab('branding')}
               style={{
-                flex: 1, border: 'none', background: generatorTab === 'branding' ? '#FFFFFF' : 'transparent',
-                color: generatorTab === 'branding' ? '#7C3AED' : '#475569', fontWeight: 700, fontSize: '0.75rem',
+                flex: 1, border: 'none', background: generatorTab === 'branding' ? 'var(--bg-glass)' : 'transparent',
+                color: generatorTab === 'branding' ? '#7C3AED' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.75rem',
                 padding: '6px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s',
                 boxShadow: generatorTab === 'branding' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}
@@ -1264,8 +1274,8 @@ export default function Reports() {
             <button 
               onClick={() => setGeneratorTab('slides')}
               style={{
-                flex: 1, border: 'none', background: generatorTab === 'slides' ? '#FFFFFF' : 'transparent',
-                color: generatorTab === 'slides' ? '#7C3AED' : '#475569', fontWeight: 700, fontSize: '0.75rem',
+                flex: 1, border: 'none', background: generatorTab === 'slides' ? 'var(--bg-glass)' : 'transparent',
+                color: generatorTab === 'slides' ? '#7C3AED' : 'var(--text-secondary)', fontWeight: 700, fontSize: '0.75rem',
                 padding: '6px', borderRadius: '6px', cursor: 'pointer', transition: 'all 0.15s',
                 boxShadow: generatorTab === 'slides' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
               }}
@@ -1280,13 +1290,13 @@ export default function Reports() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
                 {/* Template Selector dropdown */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Select Deck Template</label>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Select Deck Template</label>
                   <select
                     value={selectedPPTTemplate}
                     onChange={(e) => handlePPTTemplateChange(e.target.value)}
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC',
-                      fontSize: '0.75rem', fontWeight: 700, color: '#071B36', outline: 'none'
+                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                      fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', outline: 'none'
                     }}
                   >
                     <option value="executive">Executive PPT (Program summary)</option>
@@ -1298,13 +1308,13 @@ export default function Reports() {
 
                 {/* Excel Workbook Selector */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Select Excel Workbook Type</label>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Select Excel Workbook Type</label>
                   <select
                     value={selectedExcelType}
                     onChange={(e) => setSelectedExcelType(e.target.value)}
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC',
-                      fontSize: '0.75rem', fontWeight: 700, color: '#071B36', outline: 'none'
+                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                      fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', outline: 'none'
                     }}
                   >
                     <option value="all">Complete Workbook (All 13 Sheets)</option>
@@ -1318,13 +1328,13 @@ export default function Reports() {
 
                 {/* Theme Selector */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Select PPT Visual Theme</label>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Select PPT Visual Theme</label>
                   <select
                     value={selectedTheme}
                     onChange={(e) => setSelectedTheme(e.target.value)}
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC',
-                      fontSize: '0.75rem', fontWeight: 700, color: '#071B36', outline: 'none'
+                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                      fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)', outline: 'none'
                     }}
                   >
                     <option value="standard">Standard Theme (Idonneous Violet/Orange)</option>
@@ -1336,30 +1346,30 @@ export default function Reports() {
 
                 {/* Presenter Name */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Presenter Name</label>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Presenter Name</label>
                   <input
                     type="text"
                     value={presenterName}
                     onChange={(e) => setPresenterName(e.target.value)}
                     placeholder="Enter presenter name..."
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC',
-                      fontSize: '0.75rem', color: '#071B36', outline: 'none', boxSizing: 'border-box'
+                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                      fontSize: '0.75rem', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box'
                     }}
                   />
                 </div>
 
                 {/* Footer Text */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: '#475569' }}>Footer Text</label>
+                  <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Footer Text</label>
                   <input
                     type="text"
                     value={footerText}
                     onChange={(e) => setFooterText(e.target.value)}
                     placeholder="Custom footer text..."
                     style={{
-                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#F8FAFC',
-                      fontSize: '0.75rem', color: '#071B36', outline: 'none', boxSizing: 'border-box'
+                      width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                      fontSize: '0.75rem', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -1367,7 +1377,7 @@ export default function Reports() {
                 {/* Logo uploads row */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.65rem', fontWeight: 700, color: '#475569' }}>Client Logo</label>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Client Logo</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <input 
                         type="file" 
@@ -1377,8 +1387,8 @@ export default function Reports() {
                         style={{ display: 'none' }}
                       />
                       <label htmlFor="client-logo-upload" style={{
-                        flex: 1, padding: '6px 10px', background: '#F8FAFC', border: '1px solid #D1D5DB', borderRadius: '6px',
-                        fontSize: '0.65rem', fontWeight: 700, color: '#475569', cursor: 'pointer', textAlign: 'center', display: 'block'
+                        flex: 1, padding: '6px 10px', background: 'var(--bg-glass)', border: '1px solid #D1D5DB', borderRadius: '6px',
+                        fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)', cursor: 'pointer', textAlign: 'center', display: 'block'
                       }}>
                         {clientLogo ? '✔️ Uploaded' : '📁 Upload'}
                       </label>
@@ -1391,7 +1401,7 @@ export default function Reports() {
                   </div>
 
                   <div>
-                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.65rem', fontWeight: 700, color: '#475569' }}>Project Logo</label>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Project Logo</label>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
                       <input 
                         type="file" 
@@ -1401,8 +1411,8 @@ export default function Reports() {
                         style={{ display: 'none' }}
                       />
                       <label htmlFor="project-logo-upload" style={{
-                        flex: 1, padding: '6px 10px', background: '#F8FAFC', border: '1px solid #D1D5DB', borderRadius: '6px',
-                        fontSize: '0.65rem', fontWeight: 700, color: '#475569', cursor: 'pointer', textAlign: 'center', display: 'block'
+                        flex: 1, padding: '6px 10px', background: 'var(--bg-glass)', border: '1px solid #D1D5DB', borderRadius: '6px',
+                        fontSize: '0.65rem', fontWeight: 700, color: 'var(--text-secondary)', cursor: 'pointer', textAlign: 'center', display: 'block'
                       }}>
                         {projectLogo ? '✔️ Uploaded' : '📁 Upload'}
                       </label>
@@ -1420,14 +1430,14 @@ export default function Reports() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
                 
                 {/* Scrollable list of slide manager checkboxes */}
-                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px', background: '#F8FAFC' }} className="custom-scrollbar">
+                <div style={{ maxHeight: '150px', overflowY: 'auto', border: '1px solid #E2E8F0', borderRadius: '8px', padding: '6px', background: 'var(--bg-glass)' }} className="custom-scrollbar">
                   {slideSettings.map((slide, i) => (
                     <div 
                       key={slide.id}
                       onClick={() => setActiveSlideIndex(i)}
                       style={{
                         display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 8px',
-                        borderRadius: '6px', background: activeSlideIndex === i ? '#F0FDF4' : 'transparent',
+                        borderRadius: '6px', background: activeSlideIndex === i ? 'rgba(34, 197, 94, 0.15)' : 'transparent',
                         border: activeSlideIndex === i ? '1px solid #BBF7D0' : '1px solid transparent',
                         cursor: 'pointer', marginBottom: '4px', transition: 'all 0.15s'
                       }}
@@ -1442,7 +1452,7 @@ export default function Reports() {
                           }}
                           style={{ cursor: 'pointer' }}
                         />
-                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#071B36', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {i + 1}. {slide.title}
                         </span>
                       </div>
@@ -1451,14 +1461,14 @@ export default function Reports() {
                         <button 
                           onClick={() => moveSlide(i, 'up')} 
                           disabled={i === 0}
-                          style={{ border: 'none', background: '#E2E8F0', color: '#475569', borderRadius: '4px', padding: '2px 6px', fontSize: '0.6rem', cursor: i === 0 ? 'not-allowed' : 'pointer' }}
+                          style={{ border: 'none', background: '#E2E8F0', color: 'var(--text-secondary)', borderRadius: '4px', padding: '2px 6px', fontSize: '0.6rem', cursor: i === 0 ? 'not-allowed' : 'pointer' }}
                         >
                           ▲
                         </button>
                         <button 
                           onClick={() => moveSlide(i, 'down')} 
                           disabled={i === slideSettings.length - 1}
-                          style={{ border: 'none', background: '#E2E8F0', color: '#475569', borderRadius: '4px', padding: '2px 6px', fontSize: '0.6rem', cursor: i === slideSettings.length - 1 ? 'not-allowed' : 'pointer' }}
+                          style={{ border: 'none', background: '#E2E8F0', color: 'var(--text-secondary)', borderRadius: '4px', padding: '2px 6px', fontSize: '0.6rem', cursor: i === slideSettings.length - 1 ? 'not-allowed' : 'pointer' }}
                         >
                           ▼
                         </button>
@@ -1473,7 +1483,7 @@ export default function Reports() {
                     <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#7C3AED' }}>
                       Presenter Notes: Slide {activeSlideIndex + 1}
                     </span>
-                    <span style={{ fontSize: '0.6rem', color: '#64748B', fontStyle: 'italic' }}>
+                    <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>
                       ({slideSettings[activeSlideIndex]?.title})
                     </span>
                   </div>
@@ -1487,7 +1497,7 @@ export default function Reports() {
                     placeholder="Enter custom speaker notes for this slide..."
                     style={{
                       width: '100%', padding: '6px 10px', borderRadius: '8px', border: '1px solid #E2E8F0',
-                      fontSize: '0.72rem', background: '#F8FAFC', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
+                      fontSize: '0.72rem', background: 'var(--bg-glass)', outline: 'none', resize: 'vertical', boxSizing: 'border-box'
                     }}
                   />
                 </div>
@@ -1506,7 +1516,7 @@ export default function Reports() {
                 style={{
                   flex: 1, border: 'none', background: 'linear-gradient(135deg, #10B981 0%, #059669 100%)', color: 'white', fontWeight: 700,
                   fontSize: '0.8rem', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(16,185,129,0.2)'
+                  alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
                 }}
               >
                 <FileSpreadsheet size={14} /> Generate Excel
@@ -1520,7 +1530,7 @@ export default function Reports() {
                 style={{
                   flex: 1, border: 'none', background: 'linear-gradient(135deg, #7C3AED 0%, #6D28D9 100%)', color: 'white', fontWeight: 700,
                   fontSize: '0.8rem', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 4px 12px rgba(124,58,237,0.2)'
+                  alignItems: 'center', justifyContent: 'center', gap: '6px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
                 }}
               >
                 <Presentation size={14} /> Generate PPT
@@ -1535,15 +1545,15 @@ export default function Reports() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px', marginBottom: '24px' }}>
         
         {/* Leaderboard widget */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Leaderboard (Top 5)</h3>
-            <a href="#view-all" onClick={(e) => { e.preventDefault(); alert("Opening full participant standings roster..."); }} style={{ fontSize: '0.68rem', fontWeight: 700, color: '#2563EB', textDecoration: 'none' }}>View All</a>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Leaderboard (Top 5)</h3>
+            <a href="#view-all" onClick={(e) => { e.preventDefault(); alert("Opening full participant standings roster..."); }} style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>View All</a>
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '10px' }}>
             {leaderboard.map(user => (
-              <div key={user.rank} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: '#F8FAFC', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+              <div key={user.rank} style={{ display: 'flex', alignItems: 'center', gap: '10px', background: 'var(--bg-glass)', padding: '8px 12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                 <div style={{
                   width: '22px', height: '22px', borderRadius: '50%', background: user.bg, color: user.col,
                   display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 800
@@ -1551,8 +1561,8 @@ export default function Reports() {
                   {user.rank}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#071B36', display: 'block' }}>{user.name}</span>
-                  <span style={{ fontSize: '0.62rem', color: '#64748B' }}>Completion: {user.completion}</span>
+                  <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{user.name}</span>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Completion: {user.completion}</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#16A34A' }}>{user.score}</span>
@@ -1563,10 +1573,10 @@ export default function Reports() {
         </div>
 
         {/* Topic Performance widget */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Topic Performance</h3>
-            <a href="#view-all" onClick={(e) => { e.preventDefault(); alert("Opening detailed competency mapping analysis..."); }} style={{ fontSize: '0.68rem', fontWeight: 700, color: '#2563EB', textDecoration: 'none' }}>View All</a>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Topic Performance</h3>
+            <a href="#view-all" onClick={(e) => { e.preventDefault(); alert("Opening detailed competency mapping analysis..."); }} style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>View All</a>
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px' }}>
@@ -1578,11 +1588,11 @@ export default function Reports() {
               { topic: 'Customer Handling', accuracy: 81, col: '#22C55E' }
             ].map((t, idx) => (
               <div key={idx}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 600, color: '#475569', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
                   <span>{t.topic}</span>
                   <strong style={{ color: t.col }}>{t.accuracy}%</strong>
                 </div>
-                <div style={{ height: '6px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ height: '6px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
                   <div style={{ width: `${t.accuracy}%`, height: '100%', background: t.col, borderRadius: '4px' }} />
                 </div>
               </div>
@@ -1591,10 +1601,10 @@ export default function Reports() {
         </div>
 
         {/* Regional Performance India Outline Heatmap widget */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Regional Performance</h3>
-            <select style={{ padding: '2px 6px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#F8FAFC', fontSize: '0.68rem', fontWeight: 700, color: '#475569' }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Regional Performance</h3>
+            <select style={{ padding: '2px 6px', borderRadius: '6px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)', fontSize: '0.68rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
               <option>Zone Wise</option>
               <option>State Wise</option>
             </select>
@@ -1605,8 +1615,8 @@ export default function Reports() {
             <div style={{ width: '100%', height: '140px', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                 <path 
-                  d="M 200 20 L 220 50 L 280 100 L 340 100 L 360 120 L 300 150 L 280 180 L 260 250 L 200 360 L 180 360 L 140 250 L 100 160 L 80 150 L 100 100 L 140 60 Z" 
-                  fill="#F4F5F7" stroke="#CBD5E1" strokeWidth="3" strokeLinejoin="round" 
+                  d="M 160 40 L 180 10 L 210 20 L 220 50 L 250 80 L 270 90 L 320 90 L 340 100 L 360 120 L 350 140 L 320 150 L 300 140 L 290 160 L 270 190 L 250 240 L 220 300 L 200 360 L 180 360 L 150 280 L 120 220 L 100 190 L 60 170 L 50 150 L 70 130 L 100 140 L 120 110 L 130 80 L 140 50 Z" 
+                  fill='var(--bg-tertiary)' stroke="#CBD5E1" strokeWidth="3" strokeLinejoin="round" 
                 />
                 <circle cx="200" cy="80" r="45" fill="#22C55E" opacity="0.8" />
                 <circle cx="120" cy="160" r="45" fill="#FBBF24" opacity="0.8" />
@@ -1614,16 +1624,16 @@ export default function Reports() {
                 <circle cx="280" cy="160" r="45" fill="#FBBF24" opacity="0.8" />
                 <circle cx="200" cy="280" r="45" fill="#22C55E" opacity="0.8" />
 
-                <text x="200" y="85" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">North: 91%</text>
-                <text x="120" y="165" fill="#071B36" fontSize="16" fontWeight="bold" textAnchor="middle">West: 74%</text>
-                <text x="200" y="185" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">Central: 88%</text>
-                <text x="280" y="165" fill="#071B36" fontSize="16" fontWeight="bold" textAnchor="middle">East: 81%</text>
-                <text x="200" y="285" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">South: 93%</text>
+                <text x="200" y="85" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">North: 91%</text>
+                <text x="120" y="165" fill='var(--text-primary)' fontSize="16" fontWeight="bold" textAnchor="middle">West: 74%</text>
+                <text x="200" y="185" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">Central: 88%</text>
+                <text x="280" y="165" fill='var(--text-primary)' fontSize="16" fontWeight="bold" textAnchor="middle">East: 81%</text>
+                <text x="200" y="285" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">South: 93%</text>
               </svg>
             </div>
 
             {/* Colors legend indicator */}
-            <div style={{ display: 'flex', gap: '10px', fontSize: '0.62rem', fontWeight: 600, color: '#64748B', marginTop: '6px' }}>
+            <div style={{ display: 'flex', gap: '10px', fontSize: '0.62rem', fontWeight: 600, color: 'var(--text-secondary)', marginTop: '6px' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22C55E' }} /> 90%+</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FBBF24' }} /> 75%-89%</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#F97316' }} /> 50%-74%</span>
@@ -1632,10 +1642,10 @@ export default function Reports() {
         </div>
 
         {/* Certification Overview widget */}
-        <div className="glass-card" style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Certification Overview</h3>
-            <span style={{ fontSize: '0.62rem', background: '#F0FDF4', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>Pass Rate 89%</span>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Certification Overview</h3>
+            <span style={{ fontSize: '0.62rem', background: 'rgba(34, 197, 94, 0.15)', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>Pass Rate 89%</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -1652,8 +1662,8 @@ export default function Reports() {
               </svg>
               {/* Center counter */}
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                <strong style={{ fontSize: '1.05rem', fontWeight: 800, color: '#071B36', display: 'block' }}>162</strong>
-                <span style={{ fontSize: '0.5rem', color: '#64748B', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>Total</span>
+                <strong style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'block' }}>162</strong>
+                <span style={{ fontSize: '0.5rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', fontWeight: 700 }}>Total</span>
               </div>
             </div>
 
@@ -1661,15 +1671,15 @@ export default function Reports() {
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.68rem', fontWeight: 600 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#22C55E' }} /> Issued</span>
-                <strong style={{ color: '#071B36' }}>150 (89%)</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>150 (89%)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#FBBF24' }} /> Pending</span>
-                <strong style={{ color: '#071B36' }}>12 (7%)</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>12 (7%)</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#EF4444' }} /> Failed</span>
-                <strong style={{ color: '#071B36' }}>8 (4%)</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>8 (4%)</strong>
               </div>
             </div>
           </div>
@@ -1678,18 +1688,18 @@ export default function Reports() {
       </div>
 
       {/* ─── BOTTOM ROW: RECENT QUIZ SESSIONS (INTERACTIVE CARDS) ─── */}
-      <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '24px', position: 'relative' }}>
+      <div style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '24px', position: 'relative' }}>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
-            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#071B36', margin: 0 }}>Recent Quiz Sessions</h3>
-            <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Interactive analytics cards for past checks</span>
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Recent Quiz Sessions</h3>
+            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Interactive analytics cards for past checks</span>
           </div>
           <a href="#view-all" onClick={(e) => { e.preventDefault(); alert("Opening all session archive..."); }} style={{ fontSize: '0.78rem', fontWeight: 700, color: '#F36F21', textDecoration: 'none' }}>View All</a>
         </div>
 
         {loading ? (
-          <p style={{ color: '#64748B', fontSize: '0.82rem', padding: '16px' }}>Loading reports data...</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', padding: '16px' }}>Loading reports data...</p>
         ) : getFilteredReports().length > 0 ? (
           
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
@@ -1700,7 +1710,7 @@ export default function Reports() {
                   key={report.id} 
                   className="glass-card" 
                   style={{
-                    background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px',
+                    background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '14px', padding: '16px',
                     display: 'flex', flexDirection: 'column', position: 'relative', transition: 'all 0.15s'
                   }}
                   onMouseOver={e => e.currentTarget.style.borderColor = '#F36F21'}
@@ -1724,7 +1734,7 @@ export default function Reports() {
                           onClick={(e) => { e.stopPropagation(); handleDeleteReport(report.id); }}
                           style={{ background: 'none', border: 'none', color: '#EF4444', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '6px', transition: 'background 0.2s' }}
                           title="Delete Session"
-                          onMouseOver={(e) => e.currentTarget.style.background = '#FEE2E2'}
+                          onMouseOver={(e) => e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)'}
                           onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                         >
                           <Trash2 size={16} />
@@ -1734,7 +1744,7 @@ export default function Reports() {
                       <button 
                         onClick={() => setActiveMenuId(activeMenuId === report.id ? null : report.id)}
                         style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px', borderRadius: '6px', transition: 'background 0.2s' }}
-                        onMouseOver={(e) => e.currentTarget.style.background = '#F1F5F9'}
+                        onMouseOver={(e) => e.currentTarget.style.background = 'var(--bg-tertiary)'}
                         onMouseOut={(e) => e.currentTarget.style.background = 'transparent'}
                       >
                         <MoreVertical size={16} />
@@ -1743,42 +1753,42 @@ export default function Reports() {
                       {/* Dropdown Options Popup */}
                       {activeMenuId === report.id && (
                         <div style={{
-                          position: 'absolute', right: 0, top: '22px', background: '#FFFFFF', border: '1px solid #E2E8F0',
+                          position: 'absolute', right: 0, top: '22px', background: 'var(--bg-glass)', border: '1px solid #E2E8F0',
                           borderRadius: '8px', boxShadow: '0 8px 20px rgba(0,0,0,0.1)', zIndex: 50, width: '150px'
                         }}>
                           <button 
                             onClick={() => { setActiveMenuId(null); handleFetchDetails(report.id); }}
-                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: '#071B36', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
-                            <Eye size={12} color="#64748B" /> View Analytics
+                            <Eye size={12} color='var(--text-secondary)' /> View Analytics
                           </button>
                           
                           <button 
                             onClick={() => { setActiveMenuId(null); handleDownloadSessionPPT(report.id, getPPTTemplateByRole(selectedRole)); }}
-                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: '#071B36', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
-                            <Presentation size={12} color="#64748B" /> Export PPT
+                            <Presentation size={12} color='var(--text-secondary)' /> Export PPT
                           </button>
 
                           <button 
                             onClick={() => { setActiveMenuId(null); handleDownloadSessionExcel(report.id); }}
-                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: '#071B36', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
+                            style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
                           >
-                            <FileText size={12} color="#64748B" /> Export Excel
+                            <FileText size={12} color='var(--text-secondary)' /> Export Excel
                           </button>
 
                           {selectedRole === 'Admin' && (
                             <>
-                              <div style={{ height: '1px', background: '#F1F5F9', margin: '4px 0' }} />
+                              <div style={{ height: '1px', background: 'var(--bg-tertiary)', margin: '4px 0' }} />
                               <button 
                                 onClick={() => { setActiveMenuId(null); alert("Duplicating session metadata configurations..."); }}
-                                style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: '#071B36', cursor: 'pointer' }}
+                                style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
                               >
                                 Duplicate Quiz
                               </button>
                               <button 
                                 onClick={() => { setActiveMenuId(null); alert("Quiz share link copied to clipboard!"); }}
-                                style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: '#071B36', cursor: 'pointer' }}
+                                style={{ width: '100%', border: 'none', background: 'transparent', textAlign: 'left', padding: '8px 12px', fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer' }}
                               >
                                 Share Report
                               </button>
@@ -1790,22 +1800,22 @@ export default function Reports() {
                   </div>
 
                   {/* Title */}
-                  <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: '#071B36', margin: '4px 0 10px 0', lineHeight: 1.3, minHeight: '36px' }}>
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 10px 0', lineHeight: 1.3, minHeight: '36px' }}>
                     {report.title}
                   </h4>
 
                   {/* Stats list */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid #F1F5F9', paddingTop: '10px', marginBottom: '14px', fontSize: '0.72rem' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', borderTop: '1px solid var(--bg-tertiary)', paddingTop: '10px', marginBottom: '14px', fontSize: '0.72rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#64748B' }}>Date Hosted</span>
-                      <strong style={{ color: '#475569' }}>{report.date}</strong>
+                      <span style={{ color: 'var(--text-secondary)' }}>Date Hosted</span>
+                      <strong style={{ color: 'var(--text-secondary)' }}>{report.date}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#64748B' }}>Participants</span>
-                      <strong style={{ color: '#071B36' }}>{report.participants}</strong>
+                      <span style={{ color: 'var(--text-secondary)' }}>Participants</span>
+                      <strong style={{ color: 'var(--text-primary)' }}>{report.participants}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#64748B' }}>Avg Score</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Avg Score</span>
                       <strong style={{ color: '#16A34A' }}>{report.avgScore}</strong>
                     </div>
                   </div>
@@ -1815,8 +1825,8 @@ export default function Reports() {
                     <button 
                       onClick={() => handleFetchDetails(report.id)}
                       style={{
-                        flex: 1, padding: '6px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#FFFFFF',
-                        fontSize: '0.72rem', fontWeight: 700, color: '#2563EB', cursor: 'pointer'
+                        flex: 1, padding: '6px', borderRadius: '6px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                        fontSize: '0.72rem', fontWeight: 700, color: 'var(--primary)', cursor: 'pointer'
                       }}
                     >
                       View Analytics
@@ -1825,7 +1835,7 @@ export default function Reports() {
                     <button 
                       onClick={() => handleDownloadSessionPPT(report.id, getPPTTemplateByRole(selectedRole))}
                       style={{
-                        padding: '6px 10px', borderRadius: '6px', border: 'none', background: '#FFF5F0',
+                        padding: '6px 10px', borderRadius: '6px', border: 'none', background: 'rgba(243, 111, 33, 0.15)',
                         fontSize: '0.72rem', fontWeight: 700, color: '#F36F21', cursor: 'pointer'
                       }}
                       title="Quick Export PPT"
@@ -1839,7 +1849,7 @@ export default function Reports() {
             })}
           </div>
         ) : (
-          <p style={{ color: '#64748B', textAlign: 'center', padding: '32px', fontSize: '0.82rem' }}>No session reports matched your queries.</p>
+          <p style={{ color: 'var(--text-secondary)', textAlign: 'center', padding: '32px', fontSize: '0.82rem' }}>No session reports matched your queries.</p>
         )}
 
         {/* Floating Orange '+' Quick Create Quiz Button (Fixed relative to the grid wrapper) */}
@@ -1865,13 +1875,13 @@ export default function Reports() {
       {/* ─── DETAILED SESSION REPORT MODAL (OVERLAY DIALOG) ─── */}
       {selectedReportDetails && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(5px)' }}>
-          <div className="glass-card" style={{ width: '700px', background: '#FFFFFF', maxHeight: '90vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
+          <div className="glass-card" style={{ width: '700px', background: 'var(--bg-glass)', maxHeight: '90vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', display: 'flex', flexDirection: 'column' }}>
             
             {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #E2E8F0', paddingBottom: '16px' }}>
               <div>
-                <h3 style={{ margin: 0, color: '#071B36', fontSize: '1.25rem', fontWeight: 800 }}>{selectedReportDetails.quizTitle}</h3>
-                <p style={{ margin: '4px 0 0 0', color: '#64748B', fontSize: '0.78rem' }}>
+                <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.25rem', fontWeight: 800 }}>{selectedReportDetails.quizTitle}</h3>
+                <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.78rem' }}>
                   Project: <strong>{selectedReportDetails.projectName}</strong> • Date: <strong>{selectedReportDetails.date}</strong>
                 </p>
               </div>
@@ -1885,20 +1895,20 @@ export default function Reports() {
 
             {/* Quick stats grid */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-              <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Total Questions</span>
-                <strong style={{ fontSize: '1.1rem', color: '#071B36', fontWeight: 800 }}>{selectedReportDetails.totalQuestions}</strong>
+              <div style={{ background: 'var(--bg-glass)', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block' }}>Total Questions</span>
+                <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: 800 }}>{selectedReportDetails.totalQuestions}</strong>
               </div>
-              <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Participants</span>
-                <strong style={{ fontSize: '1.1rem', color: '#071B36', fontWeight: 800 }}>{selectedReportDetails.participants.length}</strong>
+              <div style={{ background: 'var(--bg-glass)', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block' }}>Participants</span>
+                <strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)', fontWeight: 800 }}>{selectedReportDetails.participants.length}</strong>
               </div>
-              <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Average Score</span>
+              <div style={{ background: 'var(--bg-glass)', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block' }}>Average Score</span>
                 <strong style={{ fontSize: '1.1rem', color: '#16A34A', fontWeight: 800 }}>84%</strong>
               </div>
-              <div style={{ background: '#F8FAFC', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
-                <span style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600, display: 'block' }}>Completion</span>
+              <div style={{ background: 'var(--bg-glass)', padding: '10px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600, display: 'block' }}>Completion</span>
                 <strong style={{ fontSize: '1.1rem', color: '#7C3AED', fontWeight: 800 }}>92%</strong>
               </div>
             </div>
@@ -1917,7 +1927,7 @@ export default function Reports() {
                   style={{
                     padding: '8px 16px', border: 'none', background: 'transparent', fontSize: '0.78rem', fontWeight: 700,
                     cursor: 'pointer', borderBottom: `2.5px solid ${detailTab === tab.key ? '#F36F21' : 'transparent'}`,
-                    color: detailTab === tab.key ? '#F36F21' : '#64748B', transition: 'all 0.15s'
+                    color: detailTab === tab.key ? '#F36F21' : 'var(--text-secondary)', transition: 'all 0.15s'
                   }}
                 >
                   {tab.label}
@@ -1931,7 +1941,7 @@ export default function Reports() {
               {/* TAB 1: OVERVIEW & EXPORTS */}
               {detailTab === 'overview' && (
                 <div>
-                  <h4 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: '#071B36', fontWeight: 800 }}>PPT Auto-Generation Suite</h4>
+                  <h4 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 800 }}>PPT Auto-Generation Suite</h4>
                   
                   <button
                     onClick={() => handleDownloadPPTFromModal('all')}
@@ -1939,7 +1949,7 @@ export default function Reports() {
                       width: '100%', padding: '12px', borderRadius: '8px', border: 'none', color: 'white',
                       background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', fontWeight: 700, fontSize: '0.8rem',
                       cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                      marginBottom: '16px', boxShadow: '0 4px 12px rgba(243,111,33,0.2)'
+                      marginBottom: '16px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
                     }}
                   >
                     <Presentation size={15} /> Download Complete Presentation Deck (All Topics)
@@ -1960,7 +1970,7 @@ export default function Reports() {
                         onClick={() => handleDownloadPPTFromModal(opt.type)}
                         style={{
                           display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px',
-                          border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#475569', fontSize: '0.78rem',
+                          border: '1px solid #E2E8F0', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.78rem',
                           fontWeight: 600, cursor: 'pointer', textAlign: 'left'
                         }}
                       >
@@ -1970,12 +1980,12 @@ export default function Reports() {
                     ))}
                   </div>
 
-                  <h4 style={{ margin: '16px 0 10px 0', fontSize: '0.85rem', color: '#071B36', fontWeight: 800 }}>Excel Data Export</h4>
+                  <h4 style={{ margin: '16px 0 10px 0', fontSize: '0.85rem', color: 'var(--text-primary)', fontWeight: 800 }}>Excel Data Export</h4>
                   <button
                     onClick={() => handleDownloadExcelFromModal()}
                     style={{
                       display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px', borderRadius: '8px',
-                      border: '1px solid rgba(22,163,74,0.3)', background: '#F0FDF4', color: '#16A34A', fontSize: '0.78rem',
+                      border: '1px solid rgba(22,163,74,0.3)', background: 'rgba(34, 197, 94, 0.15)', color: '#16A34A', fontSize: '0.78rem',
                       fontWeight: 700, cursor: 'pointer'
                     }}
                   >
@@ -1988,11 +1998,11 @@ export default function Reports() {
               {detailTab === 'participation' && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '12px', alignItems: 'center', gap: '8px' }}>
-                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748B' }}>Passing Score Threshold:</label>
+                    <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Passing Score Threshold:</label>
                     <select 
                       value={passingScore} 
                       onChange={(e) => setPassingScore(Number(e.target.value))}
-                      style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '0.75rem', outline: 'none', background: '#FFFFFF', color: '#071B36', cursor: 'pointer' }}
+                      style={{ padding: '4px 8px', borderRadius: '6px', border: '1px solid #E2E8F0', fontSize: '0.75rem', outline: 'none', background: 'var(--bg-glass)', color: 'var(--text-primary)', cursor: 'pointer' }}
                     >
                       <option value={50}>50%</option>
                       <option value={60}>60%</option>
@@ -2007,7 +2017,7 @@ export default function Reports() {
                   <div style={{ overflowX: 'auto' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.78rem' }}>
                       <thead>
-                        <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#64748B', fontWeight: 700 }}>
+                        <tr style={{ borderBottom: '2px solid #E2E8F0', color: 'var(--text-secondary)', fontWeight: 700 }}>
                           <th style={{ padding: '8px 10px' }}>Name</th>
                           <th style={{ padding: '8px 10px' }}>Employee ID</th>
                           <th style={{ padding: '8px 10px' }}>Store Name</th>
@@ -2021,30 +2031,30 @@ export default function Reports() {
                           const pctStr = p.percentage || '0%';
                           const pctValue = parseInt(pctStr.replace('%', ''), 10) || 0;
                           
-                          let bg = '#F0FDF4';
+                          let bg = 'rgba(34, 197, 94, 0.15)';
                           let col = '#16A34A'; // Green (Pass)
                           if (pctValue < passingScore) {
                             if (pctValue >= passingScore - 20) {
-                              bg = '#FFF7ED';
+                              bg = 'rgba(234, 88, 12, 0.15)';
                               col = '#EA580C'; // Orange (Close)
                             } else {
-                              bg = '#FEF2F2';
+                              bg = 'rgba(239, 68, 68, 0.15)';
                               col = '#EF4444'; // Red (Fail)
                             }
                           }
 
                           return (
-                            <tr key={p.id || idx} style={{ borderBottom: '1px solid #F1F5F9' }}>
-                              <td style={{ padding: '10px', color: '#071B36', fontWeight: 700 }}>{p.name}</td>
-                              <td style={{ padding: '10px', color: '#64748B' }}>{p.employeeId || 'N/A'}</td>
-                              <td style={{ padding: '10px', color: '#64748B' }}>{p.storeName || getMockDetails(p.name).store}</td>
-                              <td style={{ padding: '10px', color: '#475569', fontWeight: 600 }}>{p.score || '—'}</td>
+                            <tr key={p.id || idx} style={{ borderBottom: '1px solid var(--bg-tertiary)' }}>
+                              <td style={{ padding: '10px', color: 'var(--text-primary)', fontWeight: 700 }}>{p.name}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{p.employeeId || 'N/A'}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{p.storeName || getMockDetails(p.name).store}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)', fontWeight: 600 }}>{p.score || '—'}</td>
                               <td style={{ padding: '10px' }}>
                                 <span style={{ background: bg, color: col, padding: '2px 8px', borderRadius: '4px', fontWeight: 700, transition: 'all 0.3s' }}>
                                   {pctStr}
                                 </span>
                               </td>
-                              <td style={{ padding: '10px', color: '#64748B' }}>{p.timeSpent || '—'}</td>
+                              <td style={{ padding: '10px', color: 'var(--text-secondary)' }}>{p.timeSpent || '—'}</td>
                             </tr>
                           );
                         })}
@@ -2060,18 +2070,18 @@ export default function Reports() {
                   {selectedReportDetails.questions.map((q, idx) => {
                     const diffTag = idx === 2 ? 'Hard' : idx === 1 ? 'Medium' : 'Easy';
                     const diffCol = idx === 2 ? '#EF4444' : idx === 1 ? '#F97316' : '#22C55E';
-                    const diffBg = idx === 2 ? '#FEF2F2' : idx === 1 ? '#FFF7ED' : '#F0FDF4';
+                    const diffBg = idx === 2 ? 'rgba(239, 68, 68, 0.15)' : idx === 1 ? 'rgba(234, 88, 12, 0.15)' : 'rgba(34, 197, 94, 0.15)';
 
                     return (
-                      <div key={q.id || idx} style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '12px', borderRadius: '10px' }}>
+                      <div key={q.id || idx} style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', padding: '12px', borderRadius: '10px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '6px' }}>
-                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: '#475569' }}>Question {idx + 1} ({q.type})</span>
+                          <span style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--text-secondary)' }}>Question {idx + 1} ({q.type})</span>
                           <span style={{ fontSize: '0.62rem', background: diffBg, color: diffCol, padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>{diffTag}</span>
                         </div>
-                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: '#071B36', margin: '0 0 8px 0' }}>{q.text}</p>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: '#64748B' }}>
+                        <p style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px 0' }}>{q.text}</p>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
                           <span>Correct Answer: <strong style={{ color: '#16A34A' }}>{q.correct_answer || '—'}</strong></span>
-                          <span>Response Accuracy: <strong style={{ color: '#071B36' }}>{idx === 2 ? '31%' : idx === 1 ? '48%' : '92%'}</strong></span>
+                          <span>Response Accuracy: <strong style={{ color: 'var(--text-primary)' }}>{idx === 2 ? '31%' : idx === 1 ? '48%' : '92%'}</strong></span>
                         </div>
                       </div>
                     );
@@ -2082,7 +2092,7 @@ export default function Reports() {
               {/* TAB 4: LEARNING GAPS */}
               {detailTab === 'gaps' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                  <div style={{ background: '#FEF2F2', border: '1px solid rgba(239,68,68,0.2)', padding: '12px', borderRadius: '10px' }}>
+                  <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239,68,68,0.2)', padding: '12px', borderRadius: '10px' }}>
                     <h5 style={{ margin: '0 0 4px 0', fontSize: '0.78rem', color: '#EF4444', fontWeight: 800 }}>Technical Parameter Compliance Gap</h5>
                     <p style={{ fontSize: '0.72rem', color: '#991B1B', margin: 0, lineHeight: 1.3 }}>
                       Over 52% of incorrect participants selected secondary spacing parameter offsets, indicating confusion between old compliance guidelines and current SOP versions.
@@ -2092,7 +2102,7 @@ export default function Reports() {
                     </span>
                   </div>
 
-                  <div style={{ background: '#FFF7ED', border: '1px solid rgba(234,88,12,0.2)', padding: '12px', borderRadius: '10px' }}>
+                  <div style={{ background: 'rgba(234, 88, 12, 0.15)', border: '1px solid rgba(234,88,12,0.2)', padding: '12px', borderRadius: '10px' }}>
                     <h5 style={{ margin: '0 0 4px 0', fontSize: '0.78rem', color: '#EA580C', fontWeight: 800 }}>Product Knowledge Retention Trend</h5>
                     <p style={{ fontSize: '0.72rem', color: '#9A3412', margin: 0, lineHeight: 1.3 }}>
                       While overall score average is solid (90%), response time values suggest hesitation markers during scenario queries on layout configurations.
@@ -2111,8 +2121,8 @@ export default function Reports() {
               <button 
                 onClick={() => setSelectedReportDetails(null)} 
                 style={{
-                  padding: '8px 16px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#FFFFFF',
-                  fontSize: '0.78rem', fontWeight: 700, color: '#64748B', cursor: 'pointer'
+                  padding: '8px 16px', borderRadius: '8px', border: '1px solid #E2E8F0', background: 'var(--bg-glass)',
+                  fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', cursor: 'pointer'
                 }}
               >
                 Close

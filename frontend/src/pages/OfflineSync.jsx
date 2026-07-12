@@ -8,8 +8,8 @@ export default function OfflineSync() {
     <div className="view-section active">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: '#FFFFFF', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
-            <RefreshCw size={22} color="#1F2328" />
+          <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
+            <RefreshCw size={22} color='var(--text-primary)' />
           </div>
           <div>
             <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>

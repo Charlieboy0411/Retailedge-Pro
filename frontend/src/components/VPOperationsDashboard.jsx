@@ -100,17 +100,17 @@ export default function VPOperationsDashboard({
   const topTrainer = projectUsers.find(u => (u.Role?.role_name || '').toLowerCase() === 'trainer')?.name || 'Ritu Verma';
 
   return (
-    <div style={{ padding: '20px 0', fontFamily: 'Poppins, sans-serif', color: '#1E293B' }}>
+    <div style={{ padding: '20px 0', fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
       
       {/* ─── 1. KEY KPI CARDS ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         {[
-          { label: 'Active Regions', value: '4 Zones', icon: <MapPin size={20} color="#0F172A" />, border: '#0F172A' },
-          { label: 'Total Supervisors', value: supervisorCount, icon: <Trophy size={20} color="#3E5C8A" />, border: '#3E5C8A' },
+          { label: 'Active Regions', value: '4 Zones', icon: <MapPin size={20} color='var(--text-primary)' />, border: 'var(--text-primary)' },
+          { label: 'Total Supervisors', value: supervisorCount, icon: <Trophy size={20} color='var(--primary)' />, border: 'var(--primary)' },
           { label: 'Active Field Teams', value: `${supervisorCount * 2} Teams`, icon: <BarChart2 size={20} color="#38BDF8" />, border: '#38BDF8' },
           { label: 'Training Completion %', value: `${avgCompletionRate}%`, icon: <CheckCircle size={20} color="#3B8C68" />, border: '#3B8C68' },
           { label: 'Quiz Pass Percentage', value: `${Math.round(avgCompletionRate * 0.95)}%`, icon: <Award size={20} color="#F59E0B" />, border: '#F59E0B' },
-          { label: 'Productivity Index', value: ((avgCompletionRate * 0.65) + 36).toFixed(1), icon: <Award size={20} color="#3E5C8A" />, border: '#3E5C8A' },
+          { label: 'Productivity Index', value: ((avgCompletionRate * 0.65) + 36).toFixed(1), icon: <Award size={20} color='var(--primary)' />, border: 'var(--primary)' },
           { label: 'Field Attendance %', value: '94.6%', icon: <CheckCircle size={20} color="#38BDF8" />, border: '#38BDF8' },
           { label: 'Compliance Rating', value: '95.1%', icon: <Award size={20} color="#3B8C68" />, border: '#3B8C68' }
         ].map((card, i) => (
@@ -118,7 +118,7 @@ export default function VPOperationsDashboard({
             background: 'var(--bg-glass)',
             padding: '20px',
             borderRadius: '16px',
-            boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)',
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
             borderTop: `4px solid ${card.border}`,
             display: 'flex',
             justifyContent: 'space-between',
@@ -130,8 +130,8 @@ export default function VPOperationsDashboard({
           onMouseOut={e => e.currentTarget.style.transform = 'none'}
           >
             <div>
-              <div style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '6px', fontFamily: 'Poppins, sans-serif' }}>{card.value}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '6px', fontFamily: 'Poppins, sans-serif' }}>{card.value}</div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `${card.border}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {card.icon}
@@ -141,8 +141,8 @@ export default function VPOperationsDashboard({
       </div>
 
       {/* ─── 2. VP TAB PORTAL ─── */}
-      <div style={{ background: 'var(--bg-glass)', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 24px rgba(15, 23, 42, 0.05)', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', borderBottom: '2px solid #B7BEC7', paddingBottom: '0', gap: '8px', marginBottom: '24px' }}>
+      <div style={{ background: 'var(--bg-glass)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', overflowX: 'auto', borderBottom: '2px solid #B7BEC7', paddingBottom: '0', gap: '8px', marginBottom: '24px' }}>
           {[
             { id: 'ranking', label: 'Regional Rankings' },
             { id: 'teams', label: 'Team Analytics' },
@@ -155,7 +155,7 @@ export default function VPOperationsDashboard({
               background: 'none',
               fontSize: '0.9rem',
               fontWeight: 700,
-              color: activeTab === tab.id ? '#3E5C8A' : '#5F6875',
+              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === tab.id ? '3px solid #3E5C8A' : '3px solid transparent',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -174,19 +174,19 @@ export default function VPOperationsDashboard({
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Zone & State Performance</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ background: '#F4F5F7', borderBottom: '2px solid #B7BEC7' }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#5F6875' }}>Zone / State</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>Supervisor</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>Avg Score</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>Audit Passed</th>
+                  <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '2px solid #B7BEC7' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)' }}>Zone / State</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>Supervisor</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>Avg Score</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>Audit Passed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {regionalRankings.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #EEF2F7' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.name}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center', color: '#5F6875' }}>{row.leader}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#3E5C8A' }}>{row.score}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.leader}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }}>{row.score}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#3B8C68' }}>{row.passed}</td>
                     </tr>
                   ))}
@@ -196,16 +196,16 @@ export default function VPOperationsDashboard({
             
             <div>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>L&D Leaderboards</h3>
-              <div style={{ background: '#F4F5F7', padding: '16px', borderRadius: '16px', border: '1px solid #B7BEC7' }}>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '16px', borderRadius: '16px', border: '1px solid #B7BEC7' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
                   <Trophy size={16} color="#F59E0B" />
                   <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Top Supervisor: {topSupervisor}</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center', marginBottom: '12px' }}>
                   <Star size={16} color="#38BDF8" />
                   <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Best Team: Team Phoenix (West)</span>
                 </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                   <Award size={16} color="#3B8C68" />
                   <span style={{ fontWeight: 700, fontSize: '0.85rem' }}>Top Trainer: {topTrainer}</span>
                 </div>
@@ -225,23 +225,23 @@ export default function VPOperationsDashboard({
                 { team: 'Team Horizon', productivity: 84, training: `${avgCompletionRate - 5}%`, attendance: '88%', compliance: 'Warning' },
                 { team: 'Team Delta', productivity: 68, training: `${avgCompletionRate - 15}%`, attendance: '74%', compliance: 'Critical' }
               ].map((item, i) => (
-                <div key={i} style={{ padding: '16px', border: '1px solid #B7BEC7', borderRadius: '16px', background: '#F4F5F7' }}>
+                <div key={i} style={{ padding: '16px', border: '1px solid #B7BEC7', borderRadius: '16px', background: 'var(--bg-tertiary)' }}>
                   <div style={{ fontWeight: 800, fontSize: '0.9rem', marginBottom: '12px' }}>{item.team}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.78rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#5F6875' }}>Productivity:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Productivity:</span>
                       <span style={{ fontWeight: 700 }}>{item.productivity}/100</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#5F6875' }}>Training:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Training:</span>
                       <span style={{ fontWeight: 700 }}>{item.training}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                      <span style={{ color: '#5F6875' }}>Attendance:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Attendance:</span>
                       <span style={{ fontWeight: 700 }}>{item.attendance}</span>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px' }}>
-                      <span style={{ color: '#5F6875' }}>Audit Compliance:</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>Audit Compliance:</span>
                       <span style={{
                         fontWeight: 700,
                         color: item.compliance === 'Green' ? '#16A34A' : item.compliance === 'Warning' ? '#D97706' : '#DC2626'
@@ -268,7 +268,7 @@ export default function VPOperationsDashboard({
                         <span>{proj.name} Adoption</span>
                         <span>{val}%</span>
                       </div>
-                      <div style={{ height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${val}%`, background: '#38BDF8', borderRadius: '4px' }} />
                       </div>
                     </div>
@@ -278,7 +278,7 @@ export default function VPOperationsDashboard({
             </div>
             <div>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Program Effectiveness</h3>
-              <div style={{ padding: '16px', background: '#F4F5F7', borderRadius: '16px', border: '1px solid #B7BEC7', fontSize: '0.78rem', color: '#5F6875', lineHeight: '1.4' }}>
+              <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px solid #B7BEC7', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                 Operational audits demonstrate that teams completing &gt;3 core quizzes in their first month have <strong>+18.5%</strong> compliance ratings.
               </div>
             </div>
@@ -292,7 +292,7 @@ export default function VPOperationsDashboard({
       </div>
 
       {/* ─── 3. STRATEGIC WARNINGS ─── */}
-      <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 4px 24px rgba(15, 23, 42, 0.05)' }}>
+      <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
         <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
           <ShieldAlert size={20} color="#EF4444" /> High-Risk Location Alerts
         </h3>
@@ -301,9 +301,9 @@ export default function VPOperationsDashboard({
             { zone: 'East Zone', reason: `Training completion average is at ${avgCompletionRate - 18}% (critical audit threshold warning)`, action: 'Needs immediate trainer audit intervention' },
             { zone: 'South Zone', reason: 'High attrition rate in Bangalore stores (9.2% exit rate)', action: 'Requires HR recruitment review' }
           ].map((item, idx) => (
-            <div key={idx} style={{ padding: '16px', background: '#F4F5F7', border: '1px solid #B7BEC7', borderRadius: '12px', borderLeft: '4px solid #EF4444' }}>
-              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: '#0F172A' }}>{item.zone}</div>
-              <div style={{ fontSize: '0.78rem', color: '#5F6875', marginTop: '6px' }}>{item.reason}</div>
+            <div key={idx} style={{ padding: '16px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', borderRadius: '12px', borderLeft: '4px solid #EF4444' }}>
+              <div style={{ fontWeight: 800, fontSize: '0.85rem', color: 'var(--text-primary)' }}>{item.zone}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '6px' }}>{item.reason}</div>
               <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#EF4444', marginTop: '8px' }}>Action: {item.action}</div>
             </div>
           ))}

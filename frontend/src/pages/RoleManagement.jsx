@@ -121,8 +121,8 @@ export default function RoleManagement() {
     <div className="view-section active">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: '#FFFFFF', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
-            <Shield size={22} color="#1F2328" />
+          <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
+            <Shield size={22} color='var(--text-primary)' />
           </div>
           <div>
             <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>
@@ -139,36 +139,36 @@ export default function RoleManagement() {
       </div>
 
       {loading ? (
-        <div style={{ textAlign: 'center', padding: '40px', color: '#5F6875' }}>Loading roles...</div>
+        <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Loading roles...</div>
       ) : error ? (
         <div style={{ textAlign: 'center', padding: '40px', color: '#EF4444' }}>{error}</div>
       ) : (
         <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
-                <th style={{ padding: '16px 24px', fontWeight: 600, color: '#1F2328' }}>Role Name</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600, color: '#1F2328' }}>Users Assigned</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600, color: '#1F2328' }}>Permissions</th>
-                <th style={{ padding: '16px 24px', fontWeight: 600, color: '#1F2328', textAlign: 'right' }}>Actions</th>
+              <tr style={{ background: 'var(--bg-glass)', borderBottom: '1px solid #E2E8F0', textAlign: 'left' }}>
+                <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-primary)' }}>Role Name</th>
+                <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-primary)' }}>Users Assigned</th>
+                <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-primary)' }}>Permissions</th>
+                <th style={{ padding: '16px 24px', fontWeight: 600, color: 'var(--text-primary)', textAlign: 'right' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
               {roles.map(role => (
                 <tr key={role.id} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                  <td style={{ padding: '16px 24px', color: '#1F2328', fontWeight: 500 }}>
+                  <td style={{ padding: '16px 24px', color: 'var(--text-primary)', fontWeight: 500 }}>
                     {role.role_name}
-                    {role.isSystem && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#E2E8F0', padding: '2px 8px', borderRadius: '12px', color: '#475569' }}>System</span>}
+                    {role.isSystem && <span style={{ marginLeft: '8px', fontSize: '0.75rem', background: '#E2E8F0', padding: '2px 8px', borderRadius: '12px', color: 'var(--text-secondary)' }}>System</span>}
                   </td>
-                  <td style={{ padding: '16px 24px', color: '#5F6875' }}>
-                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#F1F5F9', borderRadius: '50%', width: '32px', height: '32px', fontWeight: 600 }}>
+                  <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>
+                    <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: '50%', width: '32px', height: '32px', fontWeight: 600 }}>
                       {role.userCount}
                     </div>
                   </td>
                   <td style={{ padding: '16px 24px' }}>
                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                       {role.permissions && Object.entries(role.permissions).filter(([k, v]) => v).map(([key]) => (
-                        <span key={key} style={{ fontSize: '0.8rem', background: 'rgba(62, 92, 138, 0.1)', color: '#3E5C8A', padding: '4px 10px', borderRadius: '16px' }}>
+                        <span key={key} style={{ fontSize: '0.8rem', background: 'rgba(62, 92, 138, 0.1)', color: 'var(--primary)', padding: '4px 10px', borderRadius: '16px' }}>
                           {key.replace('_', ' ')}
                         </span>
                       ))}
@@ -182,7 +182,7 @@ export default function RoleManagement() {
                       <Edit2 size={16} />
                     </button>
                     {!role.isSystem && (
-                      <button className="btn btn-secondary" style={{ padding: '6px', color: '#EF4444', borderColor: '#FEE2E2', background: '#FEF2F2' }} onClick={() => handleDelete(role)} title="Delete Role">
+                      <button className="btn btn-secondary" style={{ padding: '6px', color: '#EF4444', borderColor: 'rgba(239, 68, 68, 0.2)', background: 'rgba(239, 68, 68, 0.15)' }} onClick={() => handleDelete(role)} title="Delete Role">
                         <Trash2 size={16} />
                       </button>
                     )}
@@ -191,7 +191,7 @@ export default function RoleManagement() {
               ))}
               {roles.length === 0 && (
                 <tr>
-                  <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: '#5F6875' }}>No roles found.</td>
+                  <td colSpan="4" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>No roles found.</td>
                 </tr>
               )}
             </tbody>
@@ -205,16 +205,16 @@ export default function RoleManagement() {
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
           background: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(4px)'
         }}>
-          <div className="glass-card" style={{ width: '100%', maxWidth: '500px', padding: '32px', background: '#FFFFFF' }}>
+          <div className="glass-card" style={{ width: '100%', maxWidth: '500px', padding: '32px', background: 'var(--bg-glass)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
               <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{editingRole ? 'Edit Role' : 'Create New Role'}</h3>
-              <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#5F6875' }}>
+              <button onClick={handleCloseModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}>
                 <X size={24} />
               </button>
             </div>
 
             <div style={{ marginBottom: '24px' }}>
-              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: '#1F2328' }}>Role Name</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500, color: 'var(--text-primary)' }}>Role Name</label>
               <input 
                 type="text" 
                 value={formData.role_name}
@@ -227,11 +227,11 @@ export default function RoleManagement() {
             </div>
 
             <div style={{ marginBottom: '32px' }}>
-              <label style={{ display: 'block', marginBottom: '16px', fontWeight: 500, color: '#1F2328' }}>Permissions</label>
+              <label style={{ display: 'block', marginBottom: '16px', fontWeight: 500, color: 'var(--text-primary)' }}>Permissions</label>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                 {Object.keys(defaultPermissions).map(key => (
-                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid #F1F5F9', borderRadius: '8px', background: '#F8FAFC' }}>
-                    <span style={{ color: '#334155', textTransform: 'capitalize' }}>{key.replace('_', ' ')}</span>
+                  <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', border: '1px solid var(--bg-tertiary)', borderRadius: '8px', background: 'var(--bg-glass)' }}>
+                    <span style={{ color: 'var(--text-secondary)', textTransform: 'capitalize' }}>{key.replace('_', ' ')}</span>
                     <button 
                       onClick={() => handleTogglePermission(key)}
                       style={{ 
@@ -241,7 +241,7 @@ export default function RoleManagement() {
                       }}
                     >
                       <div style={{
-                        width: '18px', height: '18px', background: '#FFF', borderRadius: '50%',
+                        width: '18px', height: '18px', background: 'var(--bg-tertiary)', borderRadius: '50%',
                         position: 'absolute', top: '3px', left: formData.permissions[key] ? '19px' : '3px',
                         transition: '0.3s'
                       }} />

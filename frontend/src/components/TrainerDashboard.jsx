@@ -336,15 +336,15 @@ export default function TrainerDashboard({
   };
 
   return (
-    <div style={{ padding: '0px', fontFamily: 'Poppins, sans-serif', color: '#1F2328' }}>
+    <div style={{ padding: '0px', fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
       
       {/* ─── HEADER ROW ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
-          <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: '1.8rem', color: '#1F2328', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: '1.8rem', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
             Welcome back, {user?.name || 'Demo Trainer'}! 👋
           </h2>
-          <p style={{ margin: '4px 0 0 0', color: '#5F6875', fontSize: '0.92rem' }}>
+          <p style={{ margin: '4px 0 0 0', color: 'var(--text-secondary)', fontSize: '0.92rem' }}>
             Here's what's happening in your training arena today.
           </p>
         </div>
@@ -366,13 +366,13 @@ export default function TrainerDashboard({
                 padding: '10px 16px',
                 fontSize: '0.88rem',
                 fontWeight: 600,
-                color: '#475569',
+                color: 'var(--text-secondary)',
                 cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(0,0,0,0.02)',
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
                 height: '42px'
               }}
             >
-              <Calendar size={16} color="#3E5C8A" />
+              <Calendar size={16} color='var(--primary)' />
               <span>{selectedDateFilter}</span>
               <ChevronDown size={14} color="#727A86" />
             </button>
@@ -398,13 +398,13 @@ export default function TrainerDashboard({
                       fontSize: '0.85rem',
                       fontWeight: 500,
                       cursor: 'pointer',
-                      color: selectedDateFilter === opt ? '#3E5C8A' : '#475569',
-                      background: selectedDateFilter === opt ? '#FFF5F0' : 'transparent',
+                      color: selectedDateFilter === opt ? 'var(--primary)' : 'var(--text-secondary)',
+                      background: selectedDateFilter === opt ? 'rgba(243, 111, 33, 0.15)' : 'transparent',
                       transition: 'background 0.15s'
                     }}
-                    onMouseOver={e => e.currentTarget.style.background = '#F4F5F7'}
+                    onMouseOver={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
                     onMouseOut={e => {
-                      if (selectedDateFilter === opt) e.currentTarget.style.background = '#FFF5F0';
+                      if (selectedDateFilter === opt) e.currentTarget.style.background = 'rgba(243, 111, 33, 0.15)';
                       else e.currentTarget.style.background = 'transparent';
                     }}
                   >
@@ -430,7 +430,7 @@ export default function TrainerDashboard({
                 padding: '0 18px',
                 fontSize: '0.88rem',
                 cursor: 'pointer',
-                boxShadow: '0 4px 12px rgba(62, 92, 138, 0.25)',
+                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
                 height: '42px',
                 border: 'none'
               }}
@@ -466,10 +466,10 @@ export default function TrainerDashboard({
                       fontSize: '0.85rem',
                       fontWeight: 500,
                       cursor: 'pointer',
-                      color: '#475569',
+                      color: 'var(--text-secondary)',
                       transition: 'background 0.15s'
                     }}
-                    onMouseOver={e => e.currentTarget.style.background = '#F4F5F7'}
+                    onMouseOver={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
                     onMouseOut={e => e.currentTarget.style.background = 'transparent'}
                   >
                     {act.label}
@@ -489,11 +489,11 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Participants</span>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: '#1F2328' }}>18</h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Participants</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-primary)' }}>18</h3>
             </div>
             <div style={{ background: 'rgba(62, 92, 138, 0.08)', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Users size={18} color="#3E5C8A" />
+              <Users size={18} color='var(--primary)' />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
@@ -502,7 +502,7 @@ export default function TrainerDashboard({
             </span>
             {/* Sparkline chart SVG */}
             <svg width="60" height="24" viewBox="0 0 60 24" style={{ overflow: 'visible' }}>
-              <path d="M0,20 Q10,12 20,16 T40,6 T60,2" fill="none" stroke="#3E5C8A" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M0,20 Q10,12 20,16 T40,6 T60,2" fill="none" stroke='var(--primary)' strokeWidth="2.5" strokeLinecap="round" />
               <path d="M0,20 Q10,12 20,16 T40,6 T60,2 L60,24 L0,24 Z" fill="rgba(62, 92, 138, 0.05)" />
             </svg>
           </div>
@@ -512,8 +512,8 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Quiz Completion</span>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: '#1F2328' }}>91%</h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Avg Quiz Completion</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-primary)' }}>91%</h3>
             </div>
             <div style={{ background: 'rgba(59, 140, 104, 0.08)', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <CheckCircle size={18} color="#3B8C68" />
@@ -535,8 +535,8 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Quizzes Hosted</span>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: '#1F2328' }}>{totalQuizzes || mockTotalQuizzesHosted}</h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Total Quizzes Hosted</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-primary)' }}>{totalQuizzes || mockTotalQuizzesHosted}</h3>
             </div>
             <div style={{ background: 'rgba(199, 154, 59, 0.08)', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <BarChart2 size={18} color="#C79A3B" />
@@ -558,11 +558,11 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', position: 'relative', overflow: 'hidden' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '12px' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Average Score</span>
-              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: '#1F2328' }}>74%</h3>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Average Score</span>
+              <h3 style={{ fontSize: '1.8rem', fontWeight: 800, margin: '4px 0 0 0', color: 'var(--text-primary)' }}>74%</h3>
             </div>
             <div style={{ background: 'rgba(62, 92, 138, 0.08)', width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Star size={18} color="#3E5C8A" />
+              <Star size={18} color='var(--primary)' />
             </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 'auto' }}>
@@ -571,7 +571,7 @@ export default function TrainerDashboard({
             </span>
             {/* Sparkline chart SVG */}
             <svg width="60" height="24" viewBox="0 0 60 24" style={{ overflow: 'visible' }}>
-              <path d="M0,18 Q15,12 30,16 T60,6" fill="none" stroke="#3E5C8A" strokeWidth="2.5" strokeLinecap="round" />
+              <path d="M0,18 Q15,12 30,16 T60,6" fill="none" stroke='var(--primary)' strokeWidth="2.5" strokeLinecap="round" />
               <path d="M0,18 Q15,12 30,16 T60,6 L60,24 L0,24 Z" fill="rgba(62, 92, 138, 0.05)" />
             </svg>
           </div>
@@ -586,12 +586,12 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <div>
-              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1F2328', margin: 0 }}>Performance Overview</h3>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Performance Overview</h3>
               <p style={{ fontSize: '0.75rem', color: '#727A86', margin: '2px 0 0 0' }}>Training effectiveness & participation trends</p>
             </div>
             
             {/* Chart Timeline Selection */}
-            <div style={{ display: 'flex', gap: '4px', background: '#F4F5F7', padding: '4px', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
+            <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
               {['Daily', 'Weekly', 'Monthly'].map(tl => (
                 <button
                   key={tl}
@@ -601,8 +601,8 @@ export default function TrainerDashboard({
                     fontSize: '0.75rem',
                     fontWeight: 600,
                     borderRadius: '6px',
-                    color: chartTimeline === tl ? '#3E5C8A' : '#5F6875',
-                    background: chartTimeline === tl ? '#FFFFFF' : 'transparent',
+                    color: chartTimeline === tl ? 'var(--primary)' : 'var(--text-secondary)',
+                    background: chartTimeline === tl ? 'var(--bg-glass)' : 'transparent',
                     boxShadow: chartTimeline === tl ? '0 1px 3px rgba(0,0,0,0.05)' : 'none',
                     border: 'none',
                     cursor: 'pointer'
@@ -616,15 +616,15 @@ export default function TrainerDashboard({
           
           {/* Chart Legend */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '0.78rem', fontWeight: 500 }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#5F6875' }}>
-              <span style={{ display: 'inline-block', width: '12px', height: '12px', background: '#3E5C8A', borderRadius: '3px' }} />
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+              <span style={{ display: 'inline-block', width: '12px', height: '12px', background: 'var(--primary)', borderRadius: '3px' }} />
               Participants
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#5F6875' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
               <span style={{ display: 'inline-block', width: '12px', height: '3px', background: '#3B8C68', borderRadius: '2px' }} />
               Completion %
             </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#5F6875' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
               <span style={{ display: 'inline-block', width: '12px', height: '3px', background: '#C79A3B', borderRadius: '2px' }} />
               Avg Score
             </span>
@@ -634,11 +634,11 @@ export default function TrainerDashboard({
           <div style={{ width: '100%', height: '220px', position: 'relative' }}>
             <svg viewBox="0 0 500 200" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
               {/* Y-axis gridlines */}
-              <line x1="40" y1="20" x2="460" y2="20" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="40" y1="60" x2="460" y2="60" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="40" y1="100" x2="460" y2="100" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="40" y1="140" x2="460" y2="140" stroke="#F1F5F9" strokeWidth="1" />
-              <line x1="40" y1="170" x2="460" y2="170" stroke="#B7BEC7" strokeWidth="1.5" />
+              <line x1="40" y1="20" x2="460" y2="20" stroke="var(--bg-tertiary)" strokeWidth="1" />
+              <line x1="40" y1="60" x2="460" y2="60" stroke="var(--bg-tertiary)" strokeWidth="1" />
+              <line x1="40" y1="100" x2="460" y2="100" stroke="var(--bg-tertiary)" strokeWidth="1" />
+              <line x1="40" y1="140" x2="460" y2="140" stroke="var(--bg-tertiary)" strokeWidth="1" />
+              <line x1="40" y1="170" x2="460" y2="170" stroke='var(--border-glass)' strokeWidth="1.5" />
 
               {/* Y Axis Labels (Left: Participants count) */}
               <text x="30" y="24" fill="#727A86" fontSize="8" fontWeight="600" textAnchor="end">{Math.round(partScale)}</text>
@@ -674,13 +674,13 @@ export default function TrainerDashboard({
                       y={y} 
                       width="24" 
                       height={height} 
-                      fill="#3E5C8A" 
+                      fill='var(--primary)' 
                       rx="4"
                       style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
-                      onMouseOver={e => e.currentTarget.setAttribute('fill', '#1D4ED8')}
-                      onMouseOut={e => e.currentTarget.setAttribute('fill', '#3E5C8A')}
+                      onMouseOver={e => e.currentTarget.setAttribute('fill', 'var(--primary)')}
+                      onMouseOut={e => e.currentTarget.setAttribute('fill', 'var(--primary)')}
                     />
-                    <text x={x} y={y - 6} fill="#1F2328" fontSize="7" fontWeight="700" textAnchor="middle">{val}</text>
+                    <text x={x} y={y - 6} fill='var(--text-primary)' fontSize="7" fontWeight="700" textAnchor="middle">{val}</text>
                   </g>
                 );
               })}
@@ -697,7 +697,7 @@ export default function TrainerDashboard({
                   <g>
                     <path d={d} fill="none" stroke="#3B8C68" strokeWidth="3" strokeLinecap="round" />
                     {points.map((pt, idx) => (
-                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill="#FFFFFF" stroke="#3B8C68" strokeWidth="2.5" />
+                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill='var(--bg-glass)' stroke="#3B8C68" strokeWidth="2.5" />
                     ))}
                   </g>
                 );
@@ -715,7 +715,7 @@ export default function TrainerDashboard({
                   <g>
                     <path d={d} fill="none" stroke="#C79A3B" strokeWidth="3" strokeLinecap="round" />
                     {points.map((pt, idx) => (
-                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill="#FFFFFF" stroke="#C79A3B" strokeWidth="2.5" />
+                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill='var(--bg-glass)' stroke="#C79A3B" strokeWidth="2.5" />
                     ))}
                   </g>
                 );
@@ -727,20 +727,20 @@ export default function TrainerDashboard({
         {/* Recent Activity Feed */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1F2328', margin: 0 }}>Recent Activity</h3>
-            <span style={{ fontSize: '0.8rem', color: '#3E5C8A', fontWeight: 600, cursor: 'pointer' }}>View All</span>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Recent Activity</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>View All</span>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
             
             {/* Act 1 */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: '#DCFCE7', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ background: 'rgba(34, 197, 94, 0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <CheckCircle size={16} color="#15803D" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Hosted for Idonneous</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Hosted for Idonneous</div>
               </div>
               <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>2 mins ago</span>
             </div>
@@ -751,20 +751,20 @@ export default function TrainerDashboard({
                 <Play size={16} color="#7C3AED" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Hosted for Galderma</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Hosted for Galderma</div>
               </div>
               <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>1 hour ago</span>
             </div>
 
             {/* Act 3 */}
             <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: '#FFF7ED', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div style={{ background: 'rgba(234, 88, 12, 0.15)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <Users size={16} color="#EA580C" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>13 participants completed</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Test Quiz Offline</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>13 participants completed</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Test Quiz Offline</div>
               </div>
               <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>2 hours ago</span>
             </div>
@@ -775,8 +775,8 @@ export default function TrainerDashboard({
                 <Award size={16} color="#0369A1" />
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Certificates issued</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>12 certificates generated</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Certificates issued</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>12 certificates generated</div>
               </div>
               <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>3 hours ago</span>
             </div>
@@ -792,8 +792,8 @@ export default function TrainerDashboard({
         {/* Top Quiz Performance */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1F2328', margin: 0 }}>Top Quiz Performance</h3>
-            <span style={{ fontSize: '0.8rem', color: '#3E5C8A', fontWeight: 600, cursor: 'pointer' }}>View All</span>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Top Quiz Performance</h3>
+            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>View All</span>
           </div>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -802,30 +802,30 @@ export default function TrainerDashboard({
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#FEF08A', color: '#A16207', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>1</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Galderma</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Galderma</div>
               </div>
-              <span style={{ padding: '4px 10px', background: '#DCFCE7', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>92%</span>
+              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>92%</span>
             </div>
 
             {/* Rank 2 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#B7BEC7', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>2</div>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--border-glass)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>2</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Idonneous</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Idonneous</div>
               </div>
-              <span style={{ padding: '4px 10px', background: '#DCFCE7', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>85%</span>
+              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>85%</span>
             </div>
 
             {/* Rank 3 */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#FFEDD5', color: '#C2410C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>3</div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#1E293B', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Product Knowledge Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875' }}>Idonneous</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Product Knowledge Quiz</div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Idonneous</div>
               </div>
-              <span style={{ padding: '4px 10px', background: '#DCFCE7', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>78%</span>
+              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>78%</span>
             </div>
 
           </div>
@@ -833,15 +833,15 @@ export default function TrainerDashboard({
 
         {/* Participants by Project Donut Chart */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1F2328', margin: '0 0 16px 0' }}>Participants by Project</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 16px 0' }}>Participants by Project</h3>
           
           {drilldownProject ? (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#3E5C8A' }}>{drilldownProject} Learners</span>
+                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>{drilldownProject} Learners</span>
                 <button 
                   onClick={() => setDrilldownProject(null)}
-                  style={{ fontSize: '0.75rem', color: '#5F6875', background: '#F1F5F9', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                  style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
                 >
                   Back
                 </button>
@@ -851,9 +851,9 @@ export default function TrainerDashboard({
                   .filter(u => drilldownProject === 'Others' ? !['Idonneous', 'Galderma'].some(p => u.Project?.name?.includes(p)) : u.Project?.name?.toLowerCase().includes(drilldownProject.toLowerCase()))
                   .slice(0, 6)
                   .map((usr, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid #F1F5F9' }}>
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid var(--bg-tertiary)' }}>
                       <span style={{ fontWeight: 600 }}>{usr.name}</span>
-                      <span style={{ color: '#5F6875' }}>{usr.Role?.role_name || 'Supervisor'}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{usr.Role?.role_name || 'Supervisor'}</span>
                     </div>
                   ))
                 }
@@ -874,7 +874,7 @@ export default function TrainerDashboard({
                     cy="60" 
                     r="40" 
                     fill="none" 
-                    stroke="#3E5C8A" 
+                    stroke='var(--primary)' 
                     strokeWidth="16" 
                     strokeDasharray="167.5 83.7"
                     style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
@@ -903,7 +903,7 @@ export default function TrainerDashboard({
                     cy="60" 
                     r="40" 
                     fill="none" 
-                    stroke="#3E5C8A" 
+                    stroke='var(--primary)' 
                     strokeWidth="16" 
                     strokeDasharray="27.9 223.3"
                     strokeDashoffset="-223.3"
@@ -922,7 +922,7 @@ export default function TrainerDashboard({
                   textAlign: 'center',
                   fontFamily: 'Poppins, sans-serif'
                 }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1F2328', lineHeight: 1 }}>18</div>
+                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>18</div>
                   <div style={{ fontSize: '0.62rem', color: '#727A86', textTransform: 'uppercase', fontWeight: 600 }}>Total</div>
                 </div>
               </div>
@@ -930,25 +930,25 @@ export default function TrainerDashboard({
               {/* Legends with percentages */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem', fontWeight: 500, flex: 1, paddingLeft: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Idonneous')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#3E5C8A', borderRadius: '50%' }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%' }} />
                     Idonneous
                   </span>
-                  <strong style={{ color: '#1F2328' }}>12 (66.7%)</strong>
+                  <strong style={{ color: 'var(--text-primary)' }}>12 (66.7%)</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Galderma')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
                     <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#3B8C68', borderRadius: '50%' }} />
                     Galderma
                   </span>
-                  <strong style={{ color: '#1F2328' }}>4 (22.2%)</strong>
+                  <strong style={{ color: 'var(--text-primary)' }}>4 (22.2%)</strong>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Others')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#3E5C8A', borderRadius: '50%' }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%' }} />
                     Others
                   </span>
-                  <strong style={{ color: '#1F2328' }}>2 (11.1%)</strong>
+                  <strong style={{ color: 'var(--text-primary)' }}>2 (11.1%)</strong>
                 </div>
               </div>
             </div>
@@ -957,7 +957,7 @@ export default function TrainerDashboard({
 
         {/* Quick Actions Panel */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1F2328', margin: '0 0 16px 0' }}>Quick Actions</h3>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 16px 0' }}>Quick Actions</h3>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
             
@@ -965,7 +965,7 @@ export default function TrainerDashboard({
             <div 
               onClick={() => navigate('/builder')}
               style={{
-                background: '#F4F5F7',
+                background: 'var(--bg-tertiary)',
                 border: '1px solid #B7BEC7',
                 borderRadius: '12px',
                 padding: '12px',
@@ -973,21 +973,21 @@ export default function TrainerDashboard({
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = '#3E5C8A'; e.currentTarget.style.background = '#F0F5FF'; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = '#B7BEC7'; e.currentTarget.style.background = '#F4F5F7'; }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.background = '#F0F5FF'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
             >
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(37,99,235,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
-                <Plus size={16} color="#3E5C8A" />
+                <Plus size={16} color='var(--primary)' />
               </div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>Create Quiz</div>
-              <div style={{ fontSize: '0.68rem', color: '#5F6875', marginTop: '2px' }}>Add new quiz</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Create Quiz</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Add new quiz</div>
             </div>
 
             {/* Action 2 */}
             <div 
               onClick={() => navigate('/reports')}
               style={{
-                background: '#F4F5F7',
+                background: 'var(--bg-tertiary)',
                 border: '1px solid #B7BEC7',
                 borderRadius: '12px',
                 padding: '12px',
@@ -995,21 +995,21 @@ export default function TrainerDashboard({
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = '#3B8C68'; e.currentTarget.style.background = '#F0FDF4'; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = '#B7BEC7'; e.currentTarget.style.background = '#F4F5F7'; }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = '#3B8C68'; e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
             >
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(34,197,94,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                 <BarChart2 size={16} color="#3B8C68" />
               </div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>View Reports</div>
-              <div style={{ fontSize: '0.68rem', color: '#5F6875', marginTop: '2px' }}>Analytics & insights</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>View Reports</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Analytics & insights</div>
             </div>
 
             {/* Action 3 */}
             <div 
               onClick={() => navigate('/trainings')}
               style={{
-                background: '#F4F5F7',
+                background: 'var(--bg-tertiary)',
                 border: '1px solid #B7BEC7',
                 borderRadius: '12px',
                 padding: '12px',
@@ -1018,20 +1018,20 @@ export default function TrainerDashboard({
                 transition: 'all 0.15s'
               }}
               onMouseOver={e => { e.currentTarget.style.borderColor = '#C79A3B'; e.currentTarget.style.background = '#F5F3FF'; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = '#B7BEC7'; e.currentTarget.style.background = '#F4F5F7'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
             >
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(139,92,246,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                 <BookOpen size={16} color="#C79A3B" />
               </div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>Manage Trainings</div>
-              <div style={{ fontSize: '0.68rem', color: '#5F6875', marginTop: '2px' }}>Training modules</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Manage Trainings</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Training modules</div>
             </div>
 
             {/* Action 4 */}
             <div 
               onClick={() => navigate('/certificates')}
               style={{
-                background: '#F4F5F7',
+                background: 'var(--bg-tertiary)',
                 border: '1px solid #B7BEC7',
                 borderRadius: '12px',
                 padding: '12px',
@@ -1039,14 +1039,14 @@ export default function TrainerDashboard({
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
-              onMouseOver={e => { e.currentTarget.style.borderColor = '#EA580C'; e.currentTarget.style.background = '#FFF7ED'; }}
-              onMouseOut={e => { e.currentTarget.style.borderColor = '#B7BEC7'; e.currentTarget.style.background = '#F4F5F7'; }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = '#EA580C'; e.currentTarget.style.background = 'rgba(234, 88, 12, 0.15)'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.background = 'var(--bg-tertiary)'; }}
             >
               <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(234,88,12,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '8px' }}>
                 <Award size={16} color="#EA580C" />
               </div>
-              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B' }}>Issue Certificate</div>
-              <div style={{ fontSize: '0.68rem', color: '#5F6875', marginTop: '2px' }}>Generate certificates</div>
+              <div style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Issue Certificate</div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', marginTop: '2px' }}>Generate certificates</div>
             </div>
 
           </div>
@@ -1061,11 +1061,11 @@ export default function TrainerDashboard({
         {quizzes.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {quizzes.map(quiz => (
-              <div key={quiz.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: '#F4F5F7', borderRadius: '12px', border: '1px solid #B7BEC7' }}>
+              <div key={quiz.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid #B7BEC7' }}>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#1F2328' }}>{quiz.title}</h4>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>{quiz.title}</h4>
                   <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                    <span style={{ color: '#5F6875', fontSize: '0.8rem', fontWeight: 500 }}>
+                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 500 }}>
                       {quiz.questions ? quiz.questions.length : 0} Questions • {quiz.Project ? quiz.Project.name : 'No Project'}
                     </span>
                     {quiz.config?.isOffline && (() => {
@@ -1088,7 +1088,7 @@ export default function TrainerDashboard({
                         );
                       } else {
                         badge = (
-                          <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px', background: '#DCFCE7', color: '#15803D', border: '1px solid rgba(22,163,74,0.2)', borderRadius: '4px' }}>
+                          <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', border: '1px solid rgba(22,163,74,0.2)', borderRadius: '4px' }}>
                             🟢 Offline Active
                           </span>
                         );
@@ -1100,7 +1100,7 @@ export default function TrainerDashboard({
                             href={linkUrl} 
                             target="_blank"
                             rel="noreferrer"
-                            style={{ color: '#3E5C8A', fontSize: '0.78rem', textDecoration: 'underline', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                            style={{ color: 'var(--primary)', fontSize: '0.78rem', textDecoration: 'underline', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
                           >
                             🔗 Open Quiz
                           </a>
@@ -1116,7 +1116,7 @@ export default function TrainerDashboard({
                     onClick={() => handleOpenOfflineModal(quiz)} 
                     title="Configure Offline Mode"
                   >
-                    <WifiOff size={14} color="#5F6875" /> <span style={{ color: '#475569' }}>Offline Mode</span>
+                    <WifiOff size={14} color='var(--text-secondary)' /> <span style={{ color: 'var(--text-secondary)' }}>Offline Mode</span>
                   </button>
                   <button 
                     className="btn btn-primary btn-sm" 
@@ -1131,11 +1131,11 @@ export default function TrainerDashboard({
                     onClick={() => navigate(`/builder/${quiz.id}`)}
                     title="Edit Quiz"
                   >
-                    <Edit3 size={14} color="#5F6875" />
+                    <Edit3 size={14} color='var(--text-secondary)' />
                   </button>
                   <button 
                     className="btn btn-secondary btn-sm" 
-                    style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid #FEE2E2', background: 'var(--bg-glass)', color: '#EF4444' }} 
+                    style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', background: 'var(--bg-glass)', color: '#EF4444' }} 
                     onClick={() => handleDeleteQuiz(quiz.id)}
                     title="Delete Quiz Room"
                   >
@@ -1162,7 +1162,7 @@ export default function TrainerDashboard({
           padding: '14px 20px',
           fontSize: '0.82rem',
           fontWeight: 600,
-          color: '#3E5C8A',
+          color: 'var(--primary)',
           marginBottom: '24px'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -1173,7 +1173,7 @@ export default function TrainerDashboard({
             onClick={() => setShowTip(false)} 
             style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
           >
-            <X size={16} color="#3E5C8A" />
+            <X size={16} color='var(--primary)' />
           </button>
         </div>
       )}
@@ -1186,44 +1186,44 @@ export default function TrainerDashboard({
             {!isSuccessView ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                  <h3 style={{ margin: 0, color: '#1F2328', fontSize: '1.3rem', fontWeight: 800 }}>Create New Meeting</h3>
-                  <button onClick={() => { setIsMeetingModalOpen(false); setIsUrlCustom(false); }} style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#5F6875' }}><X size={20} /></button>
+                  <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 800 }}>Create New Meeting</h3>
+                  <button onClick={() => { setIsMeetingModalOpen(false); setIsUrlCustom(false); }} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--text-secondary)' }}><X size={20} /></button>
                 </div>
                 
                 <form onSubmit={handleScheduleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                   
                   {/* Topic */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Meeting Topic/Title *</label>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Meeting Topic/Title *</label>
                     <input 
                       type="text" 
                       value={meetingForm.title} 
                       onChange={e => setMeetingForm({...meetingForm, title: e.target.value})} 
                       required 
                       placeholder="e.g. Product Knowledge Assessment Review"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.88rem' }} 
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }} 
                     />
                   </div>
 
                   {/* Agenda */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Description/Agenda</label>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Description/Agenda</label>
                     <textarea 
                       value={meetingForm.description} 
                       onChange={e => setMeetingForm({...meetingForm, description: e.target.value})} 
                       placeholder="Enter meeting agenda or notes..."
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', minHeight: '60px', resize: 'vertical', fontSize: '0.88rem' }} 
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', minHeight: '60px', resize: 'vertical', fontSize: '0.88rem' }} 
                     />
                   </div>
 
                   {/* Project & DateTime */}
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     <div>
-                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Select Project</label>
+                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Select Project</label>
                       <select 
                         value={meetingForm.projectId} 
                         onChange={e => handleProjectChange(e.target.value)} 
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.88rem', outline: 'none' }}
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem', outline: 'none' }}
                       >
                         <option value="">-- General / Global --</option>
                         {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1231,27 +1231,27 @@ export default function TrainerDashboard({
                     </div>
 
                     <div>
-                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Date & Time *</label>
+                      <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Date & Time *</label>
                       <input 
                         type="datetime-local" 
                         value={meetingForm.scheduledAt} 
                         onChange={e => setMeetingForm({...meetingForm, scheduledAt: e.target.value})} 
                         required 
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.88rem' }} 
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }} 
                       />
                     </div>
                   </div>
 
                   {/* Meeting Platform Selection */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Meeting Platform *</label>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Meeting Platform *</label>
                     <select
                       value={meetingForm.platform}
                       onChange={e => {
                         setIsUrlCustom(false);
                         setMeetingForm({...meetingForm, platform: e.target.value});
                       }}
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.88rem', outline: 'none' }}
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem', outline: 'none' }}
                     >
                       <option value="google_meet">Google Meet (Auto-generated Link)</option>
                       <option value="jitsi">Jitsi Meet (Auto-generated Link)</option>
@@ -1260,7 +1260,7 @@ export default function TrainerDashboard({
 
                   {/* Meeting URL */}
                   <div>
-                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                       Meeting Link (Google Meet / Jitsi URL) *
                     </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
@@ -1273,12 +1273,12 @@ export default function TrainerDashboard({
                         }} 
                         placeholder="https://meet.google.com/abc-defg-hij"
                         required
-                        style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.85rem' }} 
+                        style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.85rem' }} 
                       />
                       <button 
                         type="button" 
                         onClick={() => handleCopyLink(meetingForm.url)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '8px', background: '#F1F5F9', border: '1px solid #B7BEC7', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
                       >
                         {linkCopied ? <Check size={14} color="#3B8C68" /> : <Copy size={14} />}
                         {linkCopied ? "Copied" : "Copy"}
@@ -1289,22 +1289,22 @@ export default function TrainerDashboard({
                   {/* Members Checklist */}
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                      <label style={{ fontSize: '0.82rem', color: '#475569', fontWeight: 600 }}>Invite Members</label>
+                      <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Invite Members</label>
                       <input 
                         type="text" 
                         placeholder="Search members..." 
                         value={memberSearch}
                         onChange={e => setMemberSearch(e.target.value)}
-                        style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.78rem', width: '180px' }}
+                        style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.78rem', width: '180px' }}
                       />
                     </div>
 
-                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #B7BEC7', borderRadius: '8px', padding: '8px 12px', background: '#F4F5F7' }}>
+                    <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid #B7BEC7', borderRadius: '8px', padding: '8px 12px', background: 'var(--bg-tertiary)' }}>
                       {filteredUsers.length > 0 ? (
                         filteredUsers.map(u => {
                           const isChecked = meetingForm.inviteeIds.includes(u.id);
                           return (
-                            <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid #F1F5F9', cursor: 'pointer' }}>
+                            <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--bg-tertiary)', cursor: 'pointer' }}>
                               <input 
                                 type="checkbox" 
                                 checked={isChecked} 
@@ -1317,8 +1317,8 @@ export default function TrainerDashboard({
                                 style={{ width: '14px', height: '14px', cursor: 'pointer' }}
                               />
                               <div style={{ fontSize: '0.8rem' }}>
-                                <div style={{ color: '#1F2328', fontWeight: 600 }}>{u.name}</div>
-                                <div style={{ color: '#5F6875', fontSize: '0.7rem' }}>{u.email} {u.Project ? `(${u.Project.name})` : ''}</div>
+                                <div style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{u.name}</div>
+                                <div style={{ color: 'var(--text-secondary)', fontSize: '0.7rem' }}>{u.email} {u.Project ? `(${u.Project.name})` : ''}</div>
                               </div>
                             </label>
                           );
@@ -1330,7 +1330,7 @@ export default function TrainerDashboard({
                   </div>
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '12px', borderTop: '1px solid #B7BEC7' }}>
-                    <button type="button" className="btn btn-secondary btn-sm" style={{ background: '#F1F5F9', border: '1px solid #B7BEC7', borderRadius: '8px' }} onClick={() => { setIsMeetingModalOpen(false); setIsUrlCustom(false); }}>Cancel</button>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', borderRadius: '8px' }} onClick={() => { setIsMeetingModalOpen(false); setIsUrlCustom(false); }}>Cancel</button>
                     <button type="submit" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #3E5C8A 0%, #E05A0E 100%)', border: 'none', color: 'white', fontWeight: 600, borderRadius: '8px' }}>
                       Schedule & Send Invites
                     </button>
@@ -1339,27 +1339,27 @@ export default function TrainerDashboard({
               </>
             ) : (
               <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto', border: '2px solid #3B8C68' }}>
+                <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(34, 197, 94, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px auto', border: '2px solid #3B8C68' }}>
                   <Check size={28} color="#3B8C68" />
                 </div>
-                <h3 style={{ fontSize: '1.4rem', color: '#1F2328', marginBottom: '8px', fontWeight: 800 }}>Meeting Scheduled!</h3>
-                <p style={{ color: '#5F6875', marginBottom: '24px', fontSize: '0.85rem' }}>
+                <h3 style={{ fontSize: '1.4rem', color: 'var(--text-primary)', marginBottom: '8px', fontWeight: 800 }}>Meeting Scheduled!</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.85rem' }}>
                   Your training meeting has been successfully created. We've simulated sending invitation emails to <strong>{scheduledMeetingDetails?.inviteeCount || 0}</strong> invitees.
                 </p>
 
-                <div style={{ background: '#F4F5F7', borderRadius: '12px', padding: '16px', textAlign: 'left', marginBottom: '24px', border: '1px solid #B7BEC7' }}>
+                <div style={{ background: 'var(--bg-tertiary)', borderRadius: '12px', padding: '16px', textAlign: 'left', marginBottom: '24px', border: '1px solid #B7BEC7' }}>
                   <div style={{ marginBottom: '10px' }}>
                     <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', fontWeight: 600 }}>Topic</span>
-                    <strong style={{ fontSize: '0.95rem', color: '#1F2328' }}>{scheduledMeetingDetails?.title}</strong>
+                    <strong style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>{scheduledMeetingDetails?.title}</strong>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
                     <div>
                       <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', fontWeight: 600 }}>Project</span>
-                      <span style={{ color: '#1F2328', fontSize: '0.85rem', fontWeight: 600 }}>{scheduledMeetingDetails?.projectName}</span>
+                      <span style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>{scheduledMeetingDetails?.projectName}</span>
                     </div>
                     <div>
                       <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', fontWeight: 600 }}>Date & Time</span>
-                      <span style={{ color: '#1F2328', fontSize: '0.85rem', fontWeight: 600 }}>{scheduledMeetingDetails?.scheduledAt ? new Date(scheduledMeetingDetails.scheduledAt).toLocaleString() : 'N/A'}</span>
+                      <span style={{ color: 'var(--text-primary)', fontSize: '0.85rem', fontWeight: 600 }}>{scheduledMeetingDetails?.scheduledAt ? new Date(scheduledMeetingDetails.scheduledAt).toLocaleString() : 'N/A'}</span>
                     </div>
                   </div>
                   <div>
@@ -1369,12 +1369,12 @@ export default function TrainerDashboard({
                         type="text" 
                         value={scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : ''} 
                         readOnly 
-                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: '#475569', fontSize: '0.8rem' }} 
+                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }} 
                       />
                       <button 
                         type="button" 
                         onClick={() => handleCopyLink(scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : '')}
-                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: '#F1F5F9', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
                         {linkCopied ? <Check size={12} color="#3B8C68" /> : <Copy size={12} />}
                         {linkCopied ? "Copied" : "Copy"}
@@ -1415,17 +1415,17 @@ export default function TrainerDashboard({
             {!isOfflineSuccessView ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #B7BEC7', paddingBottom: '12px' }}>
-                  <h3 style={{ margin: 0, fontFamily: 'Poppins, sans-serif', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem', color: '#1F2328' }}>
-                    <WifiOff size={20} color="#3E5C8A" /> Configure Offline Quiz
+                  <h3 style={{ margin: 0, fontFamily: 'Poppins, sans-serif', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.25rem', color: 'var(--text-primary)' }}>
+                    <WifiOff size={20} color='var(--primary)' /> Configure Offline Quiz
                   </h3>
                   <button onClick={() => setIsOfflineModalOpen(false)} style={{ background: 'none', border: 'none', color: '#727A86', cursor: 'pointer' }}><X size={20} /></button>
                 </div>
 
                 <form onSubmit={handleOfflineSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F4F5F7', padding: '12px 16px', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-tertiary)', padding: '12px 16px', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#1F2328' }}>Enable Offline Taking</div>
-                      <div style={{ fontSize: '0.72rem', color: '#5F6875' }}>Learners can join asynchronously via a link</div>
+                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--text-primary)' }}>Enable Offline Taking</div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Learners can join asynchronously via a link</div>
                     </div>
                     {/* Switch styled checkbox */}
                     <input 
@@ -1439,7 +1439,7 @@ export default function TrainerDashboard({
                   {offlineForm.isOffline && (
                     <>
                       {/* Start Now toggle */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F0FDF4', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'rgba(34, 197, 94, 0.15)', padding: '10px 14px', borderRadius: '8px', border: '1px solid #BBF7D0' }}>
                         <div>
                           <div style={{ fontWeight: 700, fontSize: '0.83rem', color: '#15803D' }}>⚡ Start Immediately</div>
                           <div style={{ fontSize: '0.72rem', color: '#4B5563' }}>Quiz is live the moment you save — no scheduled start</div>
@@ -1456,22 +1456,22 @@ export default function TrainerDashboard({
                       {!offlineForm.startNow && (
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                           <div>
-                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>Start Date &amp; Time</label>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Start Date &amp; Time</label>
                             <input 
                               type="datetime-local" 
                               value={offlineForm.startTime}
                               onChange={e => setOfflineForm({ ...offlineForm, startTime: e.target.value })}
-                              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                             />
                             <div style={{ fontSize: '0.68rem', color: '#727A86', marginTop: '3px' }}>Your local time ({localTzLabel()})</div>
                           </div>
                           <div>
-                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>End Date &amp; Time</label>
+                            <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>End Date &amp; Time</label>
                             <input 
                               type="datetime-local" 
                               value={offlineForm.endTime}
                               onChange={e => setOfflineForm({ ...offlineForm, endTime: e.target.value })}
-                              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                              style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                             />
                             <div style={{ fontSize: '0.68rem', color: '#727A86', marginTop: '3px' }}>Your local time ({localTzLabel()})</div>
                           </div>
@@ -1481,30 +1481,30 @@ export default function TrainerDashboard({
                       {/* End time when start-now is enabled */}
                       {offlineForm.startNow && (
                         <div>
-                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>Closes At (End Date &amp; Time)</label>
+                          <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Closes At (End Date &amp; Time)</label>
                           <input 
                             type="datetime-local" 
                             value={offlineForm.endTime}
                             onChange={e => setOfflineForm({ ...offlineForm, endTime: e.target.value })}
-                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#1F2328', fontSize: '0.82rem', boxSizing: 'border-box' }}
+                            style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
                           />
                           <div style={{ fontSize: '0.68rem', color: '#727A86', marginTop: '3px' }}>Leave blank to keep quiz open indefinitely — your local time ({localTzLabel()})</div>
                         </div>
                       )}
 
                       <div>
-                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>Shareable Quiz Link</label>
+                        <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Shareable Quiz Link</label>
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
                           <input 
                             type="text" 
                             value={offlineQuizLink} 
                             readOnly 
-                            style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: '#F4F5F7', color: '#5F6875', fontSize: '0.82rem' }}
+                            style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: '0.82rem' }}
                           />
                           <button 
                             type="button" 
                             onClick={() => handleCopyLink(offlineQuizLink)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '6px', background: '#F1F5F9', border: '1px solid #B7BEC7', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
+                            style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
                           >
                             {linkCopied ? <Check size={12} color="#3B8C68" /> : <Copy size={12} />}
                             {linkCopied ? "Copied" : "Copy"}
@@ -1515,25 +1515,25 @@ export default function TrainerDashboard({
                   )}
 
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '12px', borderTop: '1px solid #B7BEC7' }}>
-                    <button type="button" className="btn btn-secondary btn-sm" style={{ background: '#F1F5F9', border: '1px solid #B7BEC7', borderRadius: '8px' }} onClick={() => setIsOfflineModalOpen(false)}>Cancel</button>
+                    <button type="button" className="btn btn-secondary btn-sm" style={{ background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', borderRadius: '8px' }} onClick={() => setIsOfflineModalOpen(false)}>Cancel</button>
                     <button type="submit" className="btn btn-primary btn-sm" style={{ background: 'linear-gradient(135deg, #3E5C8A 0%, #E05A0E 100%)', border: 'none', color: 'white', fontWeight: 600, borderRadius: '8px' }}>Save Settings</button>
                   </div>
                 </form>
               </>
             ) : (
               <div style={{ textAlign: 'center', padding: '16px 0' }}>
-                <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#DCFCE7', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', margin: '0 auto 20px auto', border: '2px solid #3B8C68' }}>
+                <div style={{ width: '54px', height: '54px', borderRadius: '50%', background: 'rgba(34, 197, 94, 0.2)', display: 'flex', alignItems: 'center', justifySelf: 'center', justifyContent: 'center', margin: '0 auto 20px auto', border: '2px solid #3B8C68' }}>
                   <Check size={28} color="#3B8C68" />
                 </div>
-                <h3 style={{ fontSize: '1.4rem', color: '#1F2328', marginBottom: '8px', fontWeight: 800 }}>Offline Mode Activated!</h3>
-                <p style={{ color: '#5F6875', marginBottom: '24px', fontSize: '0.85rem' }}>
+                <h3 style={{ fontSize: '1.4rem', color: 'var(--text-primary)', marginBottom: '8px', fontWeight: 800 }}>Offline Mode Activated!</h3>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', fontSize: '0.85rem' }}>
                   The quiz <strong>{selectedOfflineQuiz.title}</strong> has been successfully configured for offline taking.
                 </p>
 
-                <div style={{ background: '#F4F5F7', borderRadius: '12px', padding: '16px', textAlign: 'left', marginBottom: '24px', border: '1px solid #B7BEC7' }}>
+                <div style={{ background: 'var(--bg-tertiary)', borderRadius: '12px', padding: '16px', textAlign: 'left', marginBottom: '24px', border: '1px solid #B7BEC7' }}>
                   <div style={{ marginBottom: '10px' }}>
                     <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', fontWeight: 600 }}>Active Period</span>
-                    <strong style={{ fontSize: '0.85rem', color: '#1F2328' }}>
+                    <strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>
                       {new Date(offlineForm.startTime).toLocaleString()} - {new Date(offlineForm.endTime).toLocaleString()}
                     </strong>
                   </div>
@@ -1544,12 +1544,12 @@ export default function TrainerDashboard({
                         type="text" 
                         value={offlineQuizLink} 
                         readOnly 
-                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: '#5F6875', fontSize: '0.8rem' }} 
+                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }} 
                       />
                       <button 
                         type="button" 
                         onClick={() => handleCopyLink(offlineQuizLink)}
-                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: '#F1F5F9', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
                         {linkCopied ? <Check size={12} color="#3B8C68" /> : <Copy size={12} />}
                         {linkCopied ? "Copied" : "Copy"}

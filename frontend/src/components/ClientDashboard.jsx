@@ -64,15 +64,17 @@ export default function ClientDashboard({
     if (selectedProjectId && selectedProjectId !== 'all') {
       const found = projectsList.find(p => p.id === selectedProjectId);
       if (found) {
+        if (found.Client && found.Client.name) return found.Client.name;
         if (found.parentId) {
           const parent = projectsList.find(p => p.id === found.parentId);
-          if (parent) return parent.name;
+          if (parent && parent.Client && parent.Client.name) return parent.Client.name;
         }
-        return found.name;
+        return 'Unassigned Client';
       }
     }
     const motherProj = projectsList.find(p => p.parentId === null);
-    return motherProj ? motherProj.name : 'Sun Pharma';
+    if (motherProj && motherProj.Client && motherProj.Client.name) return motherProj.Client.name;
+    return 'Default Client';
   };
 
   const getActiveProjectName = () => {
@@ -198,22 +200,22 @@ export default function ClientDashboard({
   };
 
   return (
-    <div style={{ padding: '20px', background: '#F4F5F7', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>
+    <div style={{ padding: '32px', background: 'var(--bg-tertiary)', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>
       
       {/* Security alert modal when view-only client attempts to modify records */}
       {showRoleAlert && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(7,27,54,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 10000, backdropFilter: 'blur(4px)' }}>
           <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '16px', border: '1.5px solid #EF4444', maxWidth: '440px', boxShadow: '0 20px 40px rgba(7,27,54,0.15)', textAlign: 'center' }}>
-            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#FEF2F2', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', color: '#EF4444' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(239, 68, 68, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto', color: '#EF4444' }}>
               <Lock size={22} />
             </div>
-            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 800, color: '#1F2328' }}>Action Restricted</h3>
-            <p style={{ fontSize: '0.8rem', color: '#5F6875', margin: '0 0 20px 0', lineHeight: 1.4 }}>
+            <h3 style={{ margin: '0 0 8px 0', fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>Action Restricted</h3>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', margin: '0 0 20px 0', lineHeight: 1.4 }}>
               As a **Client** role user, you have view-only access. You cannot assign training modules, edit questions, modify database logs, or notify supervisors directly.
             </p>
             <button 
               onClick={() => setShowRoleAlert(false)}
-              style={{ padding: '8px 24px', background: '#1F2328', color: 'white', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '0.78rem' }}
+              style={{ padding: '8px 24px', background: 'var(--text-primary)', color: 'white', fontWeight: 700, border: 'none', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease', fontSize: '0.78rem' }}
             >
               Acknowledge
             </button>
@@ -222,38 +224,38 @@ export default function ClientDashboard({
       )}
 
       {/* ─── HEADER BAR ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '16px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '24px' }}>
         <div>
-          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: '#1F2328', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+          <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             Client Success Command Center <span style={{ textShadow: '0 0 10px rgba(243,111,33,0.3)' }}>🛡️</span>
           </h1>
-          <p style={{ color: '#5F6875', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Workforce readiness, training effectiveness, compliance status and project health.</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: '4px 0 0 0' }}>Workforce readiness, training effectiveness, compliance status and project health.</p>
         </div>
 
         {/* User Profile display card */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', padding: '6px 14px', borderRadius: '12px' }}>
-          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: '#FFF5F0', border: '1.5px solid #3E5C8A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3E5C8A', fontWeight: 800, fontSize: '0.78rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-glass)', border: '1px solid var(--border-glass)', padding: '6px 14px', borderRadius: '12px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'rgba(243, 111, 33, 0.15)', border: '1.5px solid #3E5C8A', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--primary)', fontWeight: 800, fontSize: '0.78rem' }}>
             SC
           </div>
           <div>
-            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: '#1F2328', display: 'block' }}>Demo Client</span>
-            <span style={{ fontSize: '0.65rem', color: '#5F6875', display: 'block' }}>{getActiveClientName()} · Executive Reviewer</span>
+            <span style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--text-primary)', display: 'block' }}>Demo Client</span>
+            <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', display: 'block' }}>{getActiveClientName()} · Executive Reviewer</span>
           </div>
         </div>
       </div>
 
       {/* ─── FILTERS & DATE SELECTOR ROW ─── */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-glass)', padding: '12px 18px', borderRadius: '12px', border: '1px solid #B7BEC7', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-glass)', padding: '12px 18px', borderRadius: '12px', border: '1px solid var(--border-glass)', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         
         {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F4F5F7', padding: '8px 14px', borderRadius: '8px', border: '1px solid #B7BEC7', width: '260px' }}>
-          <Search size={14} color="#5F6875" />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-tertiary)', padding: '8px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)', width: '260px' }}>
+          <Search size={14} color='var(--text-secondary)' />
           <input 
             type="text" 
             placeholder="Search employees, locations, roles..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.78rem', color: '#1F2328', width: '100%' }}
+            style={{ border: 'none', background: 'transparent', outline: 'none', fontSize: '0.78rem', color: 'var(--text-primary)', width: '100%' }}
           />
         </div>
 
@@ -261,13 +263,13 @@ export default function ClientDashboard({
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           
           {/* Active range indicator */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#F4F5F7', border: '1px solid #B7BEC7', padding: '6px 12px', borderRadius: '8px' }}>
-            <Calendar size={14} color="#5F6875" />
-            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#1F2328' }}>{dateRange}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', padding: '6px 12px', borderRadius: '8px' }}>
+            <Calendar size={14} color='var(--text-secondary)' />
+            <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-primary)' }}>{dateRange}</span>
           </div>
 
           {/* Quick Date Selection Filters */}
-          <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '8px', padding: '3px' }}>
+          <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '3px' }}>
             {['Last 7 Days', 'Last 30 Days', 'Quarterly', 'Custom'].map(item => {
               const isActive = dateFilter === item;
               return (
@@ -276,7 +278,7 @@ export default function ClientDashboard({
                   onClick={() => handleDateFilterChange(item)}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '0.72rem', fontWeight: 700,
-                    cursor: 'pointer', background: isActive ? '#3E5C8A' : 'transparent', color: isActive ? 'white' : '#5F6875',
+                    cursor: 'pointer', transition: 'all 0.2s ease', background: isActive ? 'var(--primary)' : 'transparent', color: isActive ? 'white' : 'var(--text-secondary)',
                     transition: 'all 0.15s'
                   }}
                 >
@@ -291,7 +293,7 @@ export default function ClientDashboard({
             onClick={triggerPPTDownload}
             style={{
               display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', background: 'linear-gradient(135deg, #1F2328 0%, #152B4F 100%)',
-              border: 'none', borderRadius: '8px', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(7,27,54,0.15)'
+              border: 'none', borderRadius: '8px', color: 'white', fontWeight: 700, fontSize: '0.75rem', cursor: 'pointer', transition: 'all 0.2s ease', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
             }}
           >
             <Presentation size={13} />
@@ -301,21 +303,21 @@ export default function ClientDashboard({
       </div>
 
       {/* ─── PROJECT INFORMATION BANNER ─── */}
-      <div style={{ background: 'linear-gradient(135deg, #1F2328 0%, #152A4E 100%)', color: 'white', padding: '20px 24px', borderRadius: '16px', marginBottom: '24px', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 24px rgba(7,27,54,0.15)' }}>
+      <div style={{ background: 'linear-gradient(135deg, rgba(31,35,40,0.9) 0%, rgba(21,42,78,0.9) 100%)', border: '1px solid var(--border-glass)', color: 'white', padding: '24px 32px', borderRadius: '16px', marginBottom: '24px', position: 'relative', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
         
         {/* Decorative client banner logo marker on right */}
-        <div style={{ position: 'absolute', right: '24px', top: '50%', transform: 'translateY(-50%)', opacity: 0.12, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <strong style={{ fontSize: '2.5rem', fontWeight: 900, textTransform: 'uppercase' }}>{getActiveClientName()}</strong>
+        <div style={{ position: 'absolute', right: '-10px', top: '50%', transform: 'translateY(-50%)', opacity: 0.05, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none', userSelect: 'none', maxWidth: '45%', overflow: 'hidden' }}>
+          <strong style={{ fontSize: '3.5rem', fontWeight: 900, textTransform: 'uppercase', whiteSpace: 'nowrap', lineHeight: 1 }}>{getActiveClientName()}</strong>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '24px' }}>
           <div>
             <span style={{ fontSize: '0.7rem', color: '#38BDF8', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '1px' }}>Active Project Command Banner</span>
             <h2 style={{ fontSize: '1.25rem', fontWeight: 800, margin: '4px 0 0 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
               {getActiveProjectName()} Performance Center
             </h2>
             
-            <div style={{ display: 'flex', gap: '16px', marginTop: '12px', flexWrap: 'wrap', fontSize: '0.78rem', color: '#727A86' }}>
+            <div style={{ display: 'flex', gap: '24px', marginTop: '12px', flexWrap: 'wrap', fontSize: '0.78rem', color: '#727A86' }}>
               <span>Client: <strong style={{ color: 'white' }}>{getActiveClientName()}</strong></span>
               <span>•</span>
               <span>Project Manager: <strong style={{ color: 'white' }}>Rahul Sharma</strong></span>
@@ -327,7 +329,7 @@ export default function ClientDashboard({
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
             <span style={{ fontSize: '0.65rem', color: '#727A86', fontWeight: 600 }}>Operational Status</span>
             <span style={{ 
-              background: '#DCFCE7', color: '#16A34A', padding: '4px 12px', borderRadius: '20px', 
+              background: 'rgba(34, 197, 94, 0.2)', color: '#16A34A', padding: '4px 12px', borderRadius: '20px', 
               fontWeight: 800, fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '4px' 
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#16A34A' }} /> On Track
@@ -337,78 +339,78 @@ export default function ClientDashboard({
       </div>
 
       {/* ─── EXECUTIVE KPI CARDS (6 CARDS) ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '24px', marginBottom: '24px' }}>
         
         {/* KPI 1: Workforce Readiness */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }} title={`Formula: Ready Employees (${readyCount}) ÷ Assigned (${totalAssigned}) × 100`}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }} title={`Formula: Ready Employees (${readyCount}) ÷ Assigned (${totalAssigned}) × 100`}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Workforce Readiness</span>
-            <Users size={16} color="#3E5C8A" />
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Workforce Readiness</span>
+            <Users size={16} color='var(--primary)' />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{readinessPercent}%</strong>
-          <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Reps ready for deployment</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{readinessPercent}%</strong>
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Reps ready for deployment</span>
         </div>
 
         {/* KPI 2: Learning Completion */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Learning Completion</span>
-            <CheckCircle size={16} color="#3E5C8A" />
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Learning Completion</span>
+            <CheckCircle size={16} color='var(--primary)' />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{learningCompletionRate}%</strong>
-          <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Curriculum progress rate</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{learningCompletionRate}%</strong>
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Curriculum progress rate</span>
         </div>
 
         {/* KPI 3: Certification Coverage */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Certifications</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Certifications</span>
             <Award size={16} color="#3B8C68" />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{certificationRate}%</strong>
-          <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Certified field force percentage</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{certificationRate}%</strong>
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Certified field force percentage</span>
         </div>
 
         {/* KPI 4: Compliance Score */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Compliance Score</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Compliance Score</span>
             <Shield size={16} color="#16A34A" />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{complianceRate}%</strong>
-          <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Mandatory check status</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{complianceRate}%</strong>
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Mandatory check status</span>
         </div>
 
         {/* KPI 5: Engagement Index */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Engagement Index</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Engagement Index</span>
             <Heart size={16} color="#EF4444" />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{engagementIndex}</strong>
-          <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Active participation score</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{engagementIndex}</strong>
+          <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Active participation score</span>
         </div>
 
         {/* KPI 6: Project Health Score */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '16px', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#5F6875' }}>Project Health</span>
+            <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Project Health</span>
             <Star size={16} color="#FBBF24" />
           </div>
-          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: '#1F2328', margin: '4px 0' }}>{projectHealthScore} / 100</strong>
-          <span style={{ background: '#DCFCE7', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', alignSelf: 'flex-start', fontWeight: 700, fontSize: '0.58rem', marginTop: '2px' }}>ON TARGET</span>
+          <strong style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0' }}>{projectHealthScore} / 100</strong>
+          <span style={{ background: 'rgba(34, 197, 94, 0.2)', color: '#16A34A', padding: '2px 6px', borderRadius: '4px', alignSelf: 'flex-start', fontWeight: 700, fontSize: '0.58rem', marginTop: '2px' }}>ON TARGET</span>
         </div>
 
       </div>
 
       {/* ─── ROW 2: WORKFORCE PIPELINE + PROJECT HEALTH CENTER + LEARNING TREND ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px', marginBottom: '24px' }}>
         
         {/* Workforce Pipeline Funnel Chart */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0 }}>Workforce Pipeline</h3>
-            <span style={{ fontSize: '0.72rem', color: '#5F6875' }}>Progression transition stages and counts</span>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Workforce Pipeline</h3>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Progression transition stages and counts</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: '16px' }}>
@@ -416,34 +418,34 @@ export default function ClientDashboard({
               <svg viewBox="0 0 200 170" width="100%" height="100%" style={{ overflow: 'visible' }}>
                 {/* Horizontal funnel bands with HSL gradients */}
                 {/* 1. Assigned */}
-                <path d="M 10,10 L 190,10 L 175,36 L 25,36 Z" fill="#3E5C8A" fillOpacity="0.95" stroke="#FFFFFF" strokeWidth="1" />
-                <text x="100" y="27" fill="#FFFFFF" fontSize="8" fontWeight="800" textAnchor="middle">{totalAssigned} Assigned</text>
+                <path d="M 10,10 L 190,10 L 175,36 L 25,36 Z" fill='var(--primary)' fillOpacity="0.95" stroke='var(--bg-glass)' strokeWidth="1" />
+                <text x="100" y="27" fill='var(--bg-glass)' fontSize="8" fontWeight="800" textAnchor="middle">{totalAssigned} Assigned</text>
 
                 {/* 2. Active */}
-                <path d="M 25,41 L 175,41 L 160,67 L 40,67 Z" fill="#1F2328" fillOpacity="0.95" stroke="#FFFFFF" strokeWidth="1" />
-                <text x="100" y="58" fill="#FFFFFF" fontSize="8" fontWeight="800" textAnchor="middle">{activeLearners} Active ({Math.round((activeLearners / totalAssigned) * 100)}%)</text>
+                <path d="M 25,41 L 175,41 L 160,67 L 40,67 Z" fill='var(--text-primary)' fillOpacity="0.95" stroke='var(--bg-glass)' strokeWidth="1" />
+                <text x="100" y="58" fill='var(--bg-glass)' fontSize="8" fontWeight="800" textAnchor="middle">{activeLearners} Active ({Math.round((activeLearners / totalAssigned) * 100)}%)</text>
 
                 {/* 3. Trained */}
-                <path d="M 40,72 L 160,72 L 145,98 L 55,98 Z" fill="#3E5C8A" fillOpacity="0.95" stroke="#FFFFFF" strokeWidth="1" />
-                <text x="100" y="89" fill="#FFFFFF" fontSize="8" fontWeight="800" textAnchor="middle">{trainedCount} Trained ({Math.round((trainedCount / totalAssigned) * 100)}%)</text>
+                <path d="M 40,72 L 160,72 L 145,98 L 55,98 Z" fill='var(--primary)' fillOpacity="0.95" stroke='var(--bg-glass)' strokeWidth="1" />
+                <text x="100" y="89" fill='var(--bg-glass)' fontSize="8" fontWeight="800" textAnchor="middle">{trainedCount} Trained ({Math.round((trainedCount / totalAssigned) * 100)}%)</text>
 
                 {/* 4. Certified */}
-                <path d="M 55,103 L 145,103 L 130,129 L 70,129 Z" fill="#3B8C68" fillOpacity="0.95" stroke="#FFFFFF" strokeWidth="1" />
-                <text x="100" y="120" fill="#FFFFFF" fontSize="8" fontWeight="800" textAnchor="middle">{certifiedCount} Certified ({Math.round((certifiedCount / totalAssigned) * 100)}%)</text>
+                <path d="M 55,103 L 145,103 L 130,129 L 70,129 Z" fill="#3B8C68" fillOpacity="0.95" stroke='var(--bg-glass)' strokeWidth="1" />
+                <text x="100" y="120" fill='var(--bg-glass)' fontSize="8" fontWeight="800" textAnchor="middle">{certifiedCount} Certified ({Math.round((certifiedCount / totalAssigned) * 100)}%)</text>
 
                 {/* 5. Ready */}
-                <path d="M 70,134 L 130,134 L 115,160 L 85,160 Z" fill="#16A34A" fillOpacity="0.95" stroke="#FFFFFF" strokeWidth="1" />
-                <text x="100" y="151" fill="#FFFFFF" fontSize="8" fontWeight="800" textAnchor="middle">{readyCount} Ready ({Math.round((readyCount / totalAssigned) * 100)}%)</text>
+                <path d="M 70,134 L 130,134 L 115,160 L 85,160 Z" fill="#16A34A" fillOpacity="0.95" stroke='var(--bg-glass)' strokeWidth="1" />
+                <text x="100" y="151" fill='var(--bg-glass)' fontSize="8" fontWeight="800" textAnchor="middle">{readyCount} Ready ({Math.round((readyCount / totalAssigned) * 100)}%)</text>
               </svg>
             </div>
           </div>
         </div>
 
         {/* Project Health Center circular concentric score card */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0 }}>Project Health Center</h3>
-            <span style={{ fontSize: '0.72rem', color: '#5F6875' }}>Operational safety concentric metrics</span>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Project Health Center</h3>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Operational safety concentric metrics</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '14px', marginTop: '12px' }}>
@@ -452,25 +454,25 @@ export default function ClientDashboard({
             <div style={{ width: '120px', height: '120px', position: 'relative', flexShrink: 0 }}>
               <svg width="120" height="120" viewBox="0 0 120 120">
                 {/* 1. Completion: learningCompletionRate% (R=50) -> circ ≈ 314 */}
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#F1F5F9" strokeWidth="7" />
-                <circle cx="60" cy="60" r="50" fill="none" stroke="#3E5C8A" strokeWidth="7" strokeDasharray="314" strokeDashoffset={314 * (1 - learningCompletionRate / 100)} strokeLinecap="round" transform="rotate(-90 60 60)" />
+                <circle cx="60" cy="60" r="50" fill="none" stroke="var(--bg-tertiary)" strokeWidth="7" />
+                <circle cx="60" cy="60" r="50" fill="none" stroke='var(--primary)' strokeWidth="7" strokeDasharray="314" strokeDashoffset={314 * (1 - learningCompletionRate / 100)} strokeLinecap="round" transform="rotate(-90 60 60)" />
 
                 {/* 2. Certification: certificationRate% (R=41) -> circ ≈ 257.6 */}
-                <circle cx="60" cy="60" r="41" fill="none" stroke="#F1F5F9" strokeWidth="7" />
-                <circle cx="60" cy="60" r="41" fill="none" stroke="#3E5C8A" strokeWidth="7" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - certificationRate / 100)} strokeLinecap="round" transform="rotate(-90 60 60)" />
+                <circle cx="60" cy="60" r="41" fill="none" stroke="var(--bg-tertiary)" strokeWidth="7" />
+                <circle cx="60" cy="60" r="41" fill="none" stroke='var(--primary)' strokeWidth="7" strokeDasharray="257.6" strokeDashoffset={257.6 * (1 - certificationRate / 100)} strokeLinecap="round" transform="rotate(-90 60 60)" />
 
                 {/* 3. Compliance: complianceRate% (R=32) -> circ ≈ 201 */}
-                <circle cx="60" cy="60" r="32" fill="none" stroke="#F1F5F9" strokeWidth="7" />
+                <circle cx="60" cy="60" r="32" fill="none" stroke="var(--bg-tertiary)" strokeWidth="7" />
                 <circle cx="60" cy="60" r="32" fill="none" stroke="#3B8C68" strokeWidth="7" strokeDasharray="201" strokeDashoffset={201 * (1 - complianceRate / 100)} strokeLinecap="round" transform="rotate(-90 60 60)" />
 
                 {/* 4. Attendance: 88% (R=23) -> circ ≈ 144.5 */}
-                <circle cx="60" cy="60" r="23" fill="none" stroke="#F1F5F9" strokeWidth="7" />
+                <circle cx="60" cy="60" r="23" fill="none" stroke="var(--bg-tertiary)" strokeWidth="7" />
                 <circle cx="60" cy="60" r="23" fill="none" stroke="#7C3AED" strokeWidth="7" strokeDasharray="144.5" strokeDashoffset={144.5 * (1 - 0.88)} strokeLinecap="round" transform="rotate(-90 60 60)" />
               </svg>
               
               {/* Inner score badge */}
               <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', textAlign: 'center' }}>
-                <strong style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1F2328', display: 'block' }}>89</strong>
+                <strong style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', display: 'block' }}>89</strong>
                 <span style={{ fontSize: '0.45rem', color: '#16A34A', display: 'block', fontWeight: 800 }}>HEALTHY</span>
               </div>
             </div>
@@ -478,20 +480,20 @@ export default function ClientDashboard({
             {/* Dials legend list */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '5px', fontSize: '0.68rem', fontWeight: 600 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3E5C8A' }} /> Completion</span>
-                <strong style={{ color: '#1F2328' }}>{learningCompletionRate}%</strong>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} /> Completion</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{learningCompletionRate}%</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3E5C8A' }} /> Certified</span>
-                <strong style={{ color: '#1F2328' }}>{certificationRate}%</strong>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'var(--primary)' }} /> Certified</span>
+                <strong style={{ color: 'var(--text-primary)' }}>{certificationRate}%</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#3B8C68' }} /> Compliance</span>
-                <strong style={{ color: '#1F2328' }}>{complianceRate}%</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>{complianceRate}%</strong>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#7C3AED' }} /> Attendance</span>
-                <strong style={{ color: '#1F2328' }}>88%</strong>
+                <strong style={{ color: 'var(--text-primary)' }}>88%</strong>
               </div>
             </div>
 
@@ -499,21 +501,21 @@ export default function ClientDashboard({
         </div>
 
         {/* Learning Effectiveness Trend Multi-Line Graph */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
             <div>
-              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0 }}>Effectiveness Trend</h3>
-              <span style={{ fontSize: '0.72rem', color: '#5F6875' }}>Training impact parameters timeline</span>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Effectiveness Trend</h3>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Training impact parameters timeline</span>
             </div>
             
-            <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '6px', padding: '2px' }}>
+            <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '6px', padding: '2px' }}>
               {['Weekly', 'Monthly', 'Quarterly'].map(t => (
                 <button
                   key={t}
                   onClick={() => setTrendTimeline(t)}
                   style={{
                     padding: '3px 8px', borderRadius: '4px', border: 'none', fontSize: '0.62rem', fontWeight: 700,
-                    cursor: 'pointer', background: trendTimeline === t ? '#1F2328' : 'transparent', color: trendTimeline === t ? 'white' : '#5F6875'
+                    cursor: 'pointer', transition: 'all 0.2s ease', background: trendTimeline === t ? 'var(--text-primary)' : 'transparent', color: trendTimeline === t ? 'white' : 'var(--text-secondary)'
                   }}
                 >
                   {t}
@@ -526,17 +528,17 @@ export default function ClientDashboard({
           <div style={{ flex: 1, height: '110px', minHeight: '110px' }}>
             <svg viewBox="0 0 220 110" width="100%" height="100%" style={{ overflow: 'visible' }}>
               {/* Grid lines */}
-              <line x1="20" y1="15" x2="200" y2="15" stroke="#F1F5F9" strokeWidth="0.8" />
-              <line x1="20" y1="50" x2="200" y2="50" stroke="#F1F5F9" strokeWidth="0.8" />
-              <line x1="20" y1="85" x2="200" y2="85" stroke="#B7BEC7" strokeWidth="1" />
+              <line x1="20" y1="15" x2="200" y2="15" stroke="var(--bg-tertiary)" strokeWidth="0.8" />
+              <line x1="20" y1="50" x2="200" y2="50" stroke="var(--bg-tertiary)" strokeWidth="0.8" />
+              <line x1="20" y1="85" x2="200" y2="85" stroke='var(--border-glass)' strokeWidth="1" />
 
               {/* Line 1: Knowledge Growth (Orange) */}
-              <path d="M 20,70 L 65,58 L 110,48 L 155,30 L 200,20" fill="none" stroke="#3E5C8A" strokeWidth="1.8" strokeLinecap="round" />
-              <circle cx="200" cy="20" r="2.5" fill="#3E5C8A" />
+              <path d="M 20,70 L 65,58 L 110,48 L 155,30 L 200,20" fill="none" stroke='var(--primary)' strokeWidth="1.8" strokeLinecap="round" />
+              <circle cx="200" cy="20" r="2.5" fill='var(--primary)' />
 
               {/* Line 2: Assessment Scores (Blue) */}
-              <path d="M 20,80 L 65,72 L 110,50 L 155,42 L 200,34" fill="none" stroke="#3E5C8A" strokeWidth="1.8" strokeLinecap="round" />
-              <circle cx="200" cy="34" r="2.5" fill="#3E5C8A" />
+              <path d="M 20,80 L 65,72 L 110,50 L 155,42 L 200,34" fill="none" stroke='var(--primary)' strokeWidth="1.8" strokeLinecap="round" />
+              <circle cx="200" cy="34" r="2.5" fill='var(--primary)' />
 
               {/* Line 3: Completion Rates (Green) */}
               <path d="M 20,85 L 65,65 L 110,55 L 155,48 L 200,26" fill="none" stroke="#3B8C68" strokeWidth="1.8" strokeLinecap="round" />
@@ -552,9 +554,9 @@ export default function ClientDashboard({
           </div>
 
           {/* Legends */}
-          <div style={{ display: 'flex', gap: '8px', fontSize: '0.62rem', fontWeight: 700, color: '#475569', justifyContent: 'center', marginTop: '6px' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', background: '#3E5C8A', borderRadius: '1.5px' }} /> Knowledge Growth</span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', background: '#3E5C8A', borderRadius: '1.5px' }} /> Assessment</span>
+          <div style={{ display: 'flex', gap: '8px', fontSize: '0.62rem', fontWeight: 700, color: 'var(--text-secondary)', justifyContent: 'center', marginTop: '6px' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', background: 'var(--primary)', borderRadius: '1.5px' }} /> Knowledge Growth</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', background: 'var(--primary)', borderRadius: '1.5px' }} /> Assessment</span>
             <span style={{ display: 'flex', alignItems: 'center', gap: '3px' }}><span style={{ width: '6px', height: '6px', background: '#3B8C68', borderRadius: '1.5px' }} /> Completion</span>
           </div>
 
@@ -563,42 +565,42 @@ export default function ClientDashboard({
       </div>
 
       {/* ─── ROW 3: COMPLIANCE OVERVIEW + REGIONAL PERFORMANCE India Heatmap + AI INSIGHTS ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '32px', marginBottom: '24px' }}>
         
         {/* Compliance & Certification Overview */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0 }}>Compliance &amp; Certifications Ratio</h3>
-            <span style={{ fontSize: '0.72rem', color: '#5F6875' }}>Mandatory audits and certification distribution</span>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Compliance &amp; Certifications Ratio</h3>
+            <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Mandatory audits and certification distribution</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px' }}>
             
             {/* Compliance Progress Meters */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div style={{ background: '#F0FDF4', border: '1.5px solid rgba(34,197,94,0.2)', padding: '10px 14px', borderRadius: '10px', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(34, 197, 94, 0.15)', border: '1.5px solid rgba(34,197,94,0.2)', padding: '10px 14px', borderRadius: '10px', textAlign: 'center' }}>
                 <span style={{ fontSize: '0.68rem', color: '#16A34A', fontWeight: 700, textTransform: 'uppercase' }}>Completed</span>
                 <strong style={{ fontSize: '1.3rem', fontWeight: 800, color: '#16A34A', display: 'block', marginTop: '4px' }}>94%</strong>
-                <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Clear audit benchmarks</span>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Clear audit benchmarks</span>
               </div>
 
-              <div style={{ background: '#FEF2F2', border: '1.5px solid rgba(239,68,68,0.2)', padding: '10px 14px', borderRadius: '10px', textAlign: 'center' }}>
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1.5px solid rgba(239,68,68,0.2)', padding: '10px 14px', borderRadius: '10px', textAlign: 'center' }}>
                 <span style={{ fontSize: '0.68rem', color: '#EF4444', fontWeight: 700, textTransform: 'uppercase' }}>Pending Gaps</span>
                 <strong style={{ fontSize: '1.3rem', fontWeight: 800, color: '#EF4444', display: 'block', marginTop: '4px' }}>6%</strong>
-                <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Requires intervention</span>
+                <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Requires intervention</span>
               </div>
             </div>
 
             {/* Certification Donut ratios */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: '#F4F5F7', border: '1px solid #B7BEC7', padding: '10px 14px', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', padding: '10px 14px', borderRadius: '10px' }}>
               {/* Small donut SVG */}
               <div style={{ width: '56px', height: '56px', position: 'relative', flexShrink: 0 }}>
                 <svg width="56" height="56" viewBox="0 0 56 56">
-                  <circle cx="28" cy="28" r="22" fill="none" stroke="#B7BEC7" strokeWidth="5" />
+                  <circle cx="28" cy="28" r="22" fill="none" stroke='var(--border-glass)' strokeWidth="5" />
                   <circle cx="28" cy="28" r="22" fill="none" stroke="#3B8C68" strokeWidth="5" strokeDasharray="138.2" strokeDashoffset={138.2 * 0.12} strokeLinecap="round" transform="rotate(-90 28 28)" />
                   <circle cx="28" cy="28" r="22" fill="none" stroke="#FBBF24" strokeWidth="5" strokeDasharray="138.2" strokeDashoffset={138.2 * 0.9} strokeLinecap="round" transform="rotate(230 28 28)" />
                 </svg>
-                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '0.68rem', fontWeight: 800, color: '#1F2328' }}>
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                   88%
                 </div>
               </div>
@@ -622,18 +624,18 @@ export default function ClientDashboard({
         </div>
 
         {/* Regional Performance India Map widget */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0 }}>Regional Standings Map</h3>
-            <span style={{ fontSize: '0.62rem', background: '#F4F5F7', border: '1px solid #B7BEC7', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>India Coverage</span>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Regional Standings Map</h3>
+            <span style={{ fontSize: '0.62rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-glass)', padding: '2px 8px', borderRadius: '4px', fontWeight: 700 }}>India Coverage</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ width: '100%', height: '130px', position: 'relative', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
               <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
                 <path 
-                  d="M 200 20 L 220 50 L 280 100 L 340 100 L 360 120 L 300 150 L 280 180 L 260 250 L 200 360 L 180 360 L 140 250 L 100 160 L 80 150 L 100 100 L 140 60 Z" 
-                  fill="#F4F5F7" stroke="#CBD5E1" strokeWidth="3" strokeLinejoin="round" 
+                  d="M 160 40 L 180 10 L 210 20 L 220 50 L 250 80 L 270 90 L 320 90 L 340 100 L 360 120 L 350 140 L 320 150 L 300 140 L 290 160 L 270 190 L 250 240 L 220 300 L 200 360 L 180 360 L 150 280 L 120 220 L 100 190 L 60 170 L 50 150 L 70 130 L 100 140 L 120 110 L 130 80 L 140 50 Z" 
+                  fill='var(--bg-tertiary)' stroke="#CBD5E1" strokeWidth="3" strokeLinejoin="round" 
                 />
                 <circle cx="200" cy="80" r="45" fill="#3B8C68" opacity="0.85" />
                 <circle cx="120" cy="160" r="45" fill="#FBBF24" opacity="0.85" />
@@ -641,16 +643,16 @@ export default function ClientDashboard({
                 <circle cx="280" cy="160" r="45" fill="#EF4444" opacity="0.85" />
                 <circle cx="200" cy="280" r="45" fill="#3B8C68" opacity="0.85" />
 
-                <text x="200" y="85" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">North: 91%</text>
-                <text x="120" y="165" fill="#1F2328" fontSize="16" fontWeight="bold" textAnchor="middle">West: 74%</text>
-                <text x="200" y="185" fill="#1F2328" fontSize="16" fontWeight="bold" textAnchor="middle">Central: 68%</text>
-                <text x="280" y="165" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">East: 58%</text>
-                <text x="200" y="285" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle">South: 93%</text>
+                <text x="200" y="85" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">North: 91%</text>
+                <text x="120" y="165" fill='var(--text-primary)' fontSize="16" fontWeight="bold" textAnchor="middle">West: 74%</text>
+                <text x="200" y="185" fill='var(--text-primary)' fontSize="16" fontWeight="bold" textAnchor="middle">Central: 68%</text>
+                <text x="280" y="165" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">East: 58%</text>
+                <text x="200" y="285" fill='var(--bg-glass)' fontSize="16" fontWeight="bold" textAnchor="middle">South: 93%</text>
               </svg>
             </div>
             
             {/* Color Threshold metrics bar */}
-            <div style={{ display: 'flex', gap: '8px', fontSize: '0.6rem', color: '#5F6875', fontWeight: 600, marginTop: '6px' }}>
+            <div style={{ display: 'flex', gap: '8px', fontSize: '0.6rem', color: 'var(--text-secondary)', fontWeight: 600, marginTop: '6px' }}>
               <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#3B8C68' }} /> Green (&gt;90%)</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#FBBF24' }} /> Yellow (75-89%)</span>
               <span style={{ display: 'flex', alignItems: 'center', gap: '2px' }}><span style={{ width: '5px', height: '5px', borderRadius: '50%', background: '#EF4444' }} /> Critical (&lt;60%)</span>
@@ -659,22 +661,22 @@ export default function ClientDashboard({
         </div>
 
         {/* AI Insights engine */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Sparkles size={15} color="#3E5C8A" /> AI Insights Engine
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={15} color='var(--primary)' /> AI Insights Engine
             </h3>
-            <span style={{ fontSize: '0.62rem', background: '#FFF5F0', color: '#3E5C8A', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>Active Recommendations</span>
+            <span style={{ fontSize: '0.62rem', background: 'rgba(243, 111, 33, 0.15)', color: 'var(--primary)', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>Active Recommendations</span>
           </div>
 
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.75rem', fontWeight: 600, color: '#334155' }}>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
             {[
               { text: 'Certification coverage target (88%) has been successfully achieved.', type: 'success' },
               { text: 'South region is performing above benchmark average (93% score).', type: 'success' },
               { text: 'East region has dropped below compliance threshold (58%); intervention required.', type: 'alert' },
               { text: 'Trainer effectiveness metric indicates 12% improvement vs last month.', type: 'success' }
             ].map((insight, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: '8px', background: '#F4F5F7', padding: '8px 10px', borderRadius: '8px', border: '1px solid #B7BEC7', alignItems: 'flex-start' }}>
+              <div key={idx} style={{ display: 'flex', gap: '8px', background: 'var(--bg-tertiary)', padding: '8px 10px', borderRadius: '8px', border: '1px solid var(--border-glass)', alignItems: 'flex-start' }}>
                 <span style={{ color: insight.type === 'success' ? '#3B8C68' : '#EF4444', flexShrink: 0 }}>✓</span>
                 <span style={{ lineHeight: 1.3 }}>{insight.text}</span>
               </div>
@@ -685,29 +687,29 @@ export default function ClientDashboard({
       </div>
 
       {/* ─── ROW 4: TOP PERFORMERS + NEEDS ATTENTION + ACTION CENTER ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '24px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px', marginBottom: '24px' }}>
         
         {/* Top Performers (Gold, Silver, Bronze Leaderboard) */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#1F2328', margin: '0 0 12px 0' }}>🏆 Top Performers</h3>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px 0' }}>🏆 Top Performers</h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
             {[
-              { rank: 1, label: '🏆 Rank 1 (Gold)', name: 'Rahul Sharma', score: '95% Avg', completion: '100% Modules', badgeBg: '#FEF3C7', badgeCol: '#D97706' },
-              { rank: 2, label: '🥈 Rank 2 (Silver)', name: 'Neha Singh', score: '92% Avg', completion: '100% Modules', badgeBg: '#F1F5F9', badgeCol: '#475569' },
+              { rank: 1, label: '🏆 Rank 1 (Gold)', name: 'Rahul Sharma', score: '95% Avg', completion: '100% Modules', badgebg: 'rgba(245, 158, 11, 0.15)', badgeCol: '#D97706' },
+              { rank: 2, label: '🥈 Rank 2 (Silver)', name: 'Neha Singh', score: '92% Avg', completion: '100% Modules', badgebg: 'var(--bg-tertiary)', badgeCol: 'var(--text-secondary)' },
               { rank: 3, label: '🥉 Rank 3 (Bronze)', name: 'Amit Kumar', score: '90% Avg', completion: '100% Modules', badgeBg: '#FFEDD5', badgeCol: '#C2410C' },
-              { rank: 4, label: '#4 Position', name: 'Priya Patel', score: '88% Avg', completion: '100% Modules', badgeBg: '#F4F5F7', badgeCol: '#5F6875' },
-              { rank: 5, label: '#5 Position', name: 'Suresh Yadav', score: '86% Avg', completion: '100% Modules', badgeBg: '#F4F5F7', badgeCol: '#5F6875' }
+              { rank: 4, label: '#4 Position', name: 'Priya Patel', score: '88% Avg', completion: '100% Modules', badgeBg: 'var(--bg-tertiary)', badgeCol: 'var(--text-secondary)' },
+              { rank: 5, label: '#5 Position', name: 'Suresh Yadav', score: '86% Avg', completion: '100% Modules', badgeBg: 'var(--bg-tertiary)', badgeCol: 'var(--text-secondary)' }
             ].map((p, idx) => (
-              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#F4F5F7', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
+              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
                 <div>
                   <span style={{ fontSize: '0.62rem', fontWeight: 800, color: p.badgeCol, background: p.badgeBg, padding: '2px 6px', borderRadius: '4px' }}>{p.label}</span>
-                  <strong style={{ display: 'block', fontSize: '0.78rem', color: '#1F2328', marginTop: '2px' }}>{p.name}</strong>
-                  <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>Status: Certified</span>
+                  <strong style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-primary)', marginTop: '2px' }}>{p.name}</strong>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>Status: Certified</span>
                 </div>
                 <div style={{ textAlign: 'right' }}>
                   <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#16A34A' }}>{p.score}</span>
-                  <span style={{ display: 'block', fontSize: '0.62rem', color: '#5F6875' }}>{p.completion}</span>
+                  <span style={{ display: 'block', fontSize: '0.62rem', color: 'var(--text-secondary)' }}>{p.completion}</span>
                 </div>
               </div>
             ))}
@@ -715,9 +717,9 @@ export default function ClientDashboard({
         </div>
 
         {/* Needs Attention (At-Risk list) */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
           <h3 style={{ fontSize: '0.9rem', fontWeight: 800, color: '#EF4444', margin: '0 0 4px 0' }}>⚠️ Needs Attention</h3>
-          <span style={{ fontSize: '0.72rem', color: '#5F6875', display: 'block', marginBottom: '12px' }}>At-risk representatives requiring L&amp;D coaching</span>
+          <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '12px' }}>At-risk representatives requiring L&amp;D coaching</span>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
             {[
@@ -725,11 +727,11 @@ export default function ClientDashboard({
               { name: 'Sneha Nair', gap: 'Expired Certificate (Compliance)', status: 'Requires Retraining', id: 'EMP415' },
               { name: 'Vikas Rao', gap: 'Low Score (42% on SOP)', status: 'Requires Coaching', id: 'EMP290' }
             ].map((p, idx) => (
-              <div key={idx} style={{ padding: '8px 12px', background: '#FEF2F2', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div key={idx} style={{ padding: '8px 12px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239,68,68,0.15)', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <strong style={{ fontSize: '0.78rem', color: '#EF4444', display: 'block' }}>{p.name}</strong>
                   <span style={{ fontSize: '0.65rem', color: '#B91C1C', display: 'block', fontWeight: 600 }}>{p.gap}</span>
-                  <span style={{ fontSize: '0.6rem', color: '#5F6875' }}>ID: {p.id} · status: {p.status}</span>
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-secondary)' }}>ID: {p.id} · status: {p.status}</span>
                 </div>
 
                 {/* Quick Client restricted actions button */}
@@ -737,7 +739,7 @@ export default function ClientDashboard({
                   onClick={() => setShowRoleAlert(true)}
                   style={{
                     padding: '4px 8px', borderRadius: '4px', border: 'none', background: '#EF4444', color: 'white',
-                    fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '3px'
+                    fontSize: '0.65rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: '3px'
                   }}
                   title="Assign Coach (Restricted)"
                 >
@@ -749,8 +751,8 @@ export default function ClientDashboard({
         </div>
 
         {/* Action Center & Business Review PPT center */}
-        <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '20px', display: 'flex', flexDirection: 'column' }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: '#1F2328', margin: '0 0 12px 0' }}>Action Center</h3>
+        <div className="glass-card" style={{ display: 'flex', flexDirection: 'column' }}>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px 0' }}>Action Center</h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
             
@@ -758,13 +760,13 @@ export default function ClientDashboard({
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
               <button 
                 onClick={triggerPPTDownload}
-                style={{ padding: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700, color: '#1F2328', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyCenter: 'center', gap: '4px' }}
+                style={{ padding: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', justifyCenter: 'center', gap: '4px' }}
               >
                 <Presentation size={12} color="#7C3AED" /> Slide Deck
               </button>
               <button 
                 onClick={triggerExcelDownload}
-                style={{ padding: '8px', border: '1px solid #B7BEC7', background: '#F4F5F7', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700, color: '#1F2328', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyCenter: 'center', gap: '4px' }}
+                style={{ padding: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', borderRadius: '8px', fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', justifyCenter: 'center', gap: '4px' }}
               >
                 <FileText size={12} color="#16A34A" /> Excel Sheets
               </button>
@@ -772,7 +774,7 @@ export default function ClientDashboard({
 
             {/* Template lists */}
             <div style={{ borderTop: '1px solid #B7BEC7', paddingTop: '10px' }}>
-              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: '#475569', marginBottom: '6px' }}>Select Business Review Deck</label>
+              <label style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>Select Business Review Deck</label>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {[
@@ -787,12 +789,12 @@ export default function ClientDashboard({
                       key={opt.key}
                       onClick={() => setSelectedReportTemplate(opt.key)}
                       style={{
-                        padding: '8px 10px', borderRadius: '6px', border: `1px solid ${isSelected ? '#3E5C8A' : '#B7BEC7'}`,
-                        background: isSelected ? '#FFF5F0' : '#FFFFFF', cursor: 'pointer', display: 'flex', flexDirection: 'column'
+                        padding: '8px 10px', borderRadius: '6px', border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-glass)'}`,
+                        background: isSelected ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column'
                       }}
                     >
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isSelected ? '#3E5C8A' : '#1F2328' }}>{opt.label}</span>
-                      <span style={{ fontSize: '0.62rem', color: '#5F6875' }}>{opt.desc}</span>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: isSelected ? 'var(--primary)' : 'var(--text-primary)' }}>{opt.label}</span>
+                      <span style={{ fontSize: '0.62rem', color: 'var(--text-secondary)' }}>{opt.desc}</span>
                     </div>
                   );
                 })}
@@ -802,9 +804,9 @@ export default function ClientDashboard({
             <button
               onClick={triggerPPTDownload}
               style={{
-                width: '100%', border: 'none', background: '#3E5C8A', color: 'white', fontWeight: 700,
-                fontSize: '0.78rem', padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: 'auto', boxShadow: '0 4px 12px rgba(243,111,33,0.2)'
+                width: '100%', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700,
+                fontSize: '0.78rem', padding: '10px', borderRadius: '8px', cursor: 'pointer', transition: 'all 0.2s ease', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', gap: '6px', marginTop: 'auto', boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
               }}
             >
               Export Selected Review Deck

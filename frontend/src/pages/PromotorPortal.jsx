@@ -52,11 +52,11 @@ export default function PromotorPortal() {
           style={{
             display: 'flex', alignItems: 'center', gap: '8px',
             background: 'linear-gradient(135deg, #FF6B35, #FF8C42)',
-            border: 'none', color: '#FFFFFF',
+            border: 'none', color: 'var(--bg-glass)',
             padding: '10px 20px', borderRadius: '20px',
             fontWeight: 700, fontSize: '0.9rem',
             cursor: 'pointer',
-            boxShadow: '0 4px 14px rgba(255,107,53,0.3)',
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
             fontFamily: 'Poppins, sans-serif',
           }}
         >

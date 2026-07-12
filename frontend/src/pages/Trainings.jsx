@@ -10,10 +10,6 @@ export default function Trainings() {
 
   const location = useLocation();
 
-  if (!token) {
-    return <Navigate to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`} replace />;
-  }
-
   const backendUrl = '';
   const [trainings, setTrainings] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -348,6 +344,10 @@ export default function Trainings() {
   const completedTrainings = trainings.filter(t => t.completed).length;
   const progressPercent = totalTrainings > 0 ? Math.round((completedTrainings / totalTrainings) * 100) : 0;
 
+  if (!token) {
+    return <Navigate to={`/login?returnUrl=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  }
+
   if (!user) {
     return <Navigate to="/login" replace />;
   }
@@ -463,14 +463,14 @@ export default function Trainings() {
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               
               {/* Player / Viewer panel */}
-              <div style={{ background: '#0F172A', borderRadius: '12px', border: '1px solid var(--border-glass)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px', position: 'relative' }}>
+              <div style={{ background: 'var(--text-primary)', borderRadius: '12px', border: '1px solid var(--border-glass)', padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '320px', position: 'relative' }}>
                 
                 {selectedTraining.type === 'Video' && (
                   <video key={selectedTraining.id} controls src={selectedTraining.url} style={{ width: '100%', maxHeight: '400px', borderRadius: '8px' }} />
                 )}
 
                 {selectedTraining.type === 'PDF' && (
-                  <div style={{ width: '100%', height: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#1E293B', borderRadius: '8px' }}>
+                  <div style={{ width: '100%', height: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--text-primary)', borderRadius: '8px' }}>
                     <FileText size={64} color="#EF4444" style={{ marginBottom: '16px' }} />
                     <p style={{ color: 'white', fontWeight: 500, marginBottom: '16px' }}>PDF Document: {selectedTraining.title}</p>
                     <a href={selectedTraining.url} target="_blank" rel="noreferrer" className="btn btn-primary" style={{ padding: '8px 16px' }}>
@@ -480,7 +480,7 @@ export default function Trainings() {
                 )}
 
                 {selectedTraining.type === 'PPT' && (
-                  <div style={{ width: '100%', height: '350px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: '#1E293B', padding: '24px', borderRadius: '8px', color: 'white' }}>
+                  <div style={{ width: '100%', height: '350px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', background: 'var(--text-primary)', padding: '24px', borderRadius: '8px', color: 'white' }}>
                     <div>
                       <span className="badge badge-warning" style={{ marginBottom: '8px' }}>{pptSlides[activeSlide].title}</span>
                       <p style={{ fontSize: '1.2rem', lineHeight: '1.6', whiteSpace: 'pre-line' }}>{pptSlides[activeSlide].content}</p>

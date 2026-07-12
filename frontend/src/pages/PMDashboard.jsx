@@ -1492,7 +1492,7 @@ export default function PMDashboard() {
     <div className="view-section active">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: '#FFFFFF', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
+          <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
             <img src="/logo.png" alt="Idonneous Logo" style={{ height: '22px', objectFit: 'contain' }} />
           </div>
           <div>

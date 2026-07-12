@@ -113,8 +113,8 @@ export default function Projects() {
       {/* Header */}
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', gap: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: '#FFFFFF', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
-            <FolderOpen size={22} color="#1F2328" />
+          <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
+            <FolderOpen size={22} color='var(--text-primary)' />
           </div>
           <div>
             <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>
@@ -140,36 +140,36 @@ export default function Projects() {
         <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ background: '#E0F2FE', padding: '12px', borderRadius: '50%', color: '#0284C7' }}><Briefcase size={24} /></div>
           <div>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.875rem' }}>Total Projects</p>
-            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: '#1E293B' }}>{totalProjects}</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Total Projects</p>
+            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{totalProjects}</h3>
           </div>
         </div>
         <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <div style={{ background: '#DCFCE7', padding: '12px', borderRadius: '50%', color: '#16A34A' }}><Activity size={24} /></div>
+          <div style={{ background: 'rgba(34, 197, 94, 0.2)', padding: '12px', borderRadius: '50%', color: '#16A34A' }}><Activity size={24} /></div>
           <div>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.875rem' }}>Active Projects</p>
-            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: '#1E293B' }}>{activeProjects}</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Active Projects</p>
+            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{activeProjects}</h3>
           </div>
         </div>
         <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ background: '#FEF9C3', padding: '12px', borderRadius: '50%', color: '#CA8A04' }}><FolderOpen size={24} /></div>
           <div>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.875rem' }}>Upcoming Projects</p>
-            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: '#1E293B' }}>{upcomingProjects}</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Upcoming Projects</p>
+            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{upcomingProjects}</h3>
           </div>
         </div>
         <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ background: '#F3E8FF', padding: '12px', borderRadius: '50%', color: '#9333EA' }}><Users size={24} /></div>
           <div>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.875rem' }}>Participants Covered</p>
-            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: '#1E293B' }}>{participantsCovered}</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Participants Covered</p>
+            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{participantsCovered}</h3>
           </div>
         </div>
         <div className="glass-card" style={{ padding: '20px', display: 'flex', alignItems: 'center', gap: '16px' }}>
           <div style={{ background: '#FFEDD5', padding: '12px', borderRadius: '50%', color: '#EA580C' }}><AlertTriangle size={24} /></div>
           <div>
-            <p style={{ margin: 0, color: '#64748B', fontSize: '0.875rem' }}>Health Score</p>
-            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: '#1E293B' }}>{healthScore}%</h3>
+            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.875rem' }}>Health Score</p>
+            <h3 style={{ margin: '4px 0 0', fontSize: '1.5rem', color: 'var(--text-primary)' }}>{healthScore}%</h3>
           </div>
         </div>
       </div>
@@ -179,7 +179,7 @@ export default function Projects() {
         
         {/* Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-          <h3 style={{ margin: 0, color: '#1F2328', fontSize: '1.1rem' }}>Project Repository</h3>
+          <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>Project Repository</h3>
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: '#94A3B8' }} />
@@ -209,21 +209,21 @@ export default function Projects() {
 
         {/* Data Table */}
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>Loading projects...</div>
+          <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>Loading projects...</div>
         ) : error ? (
           <div style={{ textAlign: 'center', padding: '40px', color: '#EF4444' }}>{error}</div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
               <thead>
-                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569', width: '40px' }}></th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569' }}>Project Name</th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569' }}>Code</th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569' }}>Client & Brand</th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569', textAlign: 'center' }}>Participants</th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569' }}>Status</th>
-                  <th style={{ padding: '16px', fontWeight: 600, color: '#475569', textAlign: 'right' }}>Action</th>
+                <tr style={{ background: 'var(--bg-glass)', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)', width: '40px' }}></th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)' }}>Project Name</th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)' }}>Code</th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)' }}>Client & Brand</th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'center' }}>Participants</th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)' }}>Status</th>
+                  <th style={{ padding: '16px', fontWeight: 600, color: 'var(--text-secondary)', textAlign: 'right' }}>Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -234,19 +234,19 @@ export default function Projects() {
                   return (
                     <React.Fragment key={mother.id}>
                       {/* Mother Project Row */}
-                      <tr style={{ borderBottom: '1px solid #F1F5F9', background: '#FFFFFF' }}>
+                      <tr style={{ borderBottom: '1px solid var(--bg-tertiary)', background: 'var(--bg-glass)' }}>
                         <td style={{ padding: '16px', textAlign: 'center' }}>
                           {children.length > 0 && (
                             <button 
                               style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '4px', display: 'flex', alignItems: 'center' }}
                               onClick={() => toggleExpand(mother.id)}
                             >
-                              {isExpanded ? <ChevronDown size={18} color="#64748B" /> : <ChevronRight size={18} color="#64748B" />}
+                              {isExpanded ? <ChevronDown size={18} color='var(--text-secondary)' /> : <ChevronRight size={18} color='var(--text-secondary)' />}
                             </button>
                           )}
                         </td>
                         <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-                          <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', background: '#F8FAFC', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid #E2E8F0' }}>
+                          <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', background: 'var(--bg-glass)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid #E2E8F0' }}>
                             {mother.project_logo ? (
                               <img src={`http://localhost:5000${mother.project_logo}`} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             ) : (
@@ -254,21 +254,21 @@ export default function Projects() {
                             )}
                           </div>
                           <div>
-                            <span style={{ fontWeight: 600, color: '#1E293B', display: 'block' }}>{mother.name}</span>
-                            <span style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 500 }}>MOTHER PROJECT</span>
+                            <span style={{ fontWeight: 600, color: 'var(--text-primary)', display: 'block' }}>{mother.name}</span>
+                            <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 500 }}>MOTHER PROJECT</span>
                           </div>
                         </td>
-                        <td style={{ padding: '16px', color: '#475569', fontWeight: 500 }}>{mother.project_code || '-'}</td>
+                        <td style={{ padding: '16px', color: 'var(--text-secondary)', fontWeight: 500 }}>{mother.project_code || '-'}</td>
                         <td style={{ padding: '16px' }}>
-                          <span style={{ display: 'block', color: '#1E293B', fontWeight: 500 }}>{mother.Client?.name || '-'}</span>
-                          <span style={{ display: 'block', color: '#64748B', fontSize: '0.85rem' }}>{mother.brand || '-'}</span>
+                          <span style={{ display: 'block', color: 'var(--text-primary)', fontWeight: 500 }}>{mother.Client?.name || '-'}</span>
+                          <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{mother.brand || '-'}</span>
                         </td>
-                        <td style={{ padding: '16px', textAlign: 'center', color: '#475569' }}>{mother.participants_planned || 0}</td>
+                        <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>{mother.participants_planned || 0}</td>
                         <td style={{ padding: '16px' }}>
                           <span style={{ 
                             padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
-                            background: mother.status === 'Active' ? '#DCFCE7' : mother.status === 'Completed' ? '#F1F5F9' : '#FEF9C3',
-                            color: mother.status === 'Active' ? '#16A34A' : mother.status === 'Completed' ? '#64748B' : '#CA8A04'
+                            background: mother.status === 'Active' ? 'rgba(34, 197, 94, 0.2)' : mother.status === 'Completed' ? 'var(--bg-tertiary)' : '#FEF9C3',
+                            color: mother.status === 'Active' ? '#16A34A' : mother.status === 'Completed' ? 'var(--text-secondary)' : '#CA8A04'
                           }}>
                             {mother.status}
                           </span>
@@ -276,7 +276,7 @@ export default function Projects() {
                         <td style={{ padding: '16px', textAlign: 'right' }}>
                           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                             <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(mother)} title="Edit">
-                              <Edit2 size={18} color="#64748B" />
+                              <Edit2 size={18} color='var(--text-secondary)' />
                             </button>
                             <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(mother)} title="Delete">
                               <Trash2 size={18} color="#EF4444" />
@@ -287,22 +287,22 @@ export default function Projects() {
                       
                       {/* Sub-projects (if expanded) */}
                       {isExpanded && children.map(child => (
-                        <tr key={child.id} style={{ borderBottom: '1px solid #F1F5F9', background: '#F8FAFC' }}>
+                        <tr key={child.id} style={{ borderBottom: '1px solid var(--bg-tertiary)', background: 'var(--bg-glass)' }}>
                           <td style={{ padding: '16px' }}></td>
                           <td style={{ padding: '16px', paddingLeft: '48px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                             <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#CBD5E1' }}></div>
-                            <span style={{ fontWeight: 500, color: '#334155' }}>{child.name}</span>
+                            <span style={{ fontWeight: 500, color: 'var(--text-secondary)' }}>{child.name}</span>
                           </td>
-                          <td style={{ padding: '16px', color: '#64748B', fontSize: '0.9rem' }}>{child.project_code || '-'}</td>
-                          <td style={{ padding: '16px', color: '#64748B', fontSize: '0.9rem' }}>
+                          <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{child.project_code || '-'}</td>
+                          <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                             {child.Client?.name || '-'} / {child.brand || '-'}
                           </td>
-                          <td style={{ padding: '16px', textAlign: 'center', color: '#64748B', fontSize: '0.9rem' }}>{child.participants_planned || 0}</td>
+                          <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{child.participants_planned || 0}</td>
                           <td style={{ padding: '16px' }}>
                             <span style={{ 
                               padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600,
-                              background: child.status === 'Active' ? '#DCFCE7' : '#F1F5F9',
-                              color: child.status === 'Active' ? '#16A34A' : '#64748B'
+                              background: child.status === 'Active' ? 'rgba(34, 197, 94, 0.2)' : 'var(--bg-tertiary)',
+                              color: child.status === 'Active' ? '#16A34A' : 'var(--text-secondary)'
                             }}>
                               {child.status}
                             </span>
@@ -310,7 +310,7 @@ export default function Projects() {
                           <td style={{ padding: '16px', textAlign: 'right' }}>
                             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
                               <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(child)} title="Edit">
-                                <Edit2 size={16} color="#64748B" />
+                                <Edit2 size={16} color='var(--text-secondary)' />
                               </button>
                               <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(child)} title="Delete">
                                 <Trash2 size={16} color="#EF4444" />
@@ -324,7 +324,7 @@ export default function Projects() {
                 })}
                 {motherProjects.filter(filterProject).length === 0 && (
                   <tr>
-                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: '#64748B' }}>No projects found.</td>
+                    <td colSpan="7" style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>No projects found.</td>
                   </tr>
                 )}
               </tbody>

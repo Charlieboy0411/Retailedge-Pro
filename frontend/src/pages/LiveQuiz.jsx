@@ -310,7 +310,7 @@ export default function LiveQuiz() {
   };
 
   // Generate Confetti
-  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', '#ffffff', '#a855f7'];
+  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', 'var(--bg-glass)', '#a855f7'];
   const confettiList = Array.from({ length: 50 }).map((_, i) => {
     const left = Math.random() * 100 + '%';
     const delay = Math.random() * 5 + 's';
@@ -336,7 +336,7 @@ export default function LiveQuiz() {
       display: 'flex',
       flexDirection: 'column',
       height: '100vh',
-      background: '#081120',
+      background: 'var(--bg-primary)',
       color: 'white',
       position: 'relative',
       overflow: 'hidden',
@@ -375,7 +375,7 @@ export default function LiveQuiz() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.2);
           border-radius: 16px;
-          color: #FFFFFF;
+          color: var(--bg-tertiary);
           display: flex;
           align-items: center;
           gap: 10px;
@@ -449,7 +449,7 @@ export default function LiveQuiz() {
           align-items: center;
           gap: 16px;
           font-size: 1.1rem;
-          color: #FFFFFF;
+          color: var(--bg-tertiary);
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.2);
           padding: 14px 20px;
@@ -550,15 +550,15 @@ export default function LiveQuiz() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
-          border: 2px solid #FFFFFF;
-          color: #FFFFFF;
+          border: 2px solid var(--bg-tertiary);
+          color: var(--bg-tertiary);
           box-shadow: 0 8px 20px rgba(255, 107, 53, 0.35);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.25);
-          color: #FFFFFF;
+          color: var(--bg-tertiary);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -603,7 +603,7 @@ export default function LiveQuiz() {
       {/* A. WAITING LOBBY STATE */}
       {status === 'waiting' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', overflowY: 'auto', zIndex: 5 }}>
-          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: '#0F1A36', borderRadius: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: 'var(--text-primary)', borderRadius: '24px' }}>
             <div style={{ marginBottom: '28px' }}>
               <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#FF6B35', background: 'rgba(255,107,53,0.1)', padding: '6px 16px', borderRadius: '20px', border: '1px solid rgba(255,107,53,0.2)' }}>
                 RetailEdge Pro Lobby
@@ -616,11 +616,11 @@ export default function LiveQuiz() {
 
             {/* Join Code & Mock Countdown Row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: '#0A1128', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: 'var(--text-primary)', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Room Code</span>
                 <span style={{ fontSize: '1.35rem', fontWeight: 900, letterSpacing: '2px', color: '#FF6B35', fontFamily: 'Courier New, monospace' }}>{roomCode}</span>
               </div>
-              <div style={{ background: '#0A1128', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: 'var(--text-primary)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Est. Start</span>
                 <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#FF9800', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                   <Clock size={14} />
@@ -646,7 +646,7 @@ export default function LiveQuiz() {
                 gap: '10px 8px',
                 maxHeight: '150px',
                 overflowY: 'auto',
-                background: '#0A1128',
+                background: 'var(--text-primary)',
                 padding: '12px',
                 borderRadius: '16px',
                 border: '1px solid rgba(255,107,53,0.15)',
@@ -675,7 +675,7 @@ export default function LiveQuiz() {
             </div>
 
             {/* Quiz Rules Panel */}
-            <div style={{ textAlign: 'left', background: '#0A1128', padding: '20px', borderRadius: '16px', color: '#FFFFFF', border: '1px solid rgba(255,107,53,0.15)' }}>
+            <div style={{ textAlign: 'left', background: 'var(--text-primary)', padding: '20px', borderRadius: '16px', color: 'var(--bg-glass)', border: '1px solid rgba(255,107,53,0.15)' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: 700, color: '#FF6B35', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assessment Rules</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.75)' }}>
                 {[
@@ -795,7 +795,7 @@ export default function LiveQuiz() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.4rem' }}>{myAvatar}</span>
-                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#FFFFFF' }}>
+                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--bg-glass)' }}>
                   Hi {playerName} 🏆
                 </span>
               </div>
@@ -834,7 +834,7 @@ export default function LiveQuiz() {
               <>
                 {/* Question Text */}
                 <div style={{ 
-                  background: '#0F1A36', 
+                  background: 'var(--text-primary)', 
                   border: '2px solid rgba(255, 107, 53, 0.3)', 
                   padding: '24px', 
                   borderRadius: '20px', 
@@ -897,7 +897,7 @@ export default function LiveQuiz() {
                             opacity: status === 'answered' && !isSelected ? 0.6 : 1,
                           }}
                         >
-                          <span className="price-tag-badge" style={{ background: isSelected ? '#FF6B35' : 'rgba(255, 107, 53, 0.2)', color: isSelected ? '#081120' : '#FFFFFF' }}>{letter}</span>
+                          <span className="price-tag-badge" style={{ background: isSelected ? '#FF6B35' : 'rgba(255, 107, 53, 0.2)', color: isSelected ? 'var(--bg-primary)' : 'var(--bg-glass)' }}>{letter}</span>
                           <span style={{ fontWeight: 600 }}>{opt}</span>
                         </button>
                       );
@@ -924,13 +924,13 @@ export default function LiveQuiz() {
                           flexDirection: 'column', 
                           gap: '12px', 
                           width: '100%',
-                          background: '#0A1128',
+                          background: 'var(--text-primary)',
                           padding: '14px 20px',
                           borderRadius: '16px',
                           border: isCorrect ? '2px solid #00C896' : (isMyChoice ? '1.5px dashed #FF6B35' : '1px solid rgba(255, 107, 53, 0.2)'),
                           boxShadow: isCorrect ? '0 0 12px rgba(0, 200, 150, 0.15)' : 'none'
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: 'var(--bg-glass)', flexWrap: 'wrap' }}>
                             <span className="price-tag-badge" style={{ background: isCorrect ? '#00C896' : '#FF6B35' }}>{letter}</span>
                             <span>{opt}</span>
                             {isMyChoice && (
@@ -995,7 +995,7 @@ export default function LiveQuiz() {
                         padding: '16px',
                         borderRadius: '16px',
                         border: '2px solid rgba(255,107,53,0.3)',
-                        background: '#0F1A36',
+                        background: 'var(--text-primary)',
                         color: 'white',
                         fontSize: '1.1rem',
                         resize: 'none',
@@ -1019,14 +1019,14 @@ export default function LiveQuiz() {
                         return (
                           <div key={idx} style={{ 
                             padding: '14px 18px', 
-                            background: '#0F1A36', 
+                            background: 'var(--text-primary)', 
                             border: isMe ? '1.5px dashed #FF6B35' : '1px solid rgba(255, 107, 53, 0.15)', 
                             borderRadius: '12px', 
                             textAlign: 'left', 
                             fontSize: '1.05rem', 
                             fontWeight: 600, 
-                            color: '#FFFFFF', 
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                            color: 'var(--bg-glass)', 
+                            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center'
@@ -1077,7 +1077,7 @@ export default function LiveQuiz() {
                 {currentQuestion.type === 'rating' && status === 'revealed' && (
                   <div style={{ 
                     textAlign: 'center', 
-                    background: '#0F1A36', 
+                    background: 'var(--text-primary)', 
                     padding: '24px', 
                     borderRadius: '20px', 
                     border: '2px solid rgba(255, 107, 53, 0.3)', 
@@ -1102,7 +1102,7 @@ export default function LiveQuiz() {
                       const displayStars = roundedAvg >= 0 ? '★'.repeat(roundedAvg).padEnd(5, '☆') : '☆☆☆☆☆';
                       return (
                         <>
-                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: '#FFFFFF', fontWeight: 800 }}>{avg}</h2>
+                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: 'var(--bg-glass)', fontWeight: 800 }}>{avg}</h2>
                           <div style={{ fontSize: '2rem', color: '#FF6B35', marginBottom: '12px', letterSpacing: '3px' }}>
                             {displayStars}
                           </div>
@@ -1153,7 +1153,7 @@ export default function LiveQuiz() {
 
                 {/* Submitting Status (Answered state) */}
                 {status === 'answered' && (
-                  <div style={{ marginTop: 'auto', textAlign: 'center', padding: '20px', background: '#0F1A36', borderRadius: '16px', color: 'white', border: '2px dashed rgba(255,107,53,0.3)' }}>
+                  <div style={{ marginTop: 'auto', textAlign: 'center', padding: '20px', background: 'var(--text-primary)', borderRadius: '16px', color: 'white', border: '2px dashed rgba(255,107,53,0.3)' }}>
                     <strong>Answer submitted!</strong> Waiting for host to reveal results...
                   </div>
                 )}

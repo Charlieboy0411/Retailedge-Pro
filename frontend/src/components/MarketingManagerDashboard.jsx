@@ -9,18 +9,18 @@ import {
 } from 'lucide-react';
 
 // Theme Palette (Retail Excellence Theme)
-const BLUE = '#3E5C8A';
-const NAVY = '#0F172A';
+const BLUE = 'var(--primary)';
+const NAVY = 'var(--text-primary)';
 const SKY = '#38BDF8';
 const ORANGE = '#F97316';
 const GREEN = '#3B8C68';
 const AMBER = '#F59E0B';
 const RED = '#EF4444';
-const BG = '#F4F5F7';
-const CARD = '#FFFFFF';
-const TEXT = '#1E293B';
-const MUTED = '#5F6875';
-const BORDER = '#B7BEC7';
+const BG = 'var(--bg-tertiary)';
+const CARD = 'var(--bg-glass)';
+const TEXT = 'var(--text-primary)';
+const MUTED = 'var(--text-secondary)';
+const BORDER = 'var(--border-glass)';
 
 export default function MarketingManagerDashboard({
   projectUsers = [],
@@ -139,7 +139,7 @@ export default function MarketingManagerDashboard({
       background: CARD,
       borderRadius: '16px',
       padding: '24px',
-      boxShadow: '0 4px 20px rgba(15,23,42,0.03)',
+      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
       border: `1px solid ${BORDER}`,
       position: 'relative',
       ...style
@@ -197,7 +197,7 @@ export default function MarketingManagerDashboard({
         background: CARD,
         borderRadius: '16px 16px 0 0',
         padding: '0 24px',
-        boxShadow: '0 2px 10px rgba(15,23,42,0.02)',
+        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
         overflowX: 'auto',
         gap: '8px'
       }}>
@@ -217,11 +217,9 @@ export default function MarketingManagerDashboard({
         borderRadius: '16px',
         padding: '16px 20px',
         marginBottom: '28px',
-        display: 'flex',
-        gap: '12px',
-        flexWrap: 'wrap',
+        display: 'flex', flexWrap: 'wrap', gap: '12px',
         alignItems: 'center',
-        boxShadow: '0 4px 15px rgba(15,23,42,0.01)'
+        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
       }}>
         <div style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: MUTED }}>Filters:</div>
         
@@ -499,7 +497,7 @@ export default function MarketingManagerDashboard({
                 <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, fontSize: '1.05rem', color: NAVY }}>Product Launch timeline</h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', paddingLeft: '8px' }}>
                   {launches.map((l, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '16px', position: 'relative' }}>
+                    <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', position: 'relative' }}>
                       {/* Timeline dot & line */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                         <div style={{ width: '14px', height: '14px', borderRadius: '50%', background: l.progress >= 90 ? GREEN : l.progress >= 50 ? AMBER : RED, zIndex: 1 }} />
@@ -667,36 +665,31 @@ export default function MarketingManagerDashboard({
                 
                 <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', background: BG, padding: '24px', borderRadius: '12px', border: `1px solid ${BORDER}`, minHeight: '320px' }}>
                   {/* High Fidelity Stylized SVG representing India Zone Mapping */}
-                  <svg viewBox="0 0 360 380" style={{ width: '100%', height: '320px' }}>
+                  <svg viewBox="0 0 400 400" style={{ width: '100%', height: '320px', overflow: 'visible' }}>
                     {/* Outline / base path of India map simplified to zones */}
+                    <path 
+                      d="M 160 40 L 180 10 L 210 20 L 220 50 L 250 80 L 270 90 L 320 90 L 340 100 L 360 120 L 350 140 L 320 150 L 300 140 L 290 160 L 270 190 L 250 240 L 220 300 L 200 360 L 180 360 L 150 280 L 120 220 L 100 190 L 60 170 L 50 150 L 70 130 L 100 140 L 120 110 L 130 80 L 140 50 Z" 
+                      fill="var(--bg-tertiary)" stroke={BORDER} strokeWidth="3" strokeLinejoin="round" 
+                    />
                     <g style={{ cursor: 'pointer', transition: 'opacity 0.2s' }}>
-                      {/* North Zone */}
-                      <path d="M140,40 L190,30 L210,70 L200,120 L160,140 L120,110 Z" 
-                        fill={selectedRegion === 'North' ? BLUE : `${BLUE}77`} stroke="#FFFFFF" strokeWidth="2.5"
-                        onClick={() => setSelectedRegion(selectedRegion === 'North' ? 'All' : 'North')} />
-                      <text x="160" y="80" fill="#FFFFFF" fontSize="11" fontWeight="800" textAnchor="middle">NORTH (87%)</text>
-                      
-                      {/* West Zone */}
-                      <path d="M120,110 L160,140 L140,210 L80,210 L60,160 L90,110 Z" 
-                        fill={selectedRegion === 'West' ? GREEN : `${GREEN}77`} stroke="#FFFFFF" strokeWidth="2.5"
-                        onClick={() => setSelectedRegion(selectedRegion === 'West' ? 'All' : 'West')} />
-                      <text x="110" y="160" fill="#FFFFFF" fontSize="11" fontWeight="800" textAnchor="middle">WEST (91%)</text>
+                      <circle cx="200" cy="80" r="45" fill={selectedRegion === 'North' || selectedRegion === 'All' ? BLUE : `${BLUE}44`} onClick={() => setSelectedRegion(selectedRegion === 'North' ? 'All' : 'North')} />
+                      <text x="200" y="85" fill='var(--bg-glass)' fontSize="13" fontWeight="800" textAnchor="middle" style={{ pointerEvents: 'none' }}>NORTH</text>
 
-                      {/* East Zone */}
-                      <path d="M200,120 L270,120 L290,180 L230,220 L180,180 L160,140 Z" 
-                        fill={selectedRegion === 'East' ? AMBER : `${AMBER}77`} stroke="#FFFFFF" strokeWidth="2.5"
-                        onClick={() => setSelectedRegion(selectedRegion === 'East' ? 'All' : 'East')} />
-                      <text x="230" y="160" fill="#FFFFFF" fontSize="11" fontWeight="800" textAnchor="middle">EAST (65%)</text>
+                      <circle cx="110" cy="160" r="45" fill={selectedRegion === 'West' || selectedRegion === 'All' ? GREEN : `${GREEN}44`} onClick={() => setSelectedRegion(selectedRegion === 'West' ? 'All' : 'West')} />
+                      <text x="110" y="165" fill='var(--bg-glass)' fontSize="13" fontWeight="800" textAnchor="middle" style={{ pointerEvents: 'none' }}>WEST</text>
 
-                      {/* South Zone */}
-                      <path d="M140,210 L180,180 L230,220 L200,320 L150,340 L120,280 Z" 
-                        fill={selectedRegion === 'South' ? SKY : `${SKY}77`} stroke="#FFFFFF" strokeWidth="2.5"
-                        onClick={() => setSelectedRegion(selectedRegion === 'South' ? 'All' : 'South')} />
-                      <text x="170" y="260" fill="#FFFFFF" fontSize="11" fontWeight="800" textAnchor="middle">SOUTH (73%)</text>
+                      <circle cx="200" cy="180" r="45" fill={selectedRegion === 'Central' || selectedRegion === 'All' ? AMBER : `${AMBER}44`} onClick={() => setSelectedRegion(selectedRegion === 'Central' ? 'All' : 'Central')} />
+                      <text x="200" y="185" fill='var(--bg-glass)' fontSize="13" fontWeight="800" textAnchor="middle" style={{ pointerEvents: 'none' }}>CENTRAL</text>
+
+                      <circle cx="290" cy="160" r="45" fill={selectedRegion === 'East' || selectedRegion === 'All' ? AMBER : `${AMBER}44`} onClick={() => setSelectedRegion(selectedRegion === 'East' ? 'All' : 'East')} />
+                      <text x="290" y="165" fill='var(--bg-glass)' fontSize="13" fontWeight="800" textAnchor="middle" style={{ pointerEvents: 'none' }}>EAST</text>
+
+                      <circle cx="200" cy="285" r="45" fill={selectedRegion === 'South' || selectedRegion === 'All' ? SKY : `${SKY}44`} onClick={() => setSelectedRegion(selectedRegion === 'South' ? 'All' : 'South')} />
+                      <text x="200" y="290" fill='var(--bg-glass)' fontSize="13" fontWeight="800" textAnchor="middle" style={{ pointerEvents: 'none' }}>SOUTH</text>
                     </g>
                   </svg>
                 </div>
-                <div style={{ marginTop: '12px', display: 'flex', gap: '8px', justifyContent: 'center' }}>
+                <div style={{ marginTop: '12px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
                   <button className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.78rem' }} onClick={() => setSelectedRegion('All')}>Reset Zoom</button>
                 </div>
               </div>
@@ -803,7 +796,7 @@ export default function MarketingManagerDashboard({
                   ].map((item, i) => (
                     <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                       <span style={{ fontSize: '0.82rem', fontWeight: 700, color: NAVY }}>{item.topic}</span>
-                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', alignItems: 'center' }}>
                         {/* Before bar */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.68rem', color: MUTED }}>
@@ -859,7 +852,7 @@ export default function MarketingManagerDashboard({
                       borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: 700,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center'

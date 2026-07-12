@@ -80,7 +80,7 @@ const css = `
 
   .qh-card {
     width: 100%; max-width: 440px;
-    background: #FFFFFF;
+    background: var(--bg-tertiary);
     border-radius: 28px;
     padding: 36px 30px;
     border: 1px solid #E2E8F0;
@@ -599,7 +599,7 @@ export default function Join() {
       </div>
 
       <p style={{ color: 'rgba(255,255,255,0.3)', marginTop: '18px', fontSize: '0.82rem', zIndex: 2 }}>
-        Trainer? <a href="/login" style={{ color: '#2563EB', fontWeight: 600 }}>Login here →</a>
+        Trainer? <a href="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>Login here →</a>
       </p>
     </div>
   );

@@ -23,6 +23,8 @@ export default function Login() {
   const [showPw, setShowPw]     = useState(false);
   const [error, setError]       = useState('');
   const [tipIndex, setTipIndex] = useState(0);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   // Forgot password modal
   const [fpOpen, setFpOpen]           = useState(false);
@@ -54,6 +56,7 @@ export default function Login() {
   const handleLogin = async (e) => {
     e.preventDefault();
     setError('');
+    setIsLoggingIn(true);
     try {
       const response = await axios.post('/api/auth/login', { email, password });
       login(response.data.token, response.data.user);
@@ -61,6 +64,8 @@ export default function Login() {
       navigate(returnUrl);
     } catch (err) {
       setError(err.response?.data?.error || 'Login failed. Please check your credentials.');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -106,7 +111,7 @@ export default function Login() {
 
   // Password strength helper
   const pwStrength = (pw) => {
-    if (!pw) return { score: 0, label: '', color: '#E2E8F0' };
+    if (!pw) return { score: 0, label: '', color: 'var(--border-glass)' };
     let s = 0;
     if (pw.length >= 8) s++;
     if (/[A-Z]/.test(pw)) s++;
@@ -115,7 +120,7 @@ export default function Login() {
     return {
       score: s,
       label: ['', 'Weak', 'Fair', 'Good', 'Strong'][s],
-      color: ['#E2E8F0', '#EF4444', '#F59E0B', '#38BDF8', '#22C55E'][s],
+      color: ['var(--border-glass)', '#EF4444', '#F59E0B', '#38BDF8', '#22C55E'][s],
     };
 
   };
@@ -180,21 +185,21 @@ export default function Login() {
   // ── Shared input style ──────────────────────────────────────────────────────
   const inputSt = {
     width: '100%', padding: '13px 16px',
-    border: '1.5px solid #E2E8F0', borderRadius: '12px',
-    background: '#F8FAFC', fontSize: '0.95rem',
-    color: '#0F1923', outline: 'none', boxSizing: 'border-box',
+    border: '1.5px solid var(--border-glass)', borderRadius: '12px',
+    background: 'var(--bg-glass)', fontSize: '0.95rem',
+    color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box',
     transition: 'border-color 0.2s',
   };
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: '#F8FAFC', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', minHeight: '100vh', background: 'transparent', overflow: 'hidden' }}>
 
       {/* ── LEFT PANEL ─────────────────────────────────────────────────────── */}
       <div style={{
-        flex: 1, background: '#0F172A',
+        flex: 1, background: 'transparent',
         display: 'flex', flexDirection: 'column', justifyContent: 'center',
         alignItems: 'center', padding: '60px 48px',
-        color: 'white', position: 'relative', overflow: 'hidden',
+        color: 'var(--text-primary)', position: 'relative', overflow: 'hidden',
       }}>
         {/* Grid overlay */}
         <div style={{ position: 'absolute', inset: 0, backgroundImage: 'linear-gradient(rgba(37,99,235,0.04) 1px,transparent 1px),linear-gradient(90deg,rgba(37,99,235,0.04) 1px,transparent 1px)', backgroundSize: '32px 32px', pointerEvents: 'none' }} />
@@ -206,11 +211,11 @@ export default function Login() {
 
         <div style={{ maxWidth: '460px', textAlign: 'center', zIndex: 1 }}>
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', background: 'rgba(37,99,235,0.12)', border: '1px solid rgba(37,99,235,0.3)', padding: '8px 20px', borderRadius: '40px', marginBottom: '28px' }}>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563EB', display: 'inline-block' }} />
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#2563EB' }}>Retail LMS & Quiz Arena</span>
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', display: 'inline-block' }} />
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: 'var(--primary)' }}>Retail LMS & Quiz Arena</span>
           </div>
 
-          <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '3rem', fontWeight: 900, lineHeight: 1.1, marginBottom: '16px', background: 'linear-gradient(135deg,#FFFFFF 40%,#2563EB 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+          <h1 style={{ fontFamily: 'Poppins, sans-serif', fontSize: '3rem', fontWeight: 900, lineHeight: 1.1, marginBottom: '16px', background: 'var(--bg-glass)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
             RetailEdge Pro
           </h1>
           <p style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, marginBottom: '36px' }}>
@@ -228,7 +233,7 @@ export default function Login() {
 
           {/* Shelfy tip */}
           <div style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(37,99,235,0.2)', borderRadius: '16px', padding: '16px 20px', display: 'flex', alignItems: 'flex-start', gap: '12px', textAlign: 'left' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg,#2563EB,#60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0, boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}>🛒</div>
+            <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg,#2563EB,#60A5FA)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', flexShrink: 0, boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>🛒</div>
             <div>
               <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '4px' }}>Shelfy says</div>
               <div style={{ fontSize: '0.88rem', color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, transition: 'opacity 0.4s ease' }}>{SHELFY_TIPS[tipIndex]}</div>
@@ -239,14 +244,14 @@ export default function Login() {
 
 
       {/* ── RIGHT PANEL: Login Card ─────────────────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px' }}>
-        <div style={{ width: '100%', maxWidth: '440px', background: '#FFFFFF', borderRadius: '24px', padding: '44px 40px', boxShadow: '0 10px 40px rgba(8,17,32,0.1)', border: '1px solid #E2E8F0' }}>
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px', position: 'relative' }}>
+        <div className="glass-card" style={{ width: '100%', maxWidth: '440px' }}>
           {/* Logo */}
           <div style={{ textAlign: 'center', marginBottom: '32px' }}>
             <div style={{ width: '220px', height: '64px', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-              <img src="/logo.png" alt="Idonneous Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+              <img src="/logo-neon.png" alt="Idonneous Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
             </div>
-            <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, color: '#0F1923', fontSize: '1.5rem', margin: '0 0 6px' }}>Sign in to Arena</h2>
+            <h2 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.5rem', margin: '0 0 6px' }}>Sign in to Arena</h2>
             <p style={{ color: '#94A3B8', fontSize: '0.9rem' }}>Manage sessions, training &amp; performance</p>
 
           </div>
@@ -264,9 +269,9 @@ export default function Login() {
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
               {['Admin', 'Trainer', 'PM', 'Client', 'Supervisor', 'Marketing', 'Employee'].map(role => (
                 <button key={role} type="button" onClick={() => quickFill(role)}
-                  style={{ padding: '6px 14px', borderRadius: '20px', border: '1.5px solid #E2E8F0', background: 'transparent', color: '#475569', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' }}
-                  onMouseOver={e => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#2563EB'; e.currentTarget.style.background = 'rgba(37,99,235,0.05)'; }}
-                  onMouseOut={e => { e.currentTarget.style.borderColor = '#E2E8F0'; e.currentTarget.style.color = '#475569'; e.currentTarget.style.background = 'transparent'; }}
+                  style={{ padding: '6px 14px', borderRadius: '20px', border: '1.5px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s ease' }}
+                  onMouseOver={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; e.currentTarget.style.background = 'rgba(37,99,235,0.05)'; }}
+                  onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--border-glass)'; e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; }}
                 >
                   {role === 'Marketing' ? 'Marketing Mgr' : role}
                 </button>
@@ -278,26 +283,26 @@ export default function Login() {
           {/* Login Form */}
           <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
             <div>
-              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: 600, color: '#0F1923' }}>Email Address</label>
+              <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Email Address</label>
               <input type="email" value={email} onChange={e => setEmail(e.target.value)}
                 placeholder="you@retailedgepro.com" required style={inputSt}
-                onFocus={e => e.target.style.borderColor = '#2563EB'}
-                onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
+                onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
             </div>
 
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#0F1923' }}>Password</label>
+                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)' }}>Password</label>
                 <button type="button" onClick={openFp}
-                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.8rem', color: '#2563EB', fontWeight: 600 }}>
+                  style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600 }}>
                   Forgot password?
                 </button>
               </div>
               <div style={{ position: 'relative' }}>
                 <input type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
                   placeholder="••••••••" required style={{ ...inputSt, paddingRight: '48px' }}
-                  onFocus={e => e.target.style.borderColor = '#2563EB'}
-                  onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
+                  onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                  onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
                 <button type="button" onClick={() => setShowPw(v => !v)}
                   style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#94A3B8', padding: '0 2px' }}>
                   {showPw ? '🙈' : '👁'}
@@ -305,16 +310,23 @@ export default function Login() {
               </div>
             </div>
 
-
-            <button type="submit" style={{ marginTop: '8px', padding: '15px', borderRadius: '14px', border: 'none', background: 'linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)', color: '#FFFFFF', fontSize: '1rem', fontWeight: 700, fontFamily: 'Poppins, sans-serif', cursor: 'pointer', boxShadow: '0 6px 20px rgba(37,99,235,0.35)', transition: 'transform 0.15s ease,box-shadow 0.15s ease' }}
-              onMouseOver={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(37,99,235,0.45)'; }}
-              onMouseOut={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(37,99,235,0.35)'; }}>
-              Enter the Arena →
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: '-4px', marginBottom: '8px' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <input type="checkbox" checked={rememberMe} onChange={e => setRememberMe(e.target.checked)} style={{ accentColor: 'var(--primary)', width: '16px', height: '16px', cursor: 'pointer' }} />
+                Remember me for 30 days
+              </label>
+            </div>
+            <button type="submit" disabled={isLoggingIn} style={{ marginTop: '8px', padding: '15px', borderRadius: '14px', border: 'none', background: isLoggingIn ? 'var(--bg-tertiary)' : 'linear-gradient(135deg,#2563EB 0%,#1D4ED8 100%)', color: isLoggingIn ? 'var(--text-secondary)' : '#fff', fontSize: '1rem', fontWeight: 700, fontFamily: 'Poppins, sans-serif', cursor: isLoggingIn ? 'not-allowed' : 'pointer', boxShadow: isLoggingIn ? 'none' : '0 6px 20px rgba(37,99,235,0.35)', transition: 'transform 0.15s ease,box-shadow 0.15s ease' }}
+              onMouseOver={e => { if (!isLoggingIn) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(37,99,235,0.45)'; } }}
+              onMouseOut={e => { if (!isLoggingIn) { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 6px 20px rgba(37,99,235,0.35)'; } }}>
+              {isLoggingIn ? 'Authenticating...' : 'Enter the Arena →'}
             </button>
           </form>
 
           <p style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.8rem', color: '#94A3B8' }}>
-            Participant? <a href="/join" style={{ color: '#2563EB', fontWeight: 600 }}>Join a session →</a>
+            Participant? <a href="/join" style={{ color: 'var(--primary)', fontWeight: 600 }}>Join a session →</a>
+            <br/><br/>
+            <span style={{ fontSize: '0.75rem', opacity: 0.7 }}>Need help? <a href="#" style={{ color: 'var(--text-primary)', textDecoration: 'underline' }}>Contact IT Support</a></span>
           </p>
 
         </div>
@@ -327,9 +339,9 @@ export default function Login() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: '24px',
         }}>
           <div style={{
-            background: '#FFFFFF', borderRadius: '24px', padding: '36px 36px 32px',
+            background: 'var(--bg-glass)', borderRadius: '24px', padding: '36px 36px 32px',
             width: '100%', maxWidth: '440px', boxShadow: '0 24px 64px rgba(8,17,32,0.3)',
-            border: '1px solid #E2E8F0', position: 'relative',
+            border: '1px solid var(--border-glass)', position: 'relative',
           }}>
             {/* Close */}
             <button onClick={closeFp} style={{ position: 'absolute', top: '18px', right: '20px', background: 'none', border: 'none', fontSize: '1.3rem', cursor: 'pointer', color: '#94A3B8', lineHeight: 1 }}>✕</button>
@@ -338,10 +350,10 @@ export default function Login() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
               <div style={{ width: '52px', height: '52px', borderRadius: '16px', background: 'rgba(37,99,235,0.08)', border: '1.5px solid rgba(37,99,235,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.5rem', flexShrink: 0 }}>🔑</div>
               <div>
-                <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, color: '#0F1923', fontSize: '1.25rem', margin: 0 }}>
+                <h3 style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.25rem', margin: 0 }}>
                   {fpResult ? (fpResult.isCustom ? 'Password Updated!' : fpResult.generic ? 'Request Sent' : 'New Password Generated') : 'Reset Password'}
                 </h3>
-                <p style={{ color: '#64748B', fontSize: '0.82rem', margin: '4px 0 0', lineHeight: 1.4 }}>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', margin: '4px 0 0', lineHeight: 1.4 }}>
                   {fpResult
                     ? fpResult.isCustom
                       ? `Hi ${fpResult.name}! Your new password has been set. You can log in now.`
@@ -356,13 +368,13 @@ export default function Login() {
 
             {/* ── Mode tabs (only show on form screen) ── */}
             {!fpResult && (
-              <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '12px', padding: '4px', marginBottom: '20px', gap: '4px' }}>
+              <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '12px', padding: '4px', marginBottom: '20px', gap: '4px' }}>
                 {[{ id: 'auto', label: '✨ Generate for me', desc: 'Auto-generate a secure password' }, { id: 'manual', label: '✏️ Set my own', desc: 'Choose your own password' }].map(tab => (
                   <button key={tab.id} type="button" onClick={() => { setFpMode(tab.id); setFpError(''); setFpNewPw(''); setFpConfirm(''); }}
                     style={{
                       flex: 1, padding: '9px 12px', borderRadius: '9px', border: 'none', cursor: 'pointer',
-                      background: fpMode === tab.id ? '#FFFFFF' : 'transparent',
-                      color: fpMode === tab.id ? '#0F1923' : '#94A3B8',
+                      background: fpMode === tab.id ? 'var(--bg-glass)' : 'transparent',
+                      color: fpMode === tab.id ? 'var(--text-primary)' : '#94A3B8',
                       fontWeight: fpMode === tab.id ? 700 : 500,
                       fontSize: '0.82rem',
                       boxShadow: fpMode === tab.id ? '0 1px 4px rgba(0,0,0,0.1)' : 'none',
@@ -384,12 +396,12 @@ export default function Login() {
             {/* ── SUCCESS: auto-generated password ── */}
             {fpResult && !fpResult.generic && !fpResult.isCustom && fpResult.newPassword && (
               <div>
-                <div style={{ background: '#F8FAFC', border: '2px solid #E2E8F0', borderRadius: '14px', padding: '18px 20px', marginBottom: '14px', textAlign: 'center' }}>
+                <div style={{ background: 'var(--bg-glass)', border: '2px solid var(--border-glass)', borderRadius: '14px', padding: '18px 20px', marginBottom: '14px', textAlign: 'center' }}>
                   <div style={{ fontSize: '0.7rem', color: '#94A3B8', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', marginBottom: '10px' }}>Your New Password</div>
-                  <div style={{ fontFamily: 'Courier New, monospace', fontSize: '1.4rem', fontWeight: 800, color: '#0F1923', letterSpacing: '4px', marginBottom: '12px', wordBreak: 'break-all' }}>
+                  <div style={{ fontFamily: 'Courier New, monospace', fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '4px', marginBottom: '12px', wordBreak: 'break-all' }}>
                     {fpResult.newPassword}
                   </div>
-                  <button onClick={copyPassword} style={{ padding: '7px 18px', borderRadius: '8px', border: '1.5px solid #E2E8F0', background: fpCopied ? 'rgba(34,197,94,0.08)' : '#fff', color: fpCopied ? '#22C55E' : '#475569', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.2s' }}>
+                  <button onClick={copyPassword} style={{ padding: '7px 18px', borderRadius: '8px', border: '1.5px solid var(--border-glass)', background: fpCopied ? 'rgba(34,197,94,0.08)' : '#fff', color: fpCopied ? '#22C55E' : 'var(--text-secondary)', fontWeight: 600, fontSize: '0.82rem', cursor: 'pointer', transition: 'all 0.2s' }}>
                     {fpCopied ? '✓ Copied!' : '📋 Copy Password'}
                   </button>
                 </div>
@@ -397,10 +409,10 @@ export default function Login() {
                   ⚠️ Shown once. Copy it now. After login, go to <strong>Settings → Security → Change Password</strong>.
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={useNewPassword} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}>
+                  <button onClick={useNewPassword} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
                     Log In Now →
                   </button>
-                  <button onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid #E2E8F0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Close</button>
+                  <button onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>Close</button>
                 </div>
               </div>
             )}
@@ -411,14 +423,14 @@ export default function Login() {
               <div>
                 <div style={{ background: 'rgba(34,197,94,0.06)', border: '1.5px solid rgba(34,197,94,0.25)', borderRadius: '14px', padding: '20px', marginBottom: '18px', textAlign: 'center' }}>
                   <div style={{ fontSize: '2rem', marginBottom: '8px' }}>✅</div>
-                  <div style={{ fontWeight: 700, color: '#0F1923', fontSize: '0.95rem' }}>Password updated successfully!</div>
-                  <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '4px' }}>Use your new password to log in.</div>
+                  <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.95rem' }}>Password updated successfully!</div>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '4px' }}>Use your new password to log in.</div>
                 </div>
                 <div style={{ display: 'flex', gap: '10px' }}>
-                  <button onClick={() => { setEmail(fpEmail); setPassword(fpNewPw || ''); closeFp(); }} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 4px 14px rgba(37,99,235,0.25)' }}>
+                  <button onClick={() => { setEmail(fpEmail); setPassword(fpNewPw || ''); closeFp(); }} style={{ flex: 1, padding: '13px', borderRadius: '12px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#1D4ED8)', color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
                     Log In Now →
                   </button>
-                  <button onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid #E2E8F0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>Close</button>
+                  <button onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>Close</button>
                 </div>
               </div>
             )}
@@ -434,11 +446,11 @@ export default function Login() {
               <form onSubmit={handleForgotPassword} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
                 {/* Email */}
                 <div>
-                  <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: '#0F1923' }}>Registered Email Address</label>
+                  <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: 'var(--text-primary)' }}>Registered Email Address</label>
                   <input type="email" value={fpEmail} onChange={e => setFpEmail(e.target.value)}
                     placeholder="you@retailedgepro.com" required style={inputSt}
-                    onFocus={e => e.target.style.borderColor = '#2563EB'}
-                    onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
+                    onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                    onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
 
                 </div>
 
@@ -449,15 +461,15 @@ export default function Login() {
                     <>
                       {/* New Password */}
                       <div>
-                        <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: '#0F1923' }}>New Password</label>
+                        <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: 'var(--text-primary)' }}>New Password</label>
                         <div style={{ position: 'relative' }}>
                           <input
                             type={fpShowNew ? 'text' : 'password'}
                             value={fpNewPw} onChange={e => setFpNewPw(e.target.value)}
                             placeholder="Min 6 characters" required
                             style={{ ...inputSt, paddingRight: '44px' }}
-                            onFocus={e => e.target.style.borderColor = '#2563EB'}
-                            onBlur={e => e.target.style.borderColor = '#E2E8F0'} />
+                            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                            onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
 
                           <button type="button" onClick={() => setFpShowNew(v => !v)}
                             style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1rem' }}>
@@ -469,7 +481,7 @@ export default function Login() {
                           <div style={{ marginTop: '7px' }}>
                             <div style={{ display: 'flex', gap: '3px', marginBottom: '3px' }}>
                               {[1,2,3,4].map(i => (
-                                <div key={i} style={{ flex: 1, height: '4px', borderRadius: '2px', background: i <= str.score ? str.color : '#E2E8F0', transition: 'background 0.25s' }} />
+                                <div key={i} style={{ flex: 1, height: '4px', borderRadius: '2px', background: i <= str.score ? str.color : 'var(--border-glass)', transition: 'background 0.25s' }} />
                               ))}
                             </div>
                             <div style={{ fontSize: '0.72rem', color: str.color, fontWeight: 600 }}>{str.label}</div>
@@ -479,7 +491,7 @@ export default function Login() {
 
                       {/* Confirm Password */}
                       <div>
-                        <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: '#0F1923' }}>Confirm New Password</label>
+                        <label style={{ display: 'block', marginBottom: '7px', fontSize: '0.83rem', fontWeight: 600, color: 'var(--text-primary)' }}>Confirm New Password</label>
                         <div style={{ position: 'relative' }}>
                           <input
                             type={fpShowConf ? 'text' : 'password'}
@@ -487,10 +499,10 @@ export default function Login() {
                             placeholder="Re-enter password" required
                             style={{
                               ...inputSt, paddingRight: '44px',
-                              borderColor: fpConfirm && fpNewPw !== fpConfirm ? '#EF4444' : '#E2E8F0',
+                              borderColor: fpConfirm && fpNewPw !== fpConfirm ? '#EF4444' : 'var(--border-glass)',
                             }}
-                            onFocus={e => e.target.style.borderColor = '#2563EB'}
-                            onBlur={e => e.target.style.borderColor = fpConfirm && fpNewPw !== fpConfirm ? '#EF4444' : '#E2E8F0'} />
+                            onFocus={e => e.target.style.borderColor = 'var(--primary)'}
+                            onBlur={e => e.target.style.borderColor = fpConfirm && fpNewPw !== fpConfirm ? '#EF4444' : 'var(--border-glass)'} />
 
                           <button type="button" onClick={() => setFpShowConf(v => !v)}
                             style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1rem' }}>
@@ -513,7 +525,7 @@ export default function Login() {
                 <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
                   <button type="submit" disabled={fpLoading} style={{
                     flex: 1, padding: '13px', borderRadius: '12px', border: 'none',
-                    background: fpLoading ? '#E2E8F0' : 'linear-gradient(135deg,#2563EB,#1D4ED8)',
+                    background: fpLoading ? 'var(--border-glass)' : 'linear-gradient(135deg,#2563EB,#1D4ED8)',
                     color: fpLoading ? '#94A3B8' : '#fff',
                     fontWeight: 700, fontSize: '0.9rem', cursor: fpLoading ? 'not-allowed' : 'pointer',
                     boxShadow: fpLoading ? 'none' : '0 4px 14px rgba(37,99,235,0.25)',
@@ -526,7 +538,7 @@ export default function Login() {
                         ? '🔒 Set New Password'
                         : '🔑 Generate New Password'}
                   </button>
-                  <button type="button" onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid #E2E8F0', background: '#fff', color: '#475569', fontWeight: 600, cursor: 'pointer' }}>
+                  <button type="button" onClick={closeFp} style={{ padding: '13px 18px', borderRadius: '12px', border: '1.5px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>
                     Cancel
                   </button>
                 </div>

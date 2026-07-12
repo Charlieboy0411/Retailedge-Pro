@@ -139,13 +139,13 @@ export default function COODashboard({
   const eastCount = regionalData.find(r => r.zone === 'East')?.count || 35;
 
   return (
-    <div style={{ padding: '20px 0', fontFamily: 'Poppins, sans-serif', color: '#1E293B' }}>
+    <div style={{ padding: '20px 0', fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
       
       {/* Configuration Action Bar */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.2rem', color: '#0F172A' }}>Operations Performance</h3>
+        <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.2rem', color: 'var(--text-primary)' }}>Operations Performance</h3>
         <button onClick={() => setShowConfig(true)} style={{
-          padding: '8px 16px', background: '#0F172A', color: 'white', border: 'none', borderRadius: '8px',
+          padding: '8px 16px', background: 'var(--text-primary)', color: 'white', border: 'none', borderRadius: '8px',
           fontWeight: 700, fontSize: '0.82rem', cursor: 'pointer', fontFamily: 'Poppins, sans-serif',
           display: 'flex', alignItems: 'center', gap: '6px'
         }}>
@@ -156,12 +156,12 @@ export default function COODashboard({
       {/* ─── 1. KEY KPI CARDS ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '24px' }}>
         {[
-          { label: 'Active Workforce', value: totalWorkforce, icon: <Users size={20} color="#0F172A" />, border: '#0F172A' },
-          { label: 'Field Staff Deployed', value: `${manualDeployed} / ${totalWorkforce}`, icon: <TrendingUp size={20} color="#3E5C8A" />, border: '#3E5C8A' },
+          { label: 'Active Workforce', value: totalWorkforce, icon: <Users size={20} color='var(--text-primary)' />, border: 'var(--text-primary)' },
+          { label: 'Field Staff Deployed', value: `${manualDeployed} / ${totalWorkforce}`, icon: <TrendingUp size={20} color='var(--primary)' />, border: 'var(--primary)' },
           { label: 'Attendance Average', value: realAttendance, icon: <Calendar size={20} color="#38BDF8" />, border: '#38BDF8' },
           { label: 'Productivity Score', value: `${realProductivity} / 100`, icon: <TrendingUp size={20} color="#3B8C68" />, border: '#3B8C68' },
           { label: 'Training Compliance', value: compliance, icon: <CheckCircle size={20} color="#F59E0B" />, border: '#F59E0B' },
-          { label: 'Project Completion Rate', value: completionRate, icon: <CheckCircle size={20} color="#3E5C8A" />, border: '#3E5C8A' },
+          { label: 'Project Completion Rate', value: completionRate, icon: <CheckCircle size={20} color='var(--primary)' />, border: 'var(--primary)' },
           { label: 'Monthly Attrition Rate', value: `${attritionRate.toFixed(1)}%`, icon: <AlertCircle size={20} color="#38BDF8" />, border: '#38BDF8' },
           { label: 'Deployment Efficiency', value: `${deploymentEfficiency.toFixed(1)}%`, icon: <TrendingUp size={20} color="#3B8C68" />, border: '#3B8C68' }
         ].map((card, i) => (
@@ -169,7 +169,7 @@ export default function COODashboard({
             background: 'var(--bg-glass)',
             padding: '20px',
             borderRadius: '16px',
-            boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)',
+            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
             borderTop: `4px solid ${card.border}`,
             display: 'flex',
             justifyContent: 'space-between',
@@ -181,8 +181,8 @@ export default function COODashboard({
           onMouseOut={e => e.currentTarget.style.transform = 'none'}
           >
             <div>
-              <div style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
-              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A', marginTop: '6px', fontFamily: 'Poppins, sans-serif' }}>{card.value}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{card.label}</div>
+              <div style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '6px', fontFamily: 'Poppins, sans-serif' }}>{card.value}</div>
             </div>
             <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: `${card.border}15`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               {card.icon}
@@ -192,8 +192,8 @@ export default function COODashboard({
       </div>
 
       {/* ─── 2. OPERATIONS TAB PORTAL ─── */}
-      <div style={{ background: 'var(--bg-glass)', borderRadius: '20px', padding: '24px', boxShadow: '0 4px 24px rgba(15, 23, 42, 0.05)', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', borderBottom: '2px solid #B7BEC7', paddingBottom: '0', gap: '8px', marginBottom: '24px' }}>
+      <div style={{ background: 'var(--bg-glass)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', overflowX: 'auto', borderBottom: '2px solid #B7BEC7', paddingBottom: '0', gap: '8px', marginBottom: '24px' }}>
           {[
             { id: 'distribution', label: 'Workforce Distribution' },
             { id: 'attendance', label: 'Attendance Dashboard' },
@@ -207,7 +207,7 @@ export default function COODashboard({
               background: 'none',
               fontSize: '0.9rem',
               fontWeight: 700,
-              color: activeTab === tab.id ? '#3E5C8A' : '#5F6875',
+              color: activeTab === tab.id ? 'var(--primary)' : 'var(--text-secondary)',
               borderBottom: activeTab === tab.id ? '3px solid #3E5C8A' : '3px solid transparent',
               cursor: 'pointer',
               transition: 'all 0.2s',
@@ -224,23 +224,23 @@ export default function COODashboard({
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '24px' }}>
             <div>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>National Deployment Map</h3>
-              <div style={{ width: '100%', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F4F5F7', borderRadius: '16px', border: '1px dashed #CBD5E1' }}>
+              <div style={{ width: '100%', height: '180px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px dashed #CBD5E1' }}>
                 <svg viewBox="0 0 300 150" style={{ width: '80%', height: '80%' }}>
-                  <circle cx="150" cy="40" r="18" fill="#3E5C8A" opacity="0.85" />
-                  <text x="150" y="44" fill="#FFFFFF" fontSize="10" fontWeight="800" textAnchor="middle">{northCount}</text>
-                  <text x="150" y="70" fill="#5F6875" fontSize="9" fontWeight="700" textAnchor="middle">North (Delhi)</text>
+                  <circle cx="150" cy="40" r="18" fill='var(--primary)' opacity="0.85" />
+                  <text x="150" y="44" fill='var(--bg-glass)' fontSize="10" fontWeight="800" textAnchor="middle">{northCount}</text>
+                  <text x="150" y="70" fill='var(--text-secondary)' fontSize="9" fontWeight="700" textAnchor="middle">North (Delhi)</text>
 
                   <circle cx="60" cy="90" r="16" fill="#38BDF8" opacity="0.85" />
-                  <text x="60" y="93" fill="#FFFFFF" fontSize="10" fontWeight="800" textAnchor="middle">{westCount}</text>
-                  <text x="60" y="120" fill="#5F6875" fontSize="9" fontWeight="700" textAnchor="middle">West (Mumbai)</text>
+                  <text x="60" y="93" fill='var(--bg-glass)' fontSize="10" fontWeight="800" textAnchor="middle">{westCount}</text>
+                  <text x="60" y="120" fill='var(--text-secondary)' fontSize="9" fontWeight="700" textAnchor="middle">West (Mumbai)</text>
 
                   <circle cx="240" cy="90" r="14" fill="#3B8C68" opacity="0.85" />
-                  <text x="240" y="93" fill="#FFFFFF" fontSize="10" fontWeight="800" textAnchor="middle">{southCount}</text>
-                  <text x="240" y="120" fill="#5F6875" fontSize="9" fontWeight="700" textAnchor="middle">South (BLR)</text>
+                  <text x="240" y="93" fill='var(--bg-glass)' fontSize="10" fontWeight="800" textAnchor="middle">{southCount}</text>
+                  <text x="240" y="120" fill='var(--text-secondary)' fontSize="9" fontWeight="700" textAnchor="middle">South (BLR)</text>
 
                   <circle cx="150" cy="110" r="12" fill="#F59E0B" opacity="0.85" />
-                  <text x="150" y="113" fill="#FFFFFF" fontSize="9" fontWeight="800" textAnchor="middle">{eastCount}</text>
-                  <text x="150" y="135" fill="#5F6875" fontSize="9" fontWeight="700" textAnchor="middle">East (Kolkata)</text>
+                  <text x="150" y="113" fill='var(--bg-glass)' fontSize="9" fontWeight="800" textAnchor="middle">{eastCount}</text>
+                  <text x="150" y="135" fill='var(--text-secondary)' fontSize="9" fontWeight="700" textAnchor="middle">East (Kolkata)</text>
                 </svg>
               </div>
             </div>
@@ -248,20 +248,20 @@ export default function COODashboard({
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Deployment Split</h3>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
                 <thead>
-                  <tr style={{ background: '#F4F5F7', borderBottom: '2px solid #B7BEC7' }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: '#5F6875' }}>State</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>City</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>Project</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: '#5F6875' }}>Staff Count</th>
+                  <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '2px solid #B7BEC7' }}>
+                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)' }}>State</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>City</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>Project</th>
+                    <th style={{ padding: '8px 12px', textAlign: 'center', fontWeight: 700, color: 'var(--text-secondary)' }}>Staff Count</th>
                   </tr>
                 </thead>
                 <tbody>
                   {regionalData.map((row, idx) => (
                     <tr key={idx} style={{ borderBottom: '1px solid #EEF2F7' }}>
                       <td style={{ padding: '10px 12px', fontWeight: 600 }}>{row.state}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center', color: '#5F6875' }}>{row.city}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-secondary)' }}>{row.city}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600 }}>{row.proj}</td>
-                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: '#3E5C8A' }}>{row.count}</td>
+                      <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 800, color: 'var(--primary)' }}>{row.count}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -280,25 +280,25 @@ export default function COODashboard({
                   <line x1="30" y1="120" x2="330" y2="120" stroke="#CBD5E1" strokeWidth="1.5" />
                   
                   {/* Daily Bar */}
-                  <rect x="50" y="30" width="30" height="90" fill="#0F172A" rx="4" />
-                  <text x="65" y="25" fill="#0F172A" fontSize="9" fontWeight="800" textAnchor="middle">{realAttendance}</text>
-                  <text x="65" y="135" fill="#5F6875" fontSize="9" fontWeight="600" textAnchor="middle">Daily</text>
+                  <rect x="50" y="30" width="30" height="90" fill='var(--text-primary)' rx="4" />
+                  <text x="65" y="25" fill='var(--text-primary)' fontSize="9" fontWeight="800" textAnchor="middle">{realAttendance}</text>
+                  <text x="65" y="135" fill='var(--text-secondary)' fontSize="9" fontWeight="600" textAnchor="middle">Daily</text>
 
                   {/* Weekly Bar */}
-                  <rect x="150" y="35" width="30" height="85" fill="#3E5C8A" rx="4" />
-                  <text x="165" y="30" fill="#3E5C8A" fontSize="9" fontWeight="800" textAnchor="middle">{realAttendance}</text>
-                  <text x="165" y="135" fill="#5F6875" fontSize="9" fontWeight="600" textAnchor="middle">Weekly</text>
+                  <rect x="150" y="35" width="30" height="85" fill='var(--primary)' rx="4" />
+                  <text x="165" y="30" fill='var(--primary)' fontSize="9" fontWeight="800" textAnchor="middle">{realAttendance}</text>
+                  <text x="165" y="135" fill='var(--text-secondary)' fontSize="9" fontWeight="600" textAnchor="middle">Weekly</text>
 
                   {/* Monthly Bar */}
                   <rect x="250" y="42" width="30" height="78" fill="#38BDF8" rx="4" />
                   <text x="265" y="37" fill="#38BDF8" fontSize="9" fontWeight="800" textAnchor="middle">{(parseFloat(realAttendance) - 1.8).toFixed(1)}%</text>
-                  <text x="265" y="135" fill="#5F6875" fontSize="9" fontWeight="600" textAnchor="middle">Monthly</text>
+                  <text x="265" y="135" fill='var(--text-secondary)' fontSize="9" fontWeight="600" textAnchor="middle">Monthly</text>
                 </svg>
               </div>
             </div>
             <div>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>No-Show Analytics</h3>
-              <div style={{ padding: '20px', background: '#F4F5F7', borderRadius: '16px', border: '1px solid #B7BEC7', height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px solid #B7BEC7', height: '120px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 600 }}>
                     <span>Global No-Show %</span>
@@ -308,7 +308,7 @@ export default function COODashboard({
                     <div style={{ height: '100%', width: `${(100 - parseFloat(realAttendance))}%`, background: '#EF4444' }} />
                   </div>
                 </div>
-                <div style={{ fontSize: '0.72rem', color: '#5F6875', lineHeight: '1.3' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: '1.3' }}>
                   No-show alerts are sent automatically to supervisor dashboards if deployment is delayed by more than 15 minutes.
                 </div>
               </div>
@@ -324,13 +324,13 @@ export default function COODashboard({
               {[
                 { title: 'Green Projects', count: completedSessions.length > 2 ? 3 : 2, color: '#3B8C68', desc: 'Operating within threshold bounds' },
                 { title: 'At Risk Projects', count: completedSessions.length > 2 ? 1 : 1, color: '#F59E0B', desc: 'Nearing SLA timeline limits' },
-                { title: 'Delayed Projects', count: completedSessions.length === 0 ? 1 : 0, color: '#3E5C8A', desc: 'Behind schedules by >10 days' },
-                { title: 'Escalated Projects', count: 0, color: '#0F172A', desc: 'Direct client review requested' }
+                { title: 'Delayed Projects', count: completedSessions.length === 0 ? 1 : 0, color: 'var(--primary)', desc: 'Behind schedules by >10 days' },
+                { title: 'Escalated Projects', count: 0, color: 'var(--text-primary)', desc: 'Direct client review requested' }
               ].map((h, i) => (
-                <div key={i} style={{ padding: '20px', borderRadius: '16px', background: '#F4F5F7', border: `1px solid ${h.color}30`, borderTop: `4px solid ${h.color}` }}>
-                  <div style={{ fontSize: '0.78rem', color: '#5F6875', fontWeight: 600 }}>{h.title}</div>
+                <div key={i} style={{ padding: '20px', borderRadius: '16px', background: 'var(--bg-tertiary)', border: `1px solid ${h.color}30`, borderTop: `4px solid ${h.color}` }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{h.title}</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '8px', color: h.color }}>{h.count}</div>
-                  <div style={{ fontSize: '0.72rem', color: '#5F6875', marginTop: '6px', lineHeight: '1.3' }}>{h.desc}</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '6px', lineHeight: '1.3' }}>{h.desc}</div>
                 </div>
               ))}
             </div>
@@ -353,7 +353,7 @@ export default function COODashboard({
                       <span>{item.label}</span>
                       <span>{item.score} / 100</span>
                     </div>
-                    <div style={{ height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ height: '8px', background: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${item.score}%`, background: 'linear-gradient(90deg, #3E5C8A, #60A5FA)', borderRadius: '4px' }} />
                     </div>
                   </div>
@@ -362,8 +362,8 @@ export default function COODashboard({
             </div>
             <div>
               <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Performance Audit Details</h3>
-              <div style={{ padding: '16px', background: '#F4F5F7', borderRadius: '16px', border: '1px solid #B7BEC7', height: '106px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <div style={{ fontSize: '0.75rem', color: '#5F6875', lineHeight: '1.4' }}>
+              <div style={{ padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '16px', border: '1px solid #B7BEC7', height: '106px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
                   Daily audits assess store capability compliance based on real-time task completion statistics reported by regional trainers.
                 </div>
               </div>
@@ -381,7 +381,7 @@ export default function COODashboard({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '24px' }}>
         
         {/* Operations Alerts */}
-        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 4px 24px rgba(15, 23, 42, 0.05)' }}>
+        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldAlert size={20} color="#F59E0B" /> Operations Action Items
           </h3>
@@ -391,16 +391,16 @@ export default function COODashboard({
               { label: 'Attendance Alert', text: `South Zone average attendance requires supervision review: ${realAttendance}`, target: 'BLR' },
               { label: 'Training Lag', text: `Compliance review: ${compliance} average score against 90% benchmark target`, target: 'CCU' }
             ].map((alert, i) => (
-              <div key={i} style={{ display: 'flex', gap: '12px', padding: '12px 16px', background: '#F4F5F7', borderRadius: '8px', borderLeft: '4px solid #F59E0B' }}>
+              <div key={i} style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', padding: '12px 16px', background: 'var(--bg-tertiary)', borderRadius: '8px', borderLeft: '4px solid #F59E0B' }}>
                 <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#D97706', textAnchor: 'uppercase' }}>{alert.label}</span>
-                <span style={{ fontSize: '0.8rem', color: '#1E293B' }}>{alert.text}</span>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-primary)' }}>{alert.text}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Workforce statistics */}
-        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 4px 24px rgba(15, 23, 42, 0.05)' }}>
+        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Workforce Analytics</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             {[
@@ -409,10 +409,10 @@ export default function COODashboard({
               { label: 'Vacancies', value: `${Math.max(0, manualDeployed - totalWorkforce)} open`, detail: 'Recruitment active' },
               { label: 'Active Projects', value: `${projectsList.filter(p => p.status !== 'Inactive').length || 4} units`, detail: 'Serving clients' }
             ].map((stat, idx) => (
-              <div key={idx} style={{ padding: '14px', border: '1px solid #B7BEC7', borderRadius: '12px', background: '#F4F5F7' }}>
-                <div style={{ fontSize: '0.72rem', color: '#5F6875', fontWeight: 600 }}>{stat.label}</div>
-                <div style={{ fontSize: '1.3rem', fontWeight: 800, marginTop: '4px', color: '#0F172A' }}>{stat.value}</div>
-                <div style={{ fontSize: '0.65rem', color: '#5F6875', marginTop: '2px' }}>{stat.detail}</div>
+              <div key={idx} style={{ padding: '14px', border: '1px solid #B7BEC7', borderRadius: '12px', background: 'var(--bg-tertiary)' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{stat.label}</div>
+                <div style={{ fontSize: '1.3rem', fontWeight: 800, marginTop: '4px', color: 'var(--text-primary)' }}>{stat.value}</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', marginTop: '2px' }}>{stat.detail}</div>
               </div>
             ))}
           </div>
@@ -431,26 +431,26 @@ export default function COODashboard({
             boxShadow: '0 10px 30px rgba(0,0,0,0.15)', maxHeight: '90vh', overflowY: 'auto'
           }}>
             <h3 style={{ margin: '0 0 8px 0', fontSize: '1.25rem', fontWeight: 800 }}>⚙️ Record Operational Metrics</h3>
-            <p style={{ margin: '0 0 20px 0', fontSize: '0.8rem', color: '#5F6875' }}>Configure workforce deployment and efficiency metrics.</p>
+            <p style={{ margin: '0 0 20px 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Configure workforce deployment and efficiency metrics.</p>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', marginBottom: '24px' }}>
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: '#475569' }}>Field Staff Deployed (Target Count)</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-secondary)' }}>Field Staff Deployed (Target Count)</label>
                 <input type="number" value={deployedInput} onChange={e => setDeployedInput(parseInt(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #B7BEC7', outline: 'none' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: '#475569' }}>Monthly Attrition Rate (%)</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-secondary)' }}>Monthly Attrition Rate (%)</label>
                 <input type="number" step="0.1" value={attritionInput} onChange={e => setAttritionInput(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #B7BEC7', outline: 'none' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: '#475569' }}>Deployment Efficiency (%)</label>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, marginBottom: '6px', color: 'var(--text-secondary)' }}>Deployment Efficiency (%)</label>
                 <input type="number" step="0.1" value={efficiencyInput} onChange={e => setEfficiencyInput(parseFloat(e.target.value) || 0)} style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #B7BEC7', outline: 'none' }} />
               </div>
             </div>
             
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end' }}>
-              <button onClick={() => setShowConfig(false)} style={{ padding: '8px 16px', background: '#F1F5F9', border: 'none', borderRadius: '8px', color: '#5F6875', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-              <button onClick={handleSave} style={{ padding: '8px 16px', background: '#3E5C8A', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', justifyContent: 'flex-end' }}>
+              <button onClick={() => setShowConfig(false)} style={{ padding: '8px 16px', background: 'var(--bg-tertiary)', border: 'none', borderRadius: '8px', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
+              <button onClick={handleSave} style={{ padding: '8px 16px', background: 'var(--primary)', border: 'none', borderRadius: '8px', color: 'white', fontWeight: 600, cursor: 'pointer' }}>Save Changes</button>
             </div>
           </div>
         </div>
