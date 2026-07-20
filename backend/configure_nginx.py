@@ -2,9 +2,14 @@ import os
 
 def configure_nginx():
     print("🧹 Cleaning up old Nginx configurations...")
-    # Remove potentially broken configurations
+    # Remove potentially broken or competing configurations
     os.system("sudo rm -f /etc/nginx/sites-enabled/default")
     os.system("sudo rm -f /etc/nginx/sites-available/default")
+    os.system("sudo rm -f /etc/nginx/sites-enabled/quizhive")
+    os.system("sudo rm -f /etc/nginx/sites-available/quizhive")
+    os.system("sudo rm -f /etc/nginx/sites-enabled/retailedge")
+    os.system("sudo rm -f /etc/nginx/sites-available/retailedge")
+    os.system("sudo rm -f /etc/nginx/conf.d/default.conf")
     
     print("📝 Writing clean Nginx configuration for QuizHive...")
     config = """
