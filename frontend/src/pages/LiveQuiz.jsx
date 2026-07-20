@@ -603,7 +603,7 @@ export default function LiveQuiz() {
       {/* A. WAITING LOBBY STATE */}
       {status === 'waiting' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', overflowY: 'auto', zIndex: 5 }}>
-          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: 'var(--text-primary)', borderRadius: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: '#0F1A36', borderRadius: '24px' }}>
             <div style={{ marginBottom: '28px' }}>
               <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#FF6B35', background: 'rgba(255,107,53,0.1)', padding: '6px 16px', borderRadius: '20px', border: '1px solid rgba(255,107,53,0.2)' }}>
                 RetailEdge Pro Lobby
@@ -616,11 +616,11 @@ export default function LiveQuiz() {
 
             {/* Join Code & Mock Countdown Row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: 'var(--text-primary)', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: '#0F1A36', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Room Code</span>
                 <span style={{ fontSize: '1.35rem', fontWeight: 900, letterSpacing: '2px', color: '#FF6B35', fontFamily: 'Courier New, monospace' }}>{roomCode}</span>
               </div>
-              <div style={{ background: 'var(--text-primary)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: '#0F1A36', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Est. Start</span>
                 <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#FF9800', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                   <Clock size={14} />
@@ -646,7 +646,7 @@ export default function LiveQuiz() {
                 gap: '10px 8px',
                 maxHeight: '150px',
                 overflowY: 'auto',
-                background: 'var(--text-primary)',
+                background: '#0F1A36',
                 padding: '12px',
                 borderRadius: '16px',
                 border: '1px solid rgba(255,107,53,0.15)',
