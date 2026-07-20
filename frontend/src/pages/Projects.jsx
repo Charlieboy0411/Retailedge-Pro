@@ -248,7 +248,7 @@ export default function Projects() {
                         <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                           <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', background: 'var(--bg-glass)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid #E2E8F0' }}>
                             {mother.project_logo ? (
-                              <img src={`http://localhost:5000${mother.project_logo}`} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                              <img src={`${mother.project_logo}`} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                             ) : (
                               <FolderOpen size={16} color="#94A3B8" />
                             )}

@@ -59,7 +59,7 @@ export default function ClientFormModal({ isOpen, onClose, onSave, token, editin
         renewal_frequency: editingClient.renewal_frequency || 'Yearly',
         notes: editingClient.notes || ''
       });
-      setLogoPreview(editingClient.client_logo ? `http://localhost:5000${editingClient.client_logo}` : null);
+      setLogoPreview(editingClient.client_logo ? `${editingClient.client_logo}` : null);
       setLogoFile(null);
     } else {
       setFormData({

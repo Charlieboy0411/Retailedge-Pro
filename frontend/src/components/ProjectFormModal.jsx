@@ -69,7 +69,7 @@ export default function ProjectFormModal({ isOpen, onClose, onSave, token, editi
         completion_targets: editingProject.completion_targets || 0,
         parentId: editingProject.parentId || ''
       });
-      setLogoPreview(editingProject.project_logo ? `http://localhost:5000${editingProject.project_logo}` : null);
+      setLogoPreview(editingProject.project_logo ? `${editingProject.project_logo}` : null);
       setLogoFile(null);
     } else {
       setFormData({

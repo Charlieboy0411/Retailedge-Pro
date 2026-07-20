@@ -202,7 +202,7 @@ export default function ClientManagement() {
                     <td style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <div style={{ width: '32px', height: '32px', borderRadius: '4px', overflow: 'hidden', background: 'var(--bg-glass)', display: 'flex', justifyContent: 'center', alignItems: 'center', border: '1px solid #E2E8F0' }}>
                         {client.client_logo ? (
-                          <img src={`http://localhost:5000${client.client_logo}`} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+                          <img src={`${client.client_logo}`} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
                         ) : (
                           <span style={{ fontSize: '0.8rem', color: '#94A3B8' }}>{client.name.charAt(0)}</span>
                         )}

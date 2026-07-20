@@ -73,7 +73,7 @@ export default function Login() {
     const creds = {
       Admin:      'admin@quizhive.com',
       Trainer:    'trainer@quizhive.com',
-      PM:         'pm@quizhive.com',
+      PM:         'rubana@idonneous.com',
       Client:     'client@quizhive.com',
       Supervisor: 'supervisor@quizhive.com',
       Marketing:  'marketing@quizhive.com',

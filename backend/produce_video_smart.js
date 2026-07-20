@@ -12,7 +12,7 @@
  * of the scene duration — capturing fade-in, animation, and hold states.
  */
 
-const puppeteer = require('puppeteer');
+// puppeteer is ESM-only in newer versions, loaded via dynamic import in main()
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
 const fs = require('fs');
@@ -84,6 +84,7 @@ function buildSwitchScript(sceneIndex, fracInScene) {
 
 // ===== CAPTURE =====
 async function captureKeyframes() {
+  const { default: puppeteer } = await import('puppeteer');
   console.log('\n🎬 RetailEdge Pro — Smart Video Production');
   console.log('═'.repeat(60));
   const totalKeyframes = 15 * SCENE_KEYFRAME_FRACTIONS.length;

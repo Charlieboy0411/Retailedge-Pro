@@ -675,7 +675,7 @@ export default function LiveQuiz() {
             </div>
 
             {/* Quiz Rules Panel */}
-            <div style={{ textAlign: 'left', background: 'var(--text-primary)', padding: '20px', borderRadius: '16px', color: 'var(--bg-glass)', border: '1px solid rgba(255,107,53,0.15)' }}>
+            <div style={{ textAlign: 'left', background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '16px', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,107,53,0.15)', backdropFilter: 'blur(10px)' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: 700, color: '#FF6B35', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assessment Rules</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.75)' }}>
                 {[
@@ -795,7 +795,7 @@ export default function LiveQuiz() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.4rem' }}>{myAvatar}</span>
-                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--bg-glass)' }}>
+                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
                   Hi {playerName} 🏆
                 </span>
               </div>
@@ -930,7 +930,7 @@ export default function LiveQuiz() {
                           border: isCorrect ? '2px solid #00C896' : (isMyChoice ? '1.5px dashed #FF6B35' : '1px solid rgba(255, 107, 53, 0.2)'),
                           boxShadow: isCorrect ? '0 0 12px rgba(0, 200, 150, 0.15)' : 'none'
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: 'var(--bg-glass)', flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: 'var(--bg-primary)', flexWrap: 'wrap' }}>
                             <span className="price-tag-badge" style={{ background: isCorrect ? '#00C896' : '#FF6B35' }}>{letter}</span>
                             <span>{opt}</span>
                             {isMyChoice && (
@@ -1025,7 +1025,7 @@ export default function LiveQuiz() {
                             textAlign: 'left', 
                             fontSize: '1.05rem', 
                             fontWeight: 600, 
-                            color: 'var(--bg-glass)', 
+                            color: 'var(--bg-primary)', 
                             boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
                             display: 'flex',
                             justifyContent: 'space-between',
@@ -1102,7 +1102,7 @@ export default function LiveQuiz() {
                       const displayStars = roundedAvg >= 0 ? '★'.repeat(roundedAvg).padEnd(5, '☆') : '☆☆☆☆☆';
                       return (
                         <>
-                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: 'var(--bg-glass)', fontWeight: 800 }}>{avg}</h2>
+                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: 'var(--bg-primary)', fontWeight: 800 }}>{avg}</h2>
                           <div style={{ fontSize: '2rem', color: '#FF6B35', marginBottom: '12px', letterSpacing: '3px' }}>
                             {displayStars}
                           </div>
