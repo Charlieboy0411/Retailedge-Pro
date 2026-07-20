@@ -80,7 +80,7 @@ const css = `
 
   .qh-card {
     width: 100%; max-width: 440px;
-    background: var(--bg-tertiary);
+    background: #FFFFFF;
     border-radius: 28px;
     padding: 36px 30px;
     border: 1px solid #E2E8F0;
