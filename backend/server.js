@@ -153,8 +153,14 @@ async function startTunnel(port) {
   const localtunnel = require('localtunnel');
 
   try {
+    // Generate unique local subdomain to avoid 502 conflict with live production server
+    const isLocal = process.platform === 'win32' || !process.env.RAILWAY_STATIC_URL;
+    const requestedSubdomain = isLocal 
+      ? `retailedge-pro-${Math.random().toString(36).slice(2, 7)}` 
+      : 'retailedge-pro';
+
     // Start localtunnel pointing to the local port with custom subdomain
-    const tunnel = await localtunnel({ port: port, subdomain: 'retailedge-pro' });
+    const tunnel = await localtunnel({ port: port, subdomain: requestedSubdomain });
     tunnelProcess = tunnel;
 
     publicTunnelUrl = tunnel.url;

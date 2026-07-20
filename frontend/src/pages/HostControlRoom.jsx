@@ -23,6 +23,8 @@ export default function HostControlRoom() {
   const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) || window.location.hostname.endsWith('.local');
+
   const [quiz, setQuiz] = useState(null);
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -38,6 +40,8 @@ export default function HostControlRoom() {
   const [liveAnswers, setLiveAnswers] = useState([]);
   const [joinBaseUrl, setJoinBaseUrl] = useState(''); // public tunnel or LAN IP
   const [joinMode, setJoinMode] = useState('lan');    // 'public' | 'lan'
+  const [lanBaseUrl, setLanBaseUrl] = useState('');
+  const [useLanQr, setUseLanQr] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
   // Participant connection metrics (PRD trainer dashboard)
@@ -55,6 +59,12 @@ export default function HostControlRoom() {
 
   // Fetch public tunnel URL (or LAN fallback) — poll every 5s until tunnel is up
   useEffect(() => {
+    if (!isLocalHost) {
+      setJoinBaseUrl(window.location.origin);
+      setJoinMode('public');
+      return;
+    }
+
     const fetchJoinUrl = () => {
       axios.get('/api/join-url')
         .then(res => {
@@ -68,6 +78,15 @@ export default function HostControlRoom() {
           setJoinBaseUrl(`${window.location.protocol}//${window.location.hostname}:${window.location.port}`);
           setJoinMode('lan');
         });
+
+      axios.get('/api/host-ip')
+        .then(res => {
+          if (res.data && res.data.ip) {
+            const port = window.location.port || '5000';
+            setLanBaseUrl(`http://${res.data.ip}:${port}`);
+          }
+        })
+        .catch(() => {});
     };
     fetchJoinUrl();
     // Poll every 5 seconds — the tunnel URL arrives ~2-4s after server start
@@ -76,19 +95,22 @@ export default function HostControlRoom() {
   }, []);
 
   useEffect(() => {
-    if (roomCode && joinBaseUrl) {
-      QRCode.toDataURL(`${joinBaseUrl}/join?code=${roomCode}`, {
-        width: 200,
-        margin: 1,
-        color: {
-          dark: '#050816',
-          light: '#ffffff'
-        }
-      })
-        .then(url => setQrDataUrl(url))
-        .catch(err => console.error('Failed to generate QR code', err));
+    if (roomCode) {
+      const activeUrl = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+      if (activeUrl) {
+        QRCode.toDataURL(`${activeUrl}/join?code=${roomCode}`, {
+          width: 200,
+          margin: 1,
+          color: {
+            dark: '#050816',
+            light: '#ffffff'
+          }
+        })
+          .then(url => setQrDataUrl(url))
+          .catch(err => console.error('Failed to generate QR code', err));
+      }
     }
-  }, [roomCode, joinBaseUrl]);
+  }, [roomCode, joinBaseUrl, lanBaseUrl, useLanQr]);
 
   useEffect(() => {
     // 1. Fetch Quiz Data
@@ -757,7 +779,7 @@ export default function HostControlRoom() {
           align-items: center;
           gap: 20px;
           font-size: 1.35rem;
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           padding: 18px 28px;
@@ -926,21 +948,43 @@ export default function HostControlRoom() {
             Scan with phone camera
           </span>
           {/* Mode indicator */}
-          {joinMode === 'public' ? (
-            <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center', marginTop: '-6px',
-              background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
-              borderRadius: '20px', padding: '3px 10px'
-            }}>
-              🌐 Public — any network
-            </span>
-          ) : (
-            <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center', marginTop: '-6px',
-              background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
-              borderRadius: '20px', padding: '3px 10px'
-            }}>
-              📡 LAN — same Wi-Fi only
-            </span>
-          )}
+          <div 
+            onClick={() => {
+              if (isLocalHost) setUseLanQr(prev => !prev);
+            }} 
+            style={{ cursor: isLocalHost ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', marginTop: '-6px' }}
+            title={isLocalHost ? "Click to toggle QR between Local LAN and Public Tunnel" : "Live Public Production Server"}
+          >
+            {!isLocalHost ? (
+              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
+                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
+                borderRadius: '20px', padding: '3px 10px'
+              }}>
+                🌐 Public Server Mode
+              </span>
+            ) : (useLanQr && lanBaseUrl) ? (
+              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
+                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
+                borderRadius: '20px', padding: '3px 10px'
+              }}>
+                📡 QR: LAN Mode (Click to toggle)
+              </span>
+            ) : joinMode === 'public' ? (
+              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
+                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
+                borderRadius: '20px', padding: '3px 10px'
+              }}>
+                🌐 QR: Public Mode (Click to toggle)
+              </span>
+            ) : (
+              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
+                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
+                borderRadius: '20px', padding: '3px 10px'
+              }}>
+                📡 QR: LAN Mode (Click to toggle)
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Access Instructions */}
@@ -949,7 +993,9 @@ export default function HostControlRoom() {
             Join the Live Quiz
           </p>
           <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500, wordBreak: 'break-all', lineHeight: 1.4 }}>
-            {joinBaseUrl ? `${joinBaseUrl.replace(/^https?:\/\//, '')}/join` : '...'}
+            {((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl) 
+              ? `${((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join` 
+              : '...'}
           </p>
           <p style={{ margin: '10px 0 0 0', fontSize: '2.4rem', color: '#FF9800', fontWeight: 900, letterSpacing: '2px' }}>
             #{formattedRoomCode}
@@ -1069,7 +1115,7 @@ export default function HostControlRoom() {
               
               {/* Question Row with stopwatch-badge */}
               <div className="glass-card" style={{ 
-                background: 'var(--text-primary)', 
+                background: '#0F1A36', 
                 border: '2px solid rgba(255, 152, 0, 0.3)', 
                 padding: '28px', 
                 borderRadius: '24px', 

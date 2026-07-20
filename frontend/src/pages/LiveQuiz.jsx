@@ -449,7 +449,7 @@ export default function LiveQuiz() {
           align-items: center;
           gap: 16px;
           font-size: 1.1rem;
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.2);
           padding: 14px 20px;
@@ -834,7 +834,7 @@ export default function LiveQuiz() {
               <>
                 {/* Question Text */}
                 <div style={{ 
-                  background: 'var(--text-primary)', 
+                  background: '#0F1A36', 
                   border: '2px solid rgba(255, 107, 53, 0.3)', 
                   padding: '24px', 
                   borderRadius: '20px', 
