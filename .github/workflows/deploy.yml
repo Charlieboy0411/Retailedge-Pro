@@ -1,50 +1,34 @@
-name: Deploy to EC2
+- name: Deploy to EC2
+  uses: appleboy/ssh-action@v1.2.0
+  with:
+    host: ${{ secrets.EC2_HOST }}
+    username: ${{ secrets.EC2_USER }}
+    key: ${{ secrets.EC2_SSH_KEY }}
+    port: 22
 
-on:
-  push:
-    branches:
-      - main
+    script: |
+      set -e
 
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
+      cd ~/apps/Retailedge-Pro
 
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      git pull origin main
 
-      - name: Deploy to EC2
-        uses: appleboy/ssh-action@v1.2.0
+      echo "Installing backend..."
+      cd backend
+      npm ci
+      pm2 restart quizhive-api
 
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ secrets.EC2_PORT  }}
+      echo "Building frontend..."
+      cd ../frontend
+      npm ci
+      npm run build
 
-          script: |
-            set -e
+      echo "Deploying frontend..."
+      sudo rm -rf /var/www/retailedge/*
+      sudo cp -r dist/* /var/www/retailedge/
+      sudo chown -R www-data:www-data /var/www/retailedge
 
-            cd ~/apps/Retailedge-Pro
+      sudo nginx -t
+      sudo systemctl reload nginx
 
-            git pull origin main
-
-            echo "Installing backend..."
-            cd backend
-            npm ci
-            pm2 restart quizhive-api
-
-            echo "Building frontend..."
-            cd ../frontend
-            npm ci
-            npm run build
-
-            echo "Deploying frontend..."
-            sudo rm -rf /var/www/retailedge/*
-            sudo cp -r dist/* /var/www/retailedge/
-            sudo chown -R www-data:www-data /var/www/retailedge
-
-            sudo nginx -t
-            sudo systemctl reload nginx
-
-            echo "Deployment completed successfully!"
+      echo "Deployment completed successfully!"
