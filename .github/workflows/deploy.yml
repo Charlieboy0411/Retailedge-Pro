@@ -32,7 +32,7 @@ jobs:
             echo "Installing backend..."
             cd backend
             npm ci
-            pm2 restart quizhive-api
+            NODE_ENV=production pm2 restart quizhive-api --update-env || NODE_ENV=production pm2 start server.js --name quizhive-api
 
             echo "Building frontend..."
             cd ../frontend

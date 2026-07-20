@@ -89,9 +89,17 @@ app.get('/api/join-url', (req, res) => {
   if (publicTunnelUrl) {
     res.json({ url: publicTunnelUrl, mode: 'public', tunnelStatus: 'active' });
   } else {
-    const ip   = getLanIp();
-    const port = process.env.PORT || 5000;
-    res.json({ url: `http://${ip}:${port}`, mode: 'lan', tunnelStatus });
+    const hostHeader = req.headers.host || '';
+    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+    const isPublicHost = hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1');
+
+    if (isPublicHost) {
+      res.json({ url: `${protocol}://${hostHeader}`, mode: 'public', tunnelStatus: 'direct' });
+    } else {
+      const ip   = getLanIp();
+      const port = process.env.PORT || 5000;
+      res.json({ url: `http://${ip}:${port}`, mode: 'lan', tunnelStatus });
+    }
   }
 });
 
@@ -149,6 +157,12 @@ const { spawn } = require('child_process');
 let tunnelProcess = null;
 
 async function startTunnel(port) {
+  if (process.env.DISABLE_TUNNEL === 'true' || process.env.NODE_ENV === 'production') {
+    console.log('\n🌐 Localtunnel disabled in production environment (Direct IP / Nginx serving active).');
+    tunnelStatus = 'disabled';
+    return;
+  }
+
   console.log('\n🌐 Starting public tunnel (so participants can join via mobile data)...');
   const localtunnel = require('localtunnel');
 
