@@ -38,7 +38,7 @@ export default function HostControlRoom() {
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [liveAnswers, setLiveAnswers] = useState([]);
-  const [joinBaseUrl, setJoinBaseUrl] = useState(''); // public tunnel or LAN IP
+  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin); // public tunnel or LAN IP
   const [joinMode, setJoinMode] = useState('lan');    // 'public' | 'lan'
   const [lanBaseUrl, setLanBaseUrl] = useState('');
   const [useLanQr, setUseLanQr] = useState(false);
@@ -96,9 +96,10 @@ export default function HostControlRoom() {
 
   useEffect(() => {
     if (roomCode) {
-      const activeUrl = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+      const activeUrl = (useLanQr && lanBaseUrl) ? lanBaseUrl : (joinBaseUrl || window.location.origin);
+      const cleanCode = String(roomCode).replace(/\s+/g, '');
       if (activeUrl) {
-        QRCode.toDataURL(`${activeUrl}/join?code=${roomCode}`, {
+        QRCode.toDataURL(`${activeUrl}/join?code=${cleanCode}`, {
           width: 200,
           margin: 1,
           color: {
