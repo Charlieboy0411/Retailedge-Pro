@@ -375,7 +375,7 @@ export default function LiveQuiz() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.2);
           border-radius: 16px;
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           display: flex;
           align-items: center;
           gap: 10px;
@@ -550,15 +550,15 @@ export default function LiveQuiz() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
-          border: 2px solid var(--bg-tertiary);
-          color: var(--bg-tertiary);
+          border: 2px solid rgba(255, 107, 53, 0.35);
+          color: #ffffff;
           box-shadow: 0 8px 20px rgba(255, 107, 53, 0.35);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.25);
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 

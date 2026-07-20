@@ -696,7 +696,7 @@ export default function HostControlRoom() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           border-radius: 20px;
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           display: flex;
           align-items: center;
           gap: 12px;
@@ -872,15 +872,15 @@ export default function HostControlRoom() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF9800 0%, #FF5722 100%);
-          border: 2px solid var(--bg-tertiary);
-          color: var(--bg-tertiary);
+          border: 2px solid rgba(255, 152, 0, 0.3);
+          color: #ffffff;
           box-shadow: 0 8px 24px rgba(255, 152, 0, 0.4);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
-          color: var(--bg-tertiary);
+          color: var(--text-primary);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
