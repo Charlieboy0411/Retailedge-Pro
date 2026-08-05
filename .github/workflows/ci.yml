@@ -89,7 +89,7 @@ jobs:
     - name: Install Playwright Browsers
       run: |
         cd backend
-        npx playwright install --with-deps chromium --if-present
+        npx playwright install --with-deps chromium
 
     - name: Run Playwright E2E Smoke Test
       env:
