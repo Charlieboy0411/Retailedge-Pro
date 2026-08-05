@@ -27,6 +27,7 @@ import RoleManagement from './pages/RoleManagement';
 import OfflineSync from './pages/OfflineSync';
 import AuditLogs from './pages/AuditLogs';
 import NotificationsCenter from './pages/NotificationsCenter';
+import MonitorDashboard from './pages/MonitorDashboard';
 import { AuthProvider, AuthContext } from './context/AuthContext';
 
 function App() {
@@ -66,6 +67,7 @@ function App() {
             <Route path="audit-logs"   element={<AuditLogs />} />
             <Route path="notifications" element={<NotificationsCenter />} />
             <Route path="settings"     element={<Settings />} />
+            <Route path="monitor"      element={<MonitorDashboard />} />
           </Route>
 
           {/* Full screen host view */}

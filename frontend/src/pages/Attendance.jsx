@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { Download, Calendar, Award, Clock, Users, ShieldAlert, BarChart2, CheckCircle, RefreshCw } from 'lucide-react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { io } from 'socket.io-client';
+import { getSocket } from '../utils/socketService';
 
 export default function Attendance() {
   const { token, user } = useContext(AuthContext);
@@ -30,27 +30,23 @@ export default function Attendance() {
     if (token) {
       fetchAttendance(false);
 
-      // Establish live socket synchronization
-      const socket = io(window.location.origin);
-      
-      const handleSync = (data) => {
-        console.log('[Live Sync] Real-time updates detected:', data);
-        fetchAttendance(true);
-      };
+      const socket = getSocket();
+      const handleSync = () => fetchAttendance(true);
 
-      socket.on('live_session_finished', handleSync);
+      // `dashboard_sync` is the targeted event for admin/dashboard pages.
+      // `live_session_finished` is now room-scoped (quiz participants only).
+      socket.on('dashboard_sync',             handleSync);
       socket.on('offline_response_submitted', handleSync);
-      socket.on('attendance_updated', handleSync);
-      socket.on('report_deleted', handleSync);
+      socket.on('attendance_updated',         handleSync);
+      socket.on('report_deleted',             handleSync);
 
-      // Background periodic polling as fallback (every 20 seconds)
-      const pollInterval = setInterval(() => {
-        console.log('[Polling Sync] Fetching latest attendance data...');
-        fetchAttendance(true);
-      }, 20000);
+      const pollInterval = setInterval(() => fetchAttendance(true), 20000);
 
       return () => {
-        socket.disconnect();
+        socket.off('dashboard_sync',             handleSync);
+        socket.off('offline_response_submitted', handleSync);
+        socket.off('attendance_updated',         handleSync);
+        socket.off('report_deleted',             handleSync);
         clearInterval(pollInterval);
       };
     }

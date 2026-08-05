@@ -407,8 +407,8 @@ export default function Join() {
         {savedSession && (
           <div className="qh-rejoin" style={{ marginBottom: '16px' }}>
             <div style={{ fontSize: '1.4rem', marginBottom: '6px' }}>{savedSession.avatar || '🙂'}</div>
-            <div style={{ color: '#fff', fontWeight: 700, marginBottom: '2px' }}>{savedSession.name}</div>
-            <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem', marginBottom: '14px' }}>
+            <div style={{ color: '#1E293B', fontWeight: 700, marginBottom: '2px' }}>{savedSession.name}</div>
+            <div style={{ color: '#64748B', fontSize: '0.8rem', marginBottom: '14px' }}>
               You were in this session before
             </div>
             <button className="qh-btn" onClick={handleRejoin} style={{ padding: '11px' }}>
@@ -592,14 +592,14 @@ export default function Join() {
           <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 3 }}>
             Shelfy says
           </div>
-          <div style={{ fontSize: '0.86rem', color: 'rgba(255,255,255,0.8)', lineHeight: 1.5 }}>
+          <div style={{ fontSize: '0.86rem', color: '#475569', lineHeight: 1.5 }}>
             {SHELFY_TIPS[tipIndex]}
           </div>
         </div>
       </div>
 
-      <p style={{ color: 'rgba(255,255,255,0.3)', marginTop: '18px', fontSize: '0.82rem', zIndex: 2 }}>
-        Trainer? <a href="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>Login here →</a>
+      <p style={{ color: '#94A3B8', marginTop: '18px', fontSize: '0.82rem', zIndex: 2 }}>
+        Trainer? <a href="/login" style={{ color: '#2563EB', fontWeight: 600 }}>Login here →</a>
       </p>
     </div>
   );

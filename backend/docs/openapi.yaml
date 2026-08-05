@@ -1,0 +1,176 @@
+openapi: 3.0.3
+info:
+  title: QuizHive Real-Time LMS Engine API
+  description: Versioned REST & WebSockets telemetry API documentation for the RetailEdge Pro enterprise platform.
+  version: 1.95.0
+servers:
+  - url: http://localhost:5000
+    description: Local Development Server
+paths:
+  /api/admin/stats:
+    get:
+      summary: Real-Time Server Telemetry Stats
+      description: Returns a live snapshot of the active quiz rooms, connected participant sockets, CPU/Memory telemetry and security event counters.
+      security:
+        - AdminTokenHeader: []
+        - AdminTokenQuery: []
+      parameters:
+        - name: token
+          in: query
+          description: Access token mapping to ADMIN_MONITOR_TOKEN secret (Query fallback)
+          required: false
+          schema:
+            type: string
+      headers:
+        x-monitor-token:
+          schema:
+            type: string
+          description: Authorization header secret (Preferred)
+      responses:
+        '200':
+          description: Telemetry statistics retrieved successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  ts:
+                    type: string
+                    format: date-time
+                    example: "2026-08-05T12:00:00.000Z"
+                  activeRooms:
+                    type: integer
+                    example: 1
+                  totalSockets:
+                    type: integer
+                    example: 3
+                  rooms:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        roomCode:
+                          type: string
+                          example: "123456"
+                        participantCount:
+                          type: integer
+                          example: 2
+                        timerActive:
+                          type: boolean
+                          example: true
+                        timerRemaining:
+                          type: integer
+                          example: 25
+                  monitor:
+                    type: object
+                    properties:
+                      totalConnections:
+                        type: integer
+                        example: 15
+                      totalDisconnections:
+                        type: integer
+                        example: 12
+                      totalAnswers:
+                        type: integer
+                        example: 8
+                      totalLateRejections:
+                        type: integer
+                        example: 0
+                      totalDupeRejections:
+                        type: integer
+                        example: 0
+                      totalFloodRejections:
+                        type: integer
+                        example: 0
+                      totalOversizedRejections:
+                        type: integer
+                        example: 0
+                      totalInvalidRooms:
+                        type: integer
+                        example: 0
+                      questionsDelivered:
+                        type: integer
+                        example: 4
+                  memoryMB:
+                    type: number
+                    example: 52.4
+                  memoryTotalMB:
+                    type: number
+                    example: 68.1
+                  rssMemoryMB:
+                    type: number
+                    example: 95.8
+        '403':
+          description: Unauthorized or missing monitor token validation.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Forbidden"
+
+  /api/set-tunnel-url:
+    post:
+      summary: Set Public Access URL
+      description: Allows a trainer or proxy process to override the public root endpoint address configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  example: "https://my-custom-tunnel.localtunnel.me"
+      responses:
+        '200':
+          description: Tunnel URL set successfully.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+                  url:
+                    type: string
+                    example: "https://my-custom-tunnel.localtunnel.me"
+        '400':
+          description: Invalid URL parameter.
+
+  /api/host-ip:
+    get:
+      summary: Get Server Local LAN IP Address
+      description: Returns the active IPv4 address of the Node server instance running within the host subnet.
+      responses:
+        '200':
+          description: Successfully parsed network adapter local IP.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ip:
+                    type: string
+                    example: "192.168.1.15"
+
+components:
+  securitySchemes:
+    AdminTokenHeader:
+      type: apiKey
+      in: header
+      name: x-monitor-token
+    AdminTokenQuery:
+      type: apiKey
+      in: query
+      name: token

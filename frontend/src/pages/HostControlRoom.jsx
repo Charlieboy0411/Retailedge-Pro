@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import io from 'socket.io-client';
+import { io } from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
 import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock } from 'lucide-react';
 import axios from 'axios';
@@ -54,8 +54,9 @@ export default function HostControlRoom() {
   // Layout States
   const [showControlsSidebar, setShowControlsSidebar] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef = useRef(null);
-  const sessionStarted = useRef(false); // guard: only call host_start_quiz once per mount
+  const containerRef   = useRef(null);
+  const sessionStarted  = useRef(false); // guard: only call host_start_quiz once per mount
+  const roomCodeRef     = useRef('');    // stores roomCode for reconnect handler (avoids stale closure)
 
   // Fetch public tunnel URL (or LAN fallback) — poll every 5s until tunnel is up
   useEffect(() => {
@@ -123,23 +124,32 @@ export default function HostControlRoom() {
         if (target) setQuiz(target);
       });
 
-    // 2. Initialize Socket connection
-    socket = io(window.location.origin);
+    // 2. Initialize Socket connection with reconnection + WebSocket transport
+    socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
+    });
 
-    socket.on('connect', () => {
-      console.log('Connected to QuizEngine');
-      // Only start a new session once per component mount — prevents duplicate sessions
-      // on HMR hot-reloads or socket reconnections.
+    // ── Named handlers — required so socket.off() removes the exact same function reference ──
+
+    const onConnect = () => {
+      console.log('[HostControlRoom] Socket connected:', socket.id);
       if (!sessionStarted.current) {
         sessionStarted.current = true;
         socket.emit('host_start_quiz', { quizId, hostId: user.id });
-      } else if (roomCode) {
-        // Rejoin the existing room on reconnect (host recovers after network blip)
-        socket.emit('host_rejoin_room', { roomCode });
+      } else if (roomCodeRef.current) {
+        // Reconnect path — use ref to avoid stale closure over React state
+        console.log('[HostControlRoom] Reconnected. Rejoining room:', roomCodeRef.current);
+        socket.emit('host_rejoin_room', { roomCode: roomCodeRef.current });
       }
-    });
+    };
 
-    socket.on('session_created', (data) => {
+    const onSessionCreated = (data) => {
+      roomCodeRef.current = data.roomCode; // keep ref in sync so reconnect knows the room
       setRoomCode(data.roomCode);
       setSessionId(data.sessionId);
       if (data.recovered) {
@@ -151,9 +161,9 @@ export default function HostControlRoom() {
           setParticipants(data.participants);
         }
       }
-    });
+    };
 
-    socket.on('participant_joined', (participant) => {
+    const onParticipantJoined = (participant) => {
       setParticipants(prev => {
         const exists = prev.find(p => p.id === participant.id);
         if (exists) {
@@ -161,65 +171,77 @@ export default function HostControlRoom() {
         }
         return [...prev, participant];
       });
-    });
+    };
 
-    socket.on('answer_received', (data) => {
-      console.log('Answer received:', data);
+    const onAnswerReceived = (data) => {
       setLiveAnswers(prev => [...prev, data]);
-    });
+    };
 
-    socket.on('leaderboard_update', (data) => {
+    const onLeaderboardUpdate = (data) => {
       setLeaderboard(data);
-    });
+    };
 
-    socket.on('emoji_received', (data) => {
+    const onEmojiReceived = (data) => {
       if (data && data.emoji) {
-        const id = Date.now() + Math.random().toString();
-        const x = Math.random() * 80 + 10;
+        const id       = Date.now() + Math.random().toString();
+        const x        = Math.random() * 80 + 10;
         const duration = Math.random() * 2 + 2;
-        const scale = Math.random() * 0.5 + 0.8;
+        const scale    = Math.random() * 0.5 + 0.8;
         setFloatingEmojis(prev => [...prev, { id, emoji: data.emoji, x, duration, scale }]);
         setTimeout(() => {
           setFloatingEmojis(prev => prev.filter(e => e.id !== id));
         }, duration * 1000);
       }
-    });
+    };
 
-    socket.on('participant_metrics', (data) => {
+    const onParticipantMetrics = (data) => {
       setMetrics(data);
-    });
+    };
 
-    socket.on('participant_disconnected', ({ participantId }) => {
+    const onParticipantDisconnected = ({ participantId }) => {
       setParticipants(prev => prev.map(p => p.id === participantId ? { ...p, disconnected: true } : p));
-    });
+    };
+
+    // Server-authoritative timer — host display is driven by server ticks, no local setInterval
+    const onTimerTick    = ({ remaining }) => setTimeLeft(remaining);
+    const onTimerExpired = () => setTimeLeft(0);
+
+    socket.on('connect',                onConnect);
+    socket.on('session_created',        onSessionCreated);
+    socket.on('participant_joined',     onParticipantJoined);
+    socket.on('answer_received',        onAnswerReceived);
+    socket.on('leaderboard_update',     onLeaderboardUpdate);
+    socket.on('emoji_received',         onEmojiReceived);
+    socket.on('participant_metrics',    onParticipantMetrics);
+    socket.on('participant_disconnected', onParticipantDisconnected);
+    socket.on('timer_tick',             onTimerTick);
+    socket.on('timer_expired',          onTimerExpired);
 
     return () => {
+      // Remove named handlers — prevents duplicate listeners if effect re-runs
+      socket.off('connect',                onConnect);
+      socket.off('session_created',        onSessionCreated);
+      socket.off('participant_joined',     onParticipantJoined);
+      socket.off('answer_received',        onAnswerReceived);
+      socket.off('leaderboard_update',     onLeaderboardUpdate);
+      socket.off('emoji_received',         onEmojiReceived);
+      socket.off('participant_metrics',    onParticipantMetrics);
+      socket.off('participant_disconnected', onParticipantDisconnected);
+      socket.off('timer_tick',             onTimerTick);
+      socket.off('timer_expired',          onTimerExpired);
       socket.disconnect();
     };
   }, [quizId, user.id, token]);
 
-  // Timer Countdown Effect
+  // Initialize timer display when question changes.
+  // Actual countdown is driven by server timer_tick events — no local setInterval.
   useEffect(() => {
-    let timer;
     if (status === 'active' && currentQuestionIndex >= 0 && quiz?.questions) {
       const currentQuestion = quiz.questions[currentQuestionIndex];
-      const limit = currentQuestion?.time_limit || 20; // default 20s
-      setTimeLeft(limit);
-      setQuestionDuration(limit);
-      
-      timer = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timer);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+      const limit = currentQuestion?.time_limit || 20;
+      setTimeLeft(limit);         // Initial value; server will update via timer_tick
+      setQuestionDuration(limit); // Used for the SVG progress ring
     }
-    return () => {
-      if (timer) clearInterval(timer);
-    };
   }, [currentQuestionIndex, status, quiz]);
 
   // Fullscreen event listener

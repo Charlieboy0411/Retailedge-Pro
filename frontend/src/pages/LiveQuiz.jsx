@@ -118,77 +118,85 @@ export default function LiveQuiz() {
   }, []);
 
   useEffect(() => {
-    socket = io(window.location.origin);
-
-    socket.on('connect', () => {
-      const cleanCode = roomCode.replace(/\s+/g, '');
-      socket.emit('participant_join', {
-        roomCode: cleanCode,
-        name: playerName,
-        employeeId: playerEmpId,
-        mobileNumber: playerMobile,
-        avatar: playerAvatar,
-        userId: currentUser?.id,
-        deviceId: playerDevice,
-      });
+    socket = io(window.location.origin, {
+      transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000,
     });
 
-    socket.on('joined_session', (data) => {
+    // ── Named handlers — required for socket.off() to remove the exact function reference ──
+
+    const onConnect = () => {
+      const cleanCode = (roomCode || '').replace(/\s+/g, '');
+      socket.emit('participant_join', {
+        roomCode: cleanCode,
+        name:         playerName,
+        employeeId:   playerEmpId,
+        mobileNumber: playerMobile,
+        avatar:       playerAvatar,
+        userId:       currentUser?.id,
+        deviceId:     playerDevice,
+      });
+    };
+
+    const onJoinedSession = (data) => {
       setParticipantId(data.participantId);
       if (data.avatar) setMyAvatar(data.avatar);
       if (data.score !== undefined) setMyScore(data.score);
       if (data.participants) setParticipants(data.participants);
 
-      // Save/update session in local storage
+      // Persist session in localStorage for reconnect recovery
       const sessionData = {
-        name: playerName,
-        employeeId: playerEmpId,
-        mobileNumber: playerMobile,
-        avatar: data.avatar || playerAvatar,
-        deviceId: playerDevice,
+        name:          playerName,
+        employeeId:    playerEmpId,
+        mobileNumber:  playerMobile,
+        avatar:        data.avatar || playerAvatar,
+        deviceId:      playerDevice,
         participantId: data.participantId,
-        score: data.score !== undefined ? data.score : 0
+        score:         data.score !== undefined ? data.score : 0,
       };
       localStorage.setItem(`qh_session_${cleanCode}`, JSON.stringify(sessionData));
-    });
+    };
 
-    socket.on('participant_joined', (p) => {
+    const onParticipantJoined = (p) => {
       setParticipants(prev => {
         if (prev.find(item => item.id === p.id)) return prev;
         return [...prev, p];
       });
-    });
+    };
 
-    socket.on('new_question', (question) => {
+    const onNewQuestion = (question) => {
       setCurrentQuestion(question);
       setSelectedAnswer(null);
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setStatus('question');
-      setTimeLeft(question.time_limit || 30);
+      setTimeLeft(question.time_limit || 30); // Initial value; server timer_tick will update
       setQuestionStartTime(Date.now());
-    });
+    };
 
-    socket.on('answer_received', (data) => {
+    const onAnswerReceived = (data) => {
       setLiveAnswers(prev => [...prev, data]);
-    });
+    };
 
-    socket.on('answer_revealed', (data) => {
-      setCorrectAnswer(data?.correctAnswer);
+    const onAnswerRevealed = (data) => {
+      setCorrectAnswer(data?.correctAnswer); // Always sourced from server, never from local state
       setAnswerRevealed(true);
       setStatus('revealed');
-    });
+    };
 
-    socket.on('leaderboard_update', (data) => {
+    const onLeaderboardUpdate = (data) => {
       setLeaderboard(data);
       setStatus('leaderboard');
 
+      // Update local score from server leaderboard
       let currentPartId = participantId;
       try {
         const raw = localStorage.getItem(`qh_session_${cleanCode}`);
-        if (raw) {
-          currentPartId = JSON.parse(raw).participantId;
-        }
+        if (raw) currentPartId = JSON.parse(raw).participantId;
       } catch (e) {}
 
       const me = data.find(p => p.id === (currentPartId || participantId || saved.participantId));
@@ -203,27 +211,60 @@ export default function LiveQuiz() {
           }
         } catch (e) {}
       }
-    });
+    };
 
-    socket.on('lobby_reset', () => {
+    const onLobbyReset = () => {
       setStatus('waiting');
       setCurrentQuestion(null);
       setSelectedAnswer(null);
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setCorrectAnswer(null);
-    });
+    };
 
-    socket.on('quiz_ended', () => {
-      setStatus('ended');
-    });
+    const onQuizEnded = () => setStatus('ended');
 
-    socket.on('error', (msg) => {
+    const onError = (msg) => {
       alert(msg);
       navigate('/join');
-    });
+    };
 
-    return () => socket.disconnect();
+    // Server-authoritative timer — replaces client-side setInterval countdown
+    const onTimerTick = ({ remaining }) => setTimeLeft(remaining);
+    const onTimerExpired = () => {
+      setTimeLeft(0);
+      // Lock submission — actual answer reveal is controlled by host via answer_revealed
+      setStatus(prev => prev === 'question' ? 'answered' : prev);
+    };
+
+    socket.on('connect',              onConnect);
+    socket.on('joined_session',       onJoinedSession);
+    socket.on('participant_joined',   onParticipantJoined);
+    socket.on('new_question',         onNewQuestion);
+    socket.on('answer_received',      onAnswerReceived);
+    socket.on('answer_revealed',      onAnswerRevealed);
+    socket.on('leaderboard_update',   onLeaderboardUpdate);
+    socket.on('lobby_reset',          onLobbyReset);
+    socket.on('quiz_ended',           onQuizEnded);
+    socket.on('error',                onError);
+    socket.on('timer_tick',           onTimerTick);
+    socket.on('timer_expired',        onTimerExpired);
+
+    return () => {
+      socket.off('connect',              onConnect);
+      socket.off('joined_session',       onJoinedSession);
+      socket.off('participant_joined',   onParticipantJoined);
+      socket.off('new_question',         onNewQuestion);
+      socket.off('answer_received',      onAnswerReceived);
+      socket.off('answer_revealed',      onAnswerRevealed);
+      socket.off('leaderboard_update',   onLeaderboardUpdate);
+      socket.off('lobby_reset',          onLobbyReset);
+      socket.off('quiz_ended',           onQuizEnded);
+      socket.off('error',                onError);
+      socket.off('timer_tick',           onTimerTick);
+      socket.off('timer_expired',        onTimerExpired);
+      socket.disconnect();
+    };
   }, [roomCode, playerName, navigate, currentUser]);
 
   // Lobby countdown timer
@@ -236,24 +277,14 @@ export default function LiveQuiz() {
     }
   }, [status]);
 
-  // Timer Countdown Effect
+  // Server-authoritative timer: timeLeft is updated by onTimerTick in the socket useEffect.
+  // This effect only handles the auto-lock of UI when time reaches 0.
+  // (The actual reveal of the correct answer is always controlled by the host.)
   useEffect(() => {
-    let timerId;
-    if (status === 'question' && timeLeft > 0) {
-      timerId = setInterval(() => {
-        setTimeLeft(prev => {
-          if (prev <= 1) {
-            clearInterval(timerId);
-            // Auto-reveal results when time expires
-            revealResults();
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (status === 'question' && timeLeft === 0) {
+      setStatus('answered'); // Lock submission input
     }
-    return () => clearInterval(timerId);
-  }, [status, timeLeft]);
+  }, [timeLeft, status]);
 
   const getOptions = (question) => {
     if (!question || !question.options) return [];

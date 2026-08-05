@@ -3,7 +3,7 @@ import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { useSearchParams } from 'react-router-dom';
 import { Users, BarChart2, Calendar, Download, FolderOpen, CheckCircle, Clock, TrendingUp, AlertCircle, X, FileText, Presentation, RefreshCw } from 'lucide-react';
-import { io } from 'socket.io-client';
+import { getSocket } from '../utils/socketService';
 import { generate15SlidePPT } from '../utils/pptHelper';
 import { generateExcelReport } from '../utils/excelHelper';
 import { downloadWorkbook, downloadPPT } from '../utils/downloadWorkbook';
@@ -212,29 +212,27 @@ export default function PMDashboard() {
     if (token) {
       fetchAll(false);
 
-      // Establish live socket synchronization
-      const socket = io(window.location.origin);
-      
-      const handleSync = (data) => {
-        console.log('[Live Sync] Real-time updates detected:', data);
+      const socket = getSocket();
+      const handleSync = () => {
         fetchAll(true);
         fetchExecutiveMetrics();
       };
 
-      socket.on('live_session_finished', handleSync);
+      socket.on('dashboard_sync',             handleSync);
       socket.on('offline_response_submitted', handleSync);
-      socket.on('attendance_updated', handleSync);
-      socket.on('report_deleted', handleSync);
+      socket.on('attendance_updated',         handleSync);
+      socket.on('report_deleted',             handleSync);
 
-      // Background periodic polling as fallback (every 20 seconds)
       const pollInterval = setInterval(() => {
-        console.log('[Polling Sync] Fetching latest metrics...');
         fetchAll(true);
         fetchExecutiveMetrics();
       }, 20000);
 
       return () => {
-        socket.disconnect();
+        socket.off('dashboard_sync',             handleSync);
+        socket.off('offline_response_submitted', handleSync);
+        socket.off('attendance_updated',         handleSync);
+        socket.off('report_deleted',             handleSync);
         clearInterval(pollInterval);
       };
     }

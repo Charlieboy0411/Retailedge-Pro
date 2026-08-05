@@ -7,7 +7,7 @@ import {
   ExternalLink, RefreshCw, BookOpen, AlertCircle, Play, CheckCircle2, 
   Circle, Users, Trophy, Award, MapPin, ClipboardList, Plus, X, Mail
 } from 'lucide-react';
-import { io } from 'socket.io-client';
+import { getSocket } from '../utils/socketService';
 
 export default function SchedulePage() {
   const { token, user } = useContext(AuthContext);
@@ -97,17 +97,15 @@ export default function SchedulePage() {
     if (token) {
       fetchData(false);
 
-      // Setup live socket updates
-      const socket = io(window.location.origin);
-      const handleSync = () => {
-        fetchData(true);
-      };
+      const socket = getSocket();
+      const handleSync = () => fetchData(true);
 
+      socket.on('dashboard_sync',    handleSync);
       socket.on('attendance_updated', handleSync);
-      socket.on('live_session_finished', handleSync);
 
       return () => {
-        socket.disconnect();
+        socket.off('dashboard_sync',    handleSync);
+        socket.off('attendance_updated', handleSync);
       };
     }
   }, [token, user]);
