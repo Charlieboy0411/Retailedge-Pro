@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "jest",
-    "test:security": "jest tests/socketSecurity.test.js",
+    "test:security": "jest tests/socketSecurity.test.js --coverage=false --runInBand",
     "test:unit": "jest tests/scoringEngine.test.js",
     "benchmark": "node tests/autocannon_benchmark.js",
     "lint": "eslint \"**/*.js\" --ignore-pattern node_modules"
