@@ -1,0 +1,53 @@
+{
+  "version": "1.9",
+  "benchmarks": {
+    "participant_join_ms": {
+      "metric": "Participant join time",
+      "target": 2000,
+      "description": "Stopwatch from Join tap to lobby entry",
+      "status": "baseline_established"
+    },
+    "question_broadcast_ms": {
+      "metric": "Question propagation latency",
+      "target": 300,
+      "description": "Compare new_question socket event timestamps across multi-network client nodes",
+      "status": "baseline_established"
+    },
+    "answer_processing_ms": {
+      "metric": "Answer processing latency",
+      "target": 200,
+      "description": "Time taken on the server to process, validate, score, save response and emit metrics",
+      "status": "baseline_established"
+    },
+    "leaderboard_update_ms": {
+      "metric": "Leaderboard update broadcast",
+      "target": 500,
+      "description": "Time from host leaderboard trigger to client render update",
+      "status": "baseline_established"
+    },
+    "certificate_generation_sec": {
+      "metric": "Certificate generation time",
+      "target": 5,
+      "description": "Puppeteer render and PDF output speed",
+      "status": "baseline_established"
+    },
+    "report_generation_sec": {
+      "metric": "Report generation time",
+      "target": 10,
+      "description": "PPT/Excel/PDF compilation of historical quiz analytics",
+      "status": "baseline_established"
+    },
+    "socket_reconnect_sec": {
+      "metric": "Socket reconnect speed",
+      "target": 5,
+      "description": "Seamless state recovery on host/participant client reconnection",
+      "status": "baseline_established"
+    },
+    "memory_growth_limit_pct": {
+      "metric": "60-minute continuous session memory growth",
+      "target": 10,
+      "description": "Percentage boundary of heap usage growth limit over long running sessions",
+      "status": "baseline_established"
+    }
+  }
+}

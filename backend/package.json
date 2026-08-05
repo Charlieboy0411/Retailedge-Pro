@@ -4,7 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "jest",
+    "test:security": "jest tests/socketSecurity.test.js",
+    "test:unit": "jest tests/scoringEngine.test.js",
+    "benchmark": "node tests/autocannon_benchmark.js",
+    "lint": "eslint \"**/*.js\" --ignore-pattern node_modules"
   },
   "keywords": [],
   "author": "",
@@ -30,5 +34,14 @@
     "sequelize": "^6.37.8",
     "socket.io": "^4.8.3",
     "sqlite3": "^6.0.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "autocannon": "^8.0.0",
+    "eslint": "^10.8.0",
+    "eslint-config-prettier": "^10.1.8",
+    "jest": "^30.4.2",
+    "prettier": "^3.9.6",
+    "socket.io-client": "^4.8.3"
   }
 }
