@@ -87,13 +87,18 @@ let tunnelStatus    = 'connecting'; // 'connecting' | 'active' | 'failed'
 
 // ─── Expose join URL for QR code generation ──────────────────────────────────
 app.get('/api/join-url', (req, res) => {
-  if (publicTunnelUrl) {
-    res.json({ url: publicTunnelUrl, mode: 'public', tunnelStatus: 'active' });
-  } else {
-    const ip   = getLanIp();
-    const port = process.env.PORT || 5000;
-    res.json({ url: `http://${ip}:${port}`, mode: 'lan', tunnelStatus });
-  }
+  const ip   = getLanIp();
+  const port = process.env.PORT || 5000;
+  const lanUrl = `http://${ip}:${port}`;
+  res.json({
+    url: publicTunnelUrl || lanUrl,
+    lanUrl: lanUrl,
+    publicUrl: publicTunnelUrl,
+    mode: publicTunnelUrl ? 'public' : 'lan',
+    tunnelStatus: tunnelStatus,
+    lanIp: ip,
+    port: port
+  });
 });
 
 // ─── Allow trainer to manually set a custom public URL ───────────────────────
@@ -154,8 +159,9 @@ async function startTunnel(port) {
   const localtunnel = require('localtunnel');
 
   try {
-    // Start localtunnel pointing to the local port with custom subdomain
-    const tunnel = await localtunnel({ port: port, subdomain: 'retailedge-pro' });
+    // Generate a fresh random suffix to avoid 503 conflicts with stale sessions on loca.lt servers
+    const sub = `retailedge-${Math.random().toString(36).substring(2, 7)}`;
+    const tunnel = await localtunnel({ port: port, subdomain: sub });
     tunnelProcess = tunnel;
 
     publicTunnelUrl = tunnel.url;
@@ -174,6 +180,7 @@ async function startTunnel(port) {
 
     tunnel.on('error', (err) => {
       console.error('[Localtunnel] Tunnel error:', err);
+      try { tunnel.close(); } catch(e) {}
     });
 
     process.once('SIGINT', () => {
