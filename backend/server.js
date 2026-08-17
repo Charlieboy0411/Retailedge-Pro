@@ -22,6 +22,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ─── Serve built React frontend ───────────────────────────────────────────────
 const DIST_PATH = path.join(__dirname, '..', 'frontend', 'dist');
 app.use((req, res, next) => {
+  res.setHeader('bypass-tunnel-reminder', 'true');
   if (req.path === '/' || req.path === '/index.html') {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');

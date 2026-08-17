@@ -2,7 +2,7 @@ import React, { useState, useEffect, useContext } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import axios from 'axios';
-import { PlayCircle, ChevronRight, BarChart2, Smartphone, Shield, Users, Zap, Award, ArrowRight, X, Menu, Mail, Phone, Calendar } from 'lucide-react';
+import { PlayCircle, ChevronRight, BarChart2, Smartphone, Shield, Users, Zap, Award, ArrowRight, X, Menu, Mail, Phone, Calendar, Eye, EyeOff } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
 export default function LandingPage() {
@@ -28,6 +28,7 @@ export default function LandingPage() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -258,8 +259,14 @@ export default function LandingPage() {
                     <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Password</label>
                     <button type="button" onClick={() => alert('A password reset link has been sent to your email address if it exists in our system.')} style={{ background: 'none', border: 'none', padding: 0, fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>Forgot?</button>
                   </div>
-                  <input type="password" value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••"
-                    style={{ width: '100%', padding: '14px 16px', borderRadius: '12px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.95rem', outline: 'none' }} />
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input type={showPassword ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••"
+                      style={{ width: '100%', padding: '14px 44px 14px 16px', borderRadius: '12px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.95rem', outline: 'none' }} />
+                    <button type="button" onClick={() => setShowPassword(v => !v)}
+                      style={{ position: 'absolute', right: '14px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}>
+                      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                    </button>
+                  </div>
                 </div>
                 <button type="submit" disabled={isLoading} style={{ 
                   marginTop: '12px', width: '100%', padding: '16px', borderRadius: '12px', border: '1px solid rgba(0, 240, 255, 0.4)', 

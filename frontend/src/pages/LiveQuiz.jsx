@@ -23,20 +23,20 @@ export default function LiveQuiz() {
 
   const cleanCode = (roomCode || '').replace(/\s+/g, '');
 
-  // Get device fingerprint
+  // Get device fingerprint (tab-safe)
   const getDeviceId = () => {
-    let id = localStorage.getItem('qh_device_id');
+    let id = sessionStorage.getItem('qh_device_id');
     if (!id) {
       id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('qh_device_id', id);
+      sessionStorage.setItem('qh_device_id', id);
     }
     return id;
   };
 
-  // Load session from localStorage if present
+  // Load session from storage if present
   const getSavedSession = () => {
     try {
-      const raw = localStorage.getItem(`qh_session_${cleanCode}`);
+      const raw = sessionStorage.getItem(`qh_session_${cleanCode}`) || localStorage.getItem(`qh_session_${cleanCode}`);
       return raw ? JSON.parse(raw) : null;
     } catch { return null; }
   };
@@ -118,9 +118,13 @@ export default function LiveQuiz() {
   }, []);
 
   useEffect(() => {
-    socket = io(window.location.origin);
+    socket = io(window.location.origin, {
+      reconnection: true,
+      reconnectionAttempts: 10,
+      reconnectionDelay: 1000,
+    });
 
-    socket.on('connect', () => {
+    const joinRoom = () => {
       const cleanCode = roomCode.replace(/\s+/g, '');
       socket.emit('participant_join', {
         roomCode: cleanCode,
@@ -130,8 +134,25 @@ export default function LiveQuiz() {
         avatar: playerAvatar,
         userId: currentUser?.id,
         deviceId: playerDevice,
+        participantId: participantId || saved.participantId,
+        isRejoin: Boolean(location.state?.isRejoin || participantId || saved.participantId),
+        zone: location.state?.zone || saved.zone
       });
-    });
+    };
+
+    socket.on('connect', joinRoom);
+
+    // Auto-resync when returning to the tab or unlocking phone
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socket) {
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          joinRoom();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     socket.on('joined_session', (data) => {
       setParticipantId(data.participantId);
@@ -139,16 +160,18 @@ export default function LiveQuiz() {
       if (data.score !== undefined) setMyScore(data.score);
       if (data.participants) setParticipants(data.participants);
 
-      // Save/update session in local storage
+      // Save/update session in storage
       const sessionData = {
         name: playerName,
         employeeId: playerEmpId,
         mobileNumber: playerMobile,
+        zone: location.state?.zone || saved.zone,
         avatar: data.avatar || playerAvatar,
         deviceId: playerDevice,
         participantId: data.participantId,
         score: data.score !== undefined ? data.score : 0
       };
+      sessionStorage.setItem(`qh_session_${cleanCode}`, JSON.stringify(sessionData));
       localStorage.setItem(`qh_session_${cleanCode}`, JSON.stringify(sessionData));
     });
 
@@ -223,7 +246,10 @@ export default function LiveQuiz() {
       navigate('/join');
     });
 
-    return () => socket.disconnect();
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      socket.disconnect();
+    };
   }, [roomCode, playerName, navigate, currentUser]);
 
   // Lobby countdown timer

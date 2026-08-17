@@ -36,7 +36,7 @@ export default function HostControlRoom() {
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [liveAnswers, setLiveAnswers] = useState([]);
-  const [joinBaseUrl, setJoinBaseUrl] = useState(''); // public tunnel or LAN IP
+  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin); // public tunnel or LAN IP
   const [joinMode, setJoinMode] = useState('lan');    // 'public' | 'lan'
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
@@ -76,17 +76,25 @@ export default function HostControlRoom() {
   }, []);
 
   useEffect(() => {
-    if (roomCode && joinBaseUrl) {
-      QRCode.toDataURL(`${joinBaseUrl}/join?code=${roomCode}`, {
-        width: 200,
+    if (roomCode) {
+      const targetBase = joinBaseUrl || window.location.origin;
+      const targetUrl = `${targetBase}/join?code=${roomCode}`;
+      QRCode.toDataURL(targetUrl, {
+        width: 220,
         margin: 1,
         color: {
           dark: '#050816',
-          light: 'var(--bg-glass)'
+          light: '#ffffff'
         }
       })
         .then(url => setQrDataUrl(url))
-        .catch(err => console.error('Failed to generate QR code', err));
+        .catch(err => {
+          console.error('Failed to generate QR code', err);
+          // Fallback simple QR
+          QRCode.toDataURL(targetUrl)
+            .then(url => setQrDataUrl(url))
+            .catch(() => {});
+        });
     }
   }, [roomCode, joinBaseUrl]);
 
@@ -435,7 +443,7 @@ export default function HostControlRoom() {
   const strokeDashoffset = questionDuration > 0 ? circumference - (timeLeft / questionDuration) * circumference : circumference;
 
   // Generate confetti elements for final slide
-  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', 'var(--bg-glass)', '#a855f7'];
+  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', '#FFFFFF', '#a855f7'];
   const confettiList = Array.from({ length: 65 }).map((_, i) => {
     const left = Math.random() * 100 + '%';
     const delay = Math.random() * 5 + 's';
@@ -481,11 +489,11 @@ export default function HostControlRoom() {
         }
 
         .host-presenter-container {
-          font-family: 'Outfit', 'Inter', var(--font-body), sans-serif;
+          font-family: 'Outfit', 'Inter', sans-serif;
           height: 100vh;
           display: flex;
           background-color: #0A1128;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           overflow: hidden;
           width: 100vw;
           position: relative;
@@ -588,7 +596,7 @@ export default function HostControlRoom() {
         .toolbar-btn {
           background: transparent;
           border: none;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           padding: 8px 14px;
           border-radius: 10px;
           font-size: 0.9rem;
@@ -612,7 +620,7 @@ export default function HostControlRoom() {
 
         .toolbar-btn.stop {
           background-color: #EF4444;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           width: 38px;
           height: 38px;
           padding: 0;
@@ -629,7 +637,7 @@ export default function HostControlRoom() {
         .toolbar-select {
           background-color: #0A1128;
           border: 1px solid rgba(255, 152, 0, 0.3);
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           padding: 8px 14px;
           border-radius: 10px;
           outline: none;
@@ -645,7 +653,7 @@ export default function HostControlRoom() {
 
         .toolbar-select option {
           background-color: #0F1A36;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
         }
 
         .qr-card-edgepro {
@@ -663,7 +671,7 @@ export default function HostControlRoom() {
         }
 
         .qr-inner-frame {
-          background: var(--bg-tertiary);
+          background: #FFFFFF;
           padding: 12px;
           border-radius: 16px;
           border: 1px solid rgba(255, 152, 0, 0.1);
@@ -850,15 +858,15 @@ export default function HostControlRoom() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF9800 0%, #FF5722 100%);
-          border: 2px solid var(--bg-tertiary);
-          color: var(--bg-tertiary);
+          border: 2px solid #FFFFFF;
+          color: #FFFFFF;
           box-shadow: 0 8px 24px rgba(255, 152, 0, 0.4);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -917,12 +925,12 @@ export default function HostControlRoom() {
                 }}
               />
             ) : (
-              <div style={{ width: '170px', height: '170px', background: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF9800' }}>
+              <div style={{ width: '170px', height: '170px', background: '#0F1A36', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF9800', fontWeight: 600, fontSize: '0.9rem' }}>
                 Generating QR...
               </div>
             )}
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--bg-glass)', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
+          <span style={{ fontSize: '0.78rem', color: '#CBD5E1', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
             Scan with phone camera
           </span>
           {/* Mode indicator */}
@@ -960,7 +968,7 @@ export default function HostControlRoom() {
         {sessionId && (
           <div style={{
             width: '100%',
-            background: 'var(--text-primary)',
+            background: '#0F1A36',
             borderRadius: '18px',
             border: '1.5px solid rgba(255,152,0,0.2)',
             padding: '14px 12px',
@@ -977,14 +985,14 @@ export default function HostControlRoom() {
                 { label: 'Rejoined',      value: metrics.rejoined,    color: '#FF9800' },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{
-                  background: 'var(--text-primary)',
+                  background: '#0A1128',
                   borderRadius: '12px',
                   padding: '10px 8px',
                   textAlign: 'center',
                   border: `1px solid ${color}33`,
                 }}>
                   <div style={{ fontSize: '1.3rem', fontWeight: 900, color }}>{value}</div>
-                  <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', marginTop: '2px' }}>{label}</div>
+                  <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -1001,7 +1009,7 @@ export default function HostControlRoom() {
             <button className="btn-circle" onClick={() => navigate('/dashboard')} title="Exit Presenter Room">
               <ChevronLeft size={24} />
             </button>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--bg-glass)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
               {status === 'waiting' && '🏆 Live Session'}
               {status === 'active' && !showQuestionLeaderboard && `🏆 Live quiz (${currentQuestionIndex + 1}/${quiz.questions.length})`}
               {(showQuestionLeaderboard || status === 'ended') && '🏆 Leaderboard'}
@@ -1068,7 +1076,7 @@ export default function HostControlRoom() {
               
               {/* Question Row with stopwatch-badge */}
               <div className="glass-card" style={{ 
-                background: 'var(--text-primary)', 
+                background: '#0F1A36', 
                 border: '2px solid rgba(255, 152, 0, 0.3)', 
                 padding: '28px', 
                 borderRadius: '24px', 
@@ -1079,7 +1087,7 @@ export default function HostControlRoom() {
                 justifyContent: 'space-between',
                 gap: '24px' 
               }}>
-                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--bg-glass)', margin: 0, lineHeight: 1.3, flex: 1 }}>
+                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#FFFFFF', margin: 0, lineHeight: 1.3, flex: 1 }}>
                   {activeQuestion.text}
                 </h1>
                 {activeQuestion.time_limit && !answerRevealed && (
@@ -1138,14 +1146,14 @@ export default function HostControlRoom() {
                             flexDirection: 'column', 
                             gap: '12px', 
                             width: '100%',
-                            background: 'var(--text-primary)',
+                            background: '#0A1128',
                             padding: '16px 24px',
                             borderRadius: '16px',
                             border: isCorrect ? '2px solid #8BCF00' : '1px solid rgba(255, 152, 0, 0.2)',
                             boxShadow: isCorrect ? '0 0 15px rgba(139, 207, 0, 0.15)' : 'none'
                           }}>
                             {/* Option text and optional check badge */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.3rem', fontWeight: 700, color: 'var(--bg-glass)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.3rem', fontWeight: 700, color: '#FFFFFF' }}>
                               <span className="price-tag-badge" style={{ background: isCorrect ? '#8BCF00' : '#FF9800' }}>{letter}</span>
                               <span>{opt}</span>
                               {isCorrect && (
@@ -1200,14 +1208,14 @@ export default function HostControlRoom() {
                   {liveAnswers.map((ans, idx) => (
                     <div key={idx} style={{ 
                       padding: '20px 24px', 
-                      background: 'var(--text-primary)', 
+                      background: '#0F1A36', 
                       border: '1.5px solid rgba(255, 152, 0, 0.25)', 
                       borderRadius: '16px', 
                       textAlign: 'left', 
                       fontSize: '1.35rem', 
                       fontWeight: 600, 
-                      color: 'var(--bg-glass)', 
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' 
+                      color: '#FFFFFF', 
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)' 
                     }}>
                       "{ans.answer}"
                     </div>
@@ -1222,7 +1230,7 @@ export default function HostControlRoom() {
               {activeQuestion.type === 'rating' && (
                 <div style={{ 
                   textAlign: 'center', 
-                  background: 'var(--text-primary)', 
+                  background: '#0F1A36', 
                   padding: '40px', 
                   borderRadius: '24px', 
                   border: '2px solid rgba(255, 152, 0, 0.3)', 
@@ -1243,7 +1251,7 @@ export default function HostControlRoom() {
                     const avg = count > 0 ? (sum / count).toFixed(1) : '0.0';
                     return (
                       <>
-                        <h2 style={{ fontSize: '5rem', margin: '0 0 12px 0', color: 'var(--bg-glass)', fontWeight: 800 }}>{avg}</h2>
+                        <h2 style={{ fontSize: '5rem', margin: '0 0 12px 0', color: '#FFFFFF', fontWeight: 800 }}>{avg}</h2>
                         <div style={{ fontSize: '3rem', color: '#FF9800', marginBottom: '16px', letterSpacing: '4px' }}>
                           {'★'.repeat(Math.round(parseFloat(avg))).padEnd(5, '☆')}
                         </div>
@@ -1272,7 +1280,7 @@ export default function HostControlRoom() {
                 fontWeight: 900, 
                 background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)', 
                 WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
+                WebkitTextFillColor: 'transparent', 
                 marginBottom: '40px', 
                 textAlign: 'center' 
               }}>
@@ -1296,7 +1304,7 @@ export default function HostControlRoom() {
                     <div key={p.id} className={`sales-board-entry ${isFirst ? 'sales-board-top' : 'sales-board-regular'}`}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <span style={{ 
-                          color: isFirst ? 'var(--bg-glass)' : '#FF9800', 
+                          color: isFirst ? '#FFFFFF' : '#FF9800', 
                           fontWeight: 900
                         }}>
                           #{i+1}
@@ -1308,7 +1316,7 @@ export default function HostControlRoom() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '1.2rem', fontWeight: 700 }}>
                         {showMetrics ? (
                           <>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirst ? 'var(--bg-glass)' : '#8BCF00' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirst ? '#FFFFFF' : '#8BCF00' }}>
                               ✓ {correctCount}/{quiz.questions.length}
                             </span>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
@@ -1316,7 +1324,7 @@ export default function HostControlRoom() {
                             </span>
                           </>
                         ) : (
-                          <span style={{ color: isFirst ? 'var(--bg-glass)' : '#FF9800' }}>{p.score} pts</span>
+                          <span style={{ color: isFirst ? '#FFFFFF' : '#FF9800' }}>{p.score} pts</span>
                         )}
                       </div>
                     </div>
@@ -1348,7 +1356,7 @@ export default function HostControlRoom() {
             }} 
             title="Stop Presenting"
           >
-            <Square size={16} fill='var(--bg-glass)' stroke="none" />
+            <Square size={16} fill='#FFFFFF' stroke="none" />
           </button>
 
           <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 152, 0, 0.2)' }} />
@@ -1376,7 +1384,7 @@ export default function HostControlRoom() {
               }
             }}
             disabled={status === 'waiting' || status === 'ended'}
-            style={{ color: showQuestionLeaderboard ? '#8BCF00' : 'var(--bg-glass)' }}
+            style={{ color: showQuestionLeaderboard ? '#8BCF00' : '#FFFFFF' }}
             title="Toggle Leaderboard"
           >
             <Award size={16} />
@@ -1408,7 +1416,7 @@ export default function HostControlRoom() {
               } else {
                 handleJumpToQuestion(idx);
               }
-            }}
+            }} 
             className="toolbar-select"
             title="Select Question"
           >
@@ -1436,7 +1444,7 @@ export default function HostControlRoom() {
           <button 
             className="toolbar-btn" 
             onClick={() => setShowControlsSidebar(prev => !prev)}
-            style={{ color: showControlsSidebar ? '#FF9800' : 'var(--bg-glass)' }}
+            style={{ color: showControlsSidebar ? '#FF9800' : '#FFFFFF' }}
             title="Toggle Right Controls"
           >
             {showControlsSidebar ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -1449,10 +1457,10 @@ export default function HostControlRoom() {
       {showControlsSidebar && (
         <div style={{ 
           width: '320px', 
-          background: 'var(--text-primary)', 
+          background: '#0F1A36', 
           borderLeft: '2px solid rgba(255, 152, 0, 0.2)', 
           display: 'flex', 
-          flexDirection: 'column',
+          flexDirection: 'column', 
           height: '100%',
           flexShrink: 0,
           zIndex: 50,
@@ -1460,7 +1468,7 @@ export default function HostControlRoom() {
         }}>
           {/* Header */}
           <div style={{ padding: '24px', borderBottom: '1px solid rgba(255, 152, 0, 0.15)' }}>
-            <h3 style={{ margin: 0, color: 'var(--bg-glass)', fontSize: '1.2rem', fontWeight: 800 }}>Present Controls</h3>
+            <h3 style={{ margin: 0, color: '#FFFFFF', fontSize: '1.2rem', fontWeight: 800 }}>Present Controls</h3>
             <p style={{ margin: '4px 0 0 0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem' }}>Manual presentation operations</p>
           </div>
 
@@ -1469,7 +1477,7 @@ export default function HostControlRoom() {
             {status === 'active' && !answerRevealed && (
               <button 
                 className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#FF9800', borderColor: '#FF9800', color: 'var(--text-primary)' }} 
+                style={{ width: '100%', justifyContent: 'center', background: '#FF9800', borderColor: '#FF9800', color: '#0A1128', fontWeight: 700 }} 
                 onClick={revealAnswer}
               >
                 Reveal Answer
@@ -1479,7 +1487,7 @@ export default function HostControlRoom() {
             {status === 'active' && !showQuestionLeaderboard && (
               <button 
                 className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#8BCF00', borderColor: '#8BCF00', color: 'var(--bg-glass)' }} 
+                style={{ width: '100%', justifyContent: 'center', background: '#8BCF00', borderColor: '#8BCF00', color: '#0A1128', fontWeight: 700 }} 
                 onClick={handleShowLeaderboard}
               >
                 Show Leaderboard
@@ -1510,7 +1518,7 @@ export default function HostControlRoom() {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {participants.map((p, i) => (
-                <div key={i} style={{ padding: '10px 14px', background: 'var(--text-primary)', borderRadius: '8px', border: '1px solid rgba(255, 152, 0, 0.15)', color: 'var(--bg-glass)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 500 }}>
+                <div key={i} style={{ padding: '10px 14px', background: '#0A1128', borderRadius: '8px', border: '1px solid rgba(255, 152, 0, 0.15)', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 500 }}>
                   <div className="status-dot-active"></div>
                   {p.name}
                 </div>

@@ -198,7 +198,7 @@ module.exports = function(io) {
     // --- PARTICIPANT EVENTS ---
 
     // Participant joins a room
-    socket.on('participant_join', async ({ roomCode, name, employeeId, mobileNumber, avatar, userId, deviceId }) => {
+    socket.on('participant_join', async ({ roomCode, name, employeeId, mobileNumber, avatar, userId, deviceId, participantId: incomingParticipantId, isRejoin: explicitRejoin, zone }) => {
       try {
         const cleanCode = (roomCode || '').replace(/\s+/g, '');
 
@@ -217,68 +217,63 @@ module.exports = function(io) {
           return;
         }
 
-        // --- 1. SEARCH FOR EXISTING PARTICIPANT IN THIS SESSION ---
+        // --- 1. SEARCH FOR EXISTING PARTICIPANT IN THIS SESSION (ONLY IF REJOINING) ---
         let participant = null;
         let isRejoin = false;
 
-        // Try searching by deviceId first (most reliable for silent browser refreshes)
-        if (deviceId) {
+        // If client provided a specific participantId from an active session
+        if (incomingParticipantId) {
+          participant = await Participant.findOne({
+            where: { id: incomingParticipantId, sessionId: session.id }
+          });
+        }
+
+        // If explicit rejoin flag is passed and deviceId exists
+        if (!participant && explicitRejoin && deviceId) {
           participant = await Participant.findOne({
             where: { sessionId: session.id, deviceId }
           });
         }
 
-        // Try searching by employeeId if provided (Option B or Guest custom ID)
-        if (!participant && employeeId) {
+        // If explicit rejoin flag is passed and employeeId exists
+        if (!participant && explicitRejoin && employeeId) {
           participant = await Participant.findOne({
             where: { sessionId: session.id, employeeId }
           });
         }
 
-        // Try searching by mobileNumber if provided (Option C OTP login)
-        if (!participant && mobileNumber) {
-          participant = await Participant.findOne({
-            where: { sessionId: session.id, mobileNumber }
-          });
-        }
-
         // --- 2. VALIDATE OR ESTABLISH CONNECTION STATUS ---
         if (participant) {
-          // Null-safe check: roomSockets may be empty after a backend restart
-          // In that case, allow rejoin rather than crashing
+          // Rejoining existing participant session
           const roomMap = roomSockets[cleanCode] || {};
-          const isOnline = Object.values(roomMap).includes(participant.id);
-          if (isOnline) {
-            // Instead of rejecting, gracefully takeover the session and disconnect the old zombie socket
-            const oldSocketId = Object.keys(roomMap).find(key => roomMap[key] === participant.id);
-            if (oldSocketId) {
-              const oldSocket = io.sockets.sockets.get(oldSocketId);
-              if (oldSocket) {
-                oldSocket.disconnect(true);
-              }
-              delete roomSockets[cleanCode][oldSocketId];
-              delete socketRoom[oldSocketId];
+          const oldSocketId = Object.keys(roomMap).find(key => roomMap[key] === participant.id);
+          if (oldSocketId && oldSocketId !== socket.id) {
+            const oldSocket = io.sockets.sockets.get(oldSocketId);
+            if (oldSocket) {
+              oldSocket.disconnect(true);
             }
+            delete roomSockets[cleanCode][oldSocketId];
+            delete socketRoom[oldSocketId];
           }
 
-          // Allow rejoin / takeover
           isRejoin = true;
-          participant.connectionStatus = 'rejoined';
+          participant.connectionStatus = session.status === 'active' ? 'active' : 'rejoined';
           if (avatar) participant.avatar = avatar;
           if (name) participant.name = name;
           if (deviceId) participant.deviceId = deviceId;
           await participant.save();
         } else {
-          // Fresh join
+          // Fresh unique participant join (allows multiple participants smoothly)
           participant = await Participant.create({
             sessionId: session.id,
-            name,
+            name: name || 'Anonymous Learner',
             employeeId: employeeId || null,
             mobileNumber: mobileNumber || null,
             avatar: avatar || '🙂',
-            connectionStatus: 'waiting',
+            connectionStatus: session.status === 'active' ? 'active' : 'waiting',
             userId: userId || null,
             deviceId: deviceId || null,
+            storeName: zone || null
           });
         }
 

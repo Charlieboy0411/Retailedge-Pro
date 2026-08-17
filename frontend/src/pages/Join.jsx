@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { Eye, EyeOff } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
 // ─── Avatar options ───────────────────────────────────────────────────────────
@@ -14,12 +15,12 @@ const SHELFY_TIPS = [
   '🔥 5 sessions in a row earns an Attendance Streak!',
 ];
 
-// ─── Generate a stable device fingerprint stored in localStorage ──────────────
+// ─── Generate a stable device fingerprint stored in sessionStorage (tab-safe) ──
 const getDeviceId = () => {
-  let id = localStorage.getItem('qh_device_id');
+  let id = sessionStorage.getItem('qh_device_id');
   if (!id) {
     id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    localStorage.setItem('qh_device_id', id);
+    sessionStorage.setItem('qh_device_id', id);
   }
   return id;
 };
@@ -27,11 +28,12 @@ const getDeviceId = () => {
 // ─── Check if there is a saved session for this room ─────────────────────────
 const getSavedSession = (roomCode) => {
   try {
-    const raw = localStorage.getItem(`qh_session_${roomCode}`);
+    const raw = sessionStorage.getItem(`qh_session_${roomCode}`) || localStorage.getItem(`qh_session_${roomCode}`);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
 };
 const saveSession = (roomCode, data) => {
+  sessionStorage.setItem(`qh_session_${roomCode}`, JSON.stringify(data));
   localStorage.setItem(`qh_session_${roomCode}`, JSON.stringify(data));
 };
 
@@ -275,6 +277,7 @@ export default function Join() {
   // LMS form
   const [lmsUsername, setLmsUsername] = useState('');
   const [lmsPassword, setLmsPassword] = useState('');
+  const [showLmsPassword, setShowLmsPassword] = useState(false);
 
   // OTP form
   const [otpName,       setOtpName]       = useState('');
@@ -313,11 +316,11 @@ export default function Join() {
     if (!guestEmpId.trim()) { setError('Please enter your Employee ID.'); return; }
     if (!guestZone) { setError('Please select a Zone.'); return; }
 
-    const session = { name, employeeId: guestEmpId, mobileNumber: guestZone, zone: guestZone, avatar };
+    const session = { name, employeeId: guestEmpId, zone: guestZone, avatar };
     saveSession(code, session);
 
     navigate(`/live/${code}`, {
-      state: { playerName: name, employeeId: guestEmpId, mobileNumber: guestZone, zone: guestZone, avatar, deviceId: getDeviceId() }
+      state: { playerName: name, employeeId: guestEmpId, zone: guestZone, avatar, deviceId: getDeviceId() }
     });
   };
 
@@ -491,9 +494,15 @@ export default function Join() {
             </div>
             <div>
               <div className="qh-label">Password</div>
-              <input className="qh-input" type="password" value={lmsPassword}
-                onChange={e => setLmsPassword(e.target.value)}
-                placeholder="••••••••" />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input className="qh-input" type={showLmsPassword ? 'text' : 'password'} value={lmsPassword}
+                  onChange={e => setLmsPassword(e.target.value)}
+                  placeholder="••••••••" style={{ paddingRight: '44px', width: '100%' }} />
+                <button type="button" onClick={() => setShowLmsPassword(v => !v)}
+                  style={{ position: 'absolute', right: '12px', background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px' }}>
+                  {showLmsPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
             </div>
 
             {/* Avatar picker */}

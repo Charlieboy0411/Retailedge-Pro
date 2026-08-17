@@ -1,6 +1,7 @@
 import React, { useState, useContext, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import axios from 'axios';
+import { Eye, EyeOff } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
 const SHELFY_TIPS = [
@@ -304,8 +305,8 @@ export default function Login() {
                   onFocus={e => e.target.style.borderColor = 'var(--primary)'}
                   onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
                 <button type="button" onClick={() => setShowPw(v => !v)}
-                  style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#94A3B8', padding: '0 2px' }}>
-                  {showPw ? '🙈' : '👁'}
+                  style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '0 2px', display: 'flex', alignItems: 'center' }}>
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
@@ -472,8 +473,8 @@ export default function Login() {
                             onBlur={e => e.target.style.borderColor = 'var(--border-glass)'} />
 
                           <button type="button" onClick={() => setFpShowNew(v => !v)}
-                            style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1rem' }}>
-                            {fpShowNew ? '🙈' : '👁'}
+                            style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
+                            {fpShowNew ? <EyeOff size={18} /> : <Eye size={18} />}
                           </button>
                         </div>
                         {/* Strength bar */}
@@ -505,8 +506,8 @@ export default function Login() {
                             onBlur={e => e.target.style.borderColor = fpConfirm && fpNewPw !== fpConfirm ? '#EF4444' : 'var(--border-glass)'} />
 
                           <button type="button" onClick={() => setFpShowConf(v => !v)}
-                            style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', fontSize: '1rem' }}>
-                            {fpShowConf ? '🙈' : '👁'}
+                            style={{ position: 'absolute', right: '13px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', display: 'flex', alignItems: 'center' }}>
+                            {fpShowConf ? <EyeOff size={18} /> : <Eye size={18} />}
                           </button>
                         </div>
                         {fpConfirm && fpNewPw !== fpConfirm && (
