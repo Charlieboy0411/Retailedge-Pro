@@ -23,6 +23,8 @@ export default function HostControlRoom() {
   const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  const querySessionName = new URLSearchParams(window.location.search).get('sessionName') || '';
+  const [sessionName, setSessionName] = useState(querySessionName);
   const [quiz, setQuiz] = useState(null);
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -36,8 +38,7 @@ export default function HostControlRoom() {
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [liveAnswers, setLiveAnswers] = useState([]);
-  const [joinUrls, setJoinUrls] = useState({ lanUrl: '', publicUrl: '', lanIp: '' });
-  const [selectedJoinMode, setSelectedJoinMode] = useState('lan'); // 'lan' (Wi-Fi) | 'public' (Tunnel)
+  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
   // Participant connection metrics (PRD trainer dashboard)
@@ -53,24 +54,18 @@ export default function HostControlRoom() {
   const containerRef = useRef(null);
   const sessionStarted = useRef(false); // guard: only call host_start_quiz once per mount
 
-  // Fetch join URLs (both LAN Wi-Fi & public tunnel) — poll every 5s
+  // Fetch public cloud / mobile data join URL — poll every 5s
   useEffect(() => {
     const fetchJoinUrl = () => {
       axios.get('/api/join-url')
         .then(res => {
           if (res.data) {
-            const lan = res.data.lanUrl || `${window.location.protocol}//${window.location.hostname}:5000`;
-            const pub = res.data.publicUrl || '';
-            setJoinUrls({
-              lanUrl: lan,
-              publicUrl: pub,
-              lanIp: res.data.lanIp || window.location.hostname
-            });
+            const pub = res.data.publicUrl || res.data.url || window.location.origin;
+            setJoinBaseUrl(pub);
           }
         })
         .catch(() => {
-          const fallbackLan = `${window.location.protocol}//${window.location.hostname}:5000`;
-          setJoinUrls({ lanUrl: fallbackLan, publicUrl: '', lanIp: window.location.hostname });
+          setJoinBaseUrl(window.location.origin);
         });
     };
     fetchJoinUrl();
@@ -78,14 +73,9 @@ export default function HostControlRoom() {
     return () => clearInterval(pollInterval);
   }, []);
 
-  // Compute active Join URL based on host's selected mode
-  const activeJoinUrl = (selectedJoinMode === 'public' && joinUrls.publicUrl)
-    ? joinUrls.publicUrl
-    : (joinUrls.lanUrl || window.location.origin);
-
   useEffect(() => {
-    if (roomCode && activeJoinUrl) {
-      const targetUrl = `${activeJoinUrl}/join?code=${roomCode}`;
+    if (roomCode && joinBaseUrl) {
+      const targetUrl = `${joinBaseUrl}/join?code=${roomCode}`;
       QRCode.toDataURL(targetUrl, {
         width: 220,
         margin: 1,
@@ -102,7 +92,7 @@ export default function HostControlRoom() {
             .catch(() => {});
         });
     }
-  }, [roomCode, activeJoinUrl]);
+  }, [roomCode, joinBaseUrl]);
 
   useEffect(() => {
     // 1. Fetch Quiz Data
@@ -123,7 +113,7 @@ export default function HostControlRoom() {
       // on HMR hot-reloads or socket reconnections.
       if (!sessionStarted.current) {
         sessionStarted.current = true;
-        socket.emit('host_start_quiz', { quizId, hostId: user.id });
+        socket.emit('host_start_quiz', { quizId, hostId: user.id, sessionName: querySessionName });
       } else if (roomCode) {
         // Rejoin the existing room on reconnect (host recovers after network blip)
         socket.emit('host_rejoin_room', { roomCode });
@@ -133,6 +123,9 @@ export default function HostControlRoom() {
     socket.on('session_created', (data) => {
       setRoomCode(data.roomCode);
       setSessionId(data.sessionId);
+      if (data.sessionName) {
+        setSessionName(data.sessionName);
+      }
       if (data.recovered) {
         setStatus(data.status);
         if (data.currentQuestionIndex !== undefined) {
@@ -937,73 +930,13 @@ export default function HostControlRoom() {
             )}
           </div>
           <span style={{ fontSize: '0.78rem', color: '#CBD5E1', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
-            Scan with phone camera
+            Scan with phone camera to join
           </span>
-
-          {/* Join Mode Switcher Tabs */}
-          <div style={{
-            display: 'flex',
-            background: '#0F1A36',
-            borderRadius: '12px',
-            padding: '3px',
-            width: '100%',
-            gap: '4px',
-            border: '1px solid rgba(255,152,0,0.25)',
-            boxSizing: 'border-box'
+          <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center', marginTop: '-4px',
+            background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
+            borderRadius: '20px', padding: '3px 12px'
           }}>
-            <button 
-              type="button"
-              onClick={() => setSelectedJoinMode('lan')}
-              style={{
-                flex: 1,
-                padding: '6px 4px',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                borderRadius: '9px',
-                border: 'none',
-                cursor: 'pointer',
-                background: selectedJoinMode === 'lan' ? '#FF9800' : 'transparent',
-                color: selectedJoinMode === 'lan' ? '#0A1128' : '#CBD5E1',
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '3px'
-              }}
-              title="Direct Wi-Fi / Hotspot connection (Zero 503 errors)"
-            >
-              📡 Same Wi-Fi
-            </button>
-            <button 
-              type="button"
-              onClick={() => setSelectedJoinMode('public')}
-              disabled={!joinUrls.publicUrl}
-              style={{
-                flex: 1,
-                padding: '6px 4px',
-                fontSize: '0.74rem',
-                fontWeight: 700,
-                borderRadius: '9px',
-                border: 'none',
-                cursor: joinUrls.publicUrl ? 'pointer' : 'not-allowed',
-                background: selectedJoinMode === 'public' ? '#8BCF00' : 'transparent',
-                color: selectedJoinMode === 'public' ? '#0A1128' : (joinUrls.publicUrl ? '#CBD5E1' : '#64748B'),
-                transition: 'all 0.2s',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '3px'
-              }}
-              title={joinUrls.publicUrl ? "Join via Mobile Data / Internet" : "Public tunnel connecting..."}
-            >
-              🌐 Mobile Data
-            </button>
-          </div>
-
-          <span style={{ fontSize: '0.68rem', color: selectedJoinMode === 'lan' ? '#FF9800' : '#8BCF00', fontWeight: 600, textAlign: 'center', lineHeight: 1.2 }}>
-            {selectedJoinMode === 'lan' 
-              ? '⚡ Direct Wi-Fi / Hotspot (Recommended)' 
-              : '🌍 Remote 4G/5G Internet'}
+            📱 Mobile 4G/5G Ready
           </span>
         </div>
 
@@ -1013,7 +946,7 @@ export default function HostControlRoom() {
             Join the Live Quiz
           </p>
           <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600, wordBreak: 'break-all', lineHeight: 1.4 }}>
-            {activeJoinUrl ? `${activeJoinUrl.replace(/^https?:\/\//, '')}/join` : '...'}
+            {joinBaseUrl ? `${joinBaseUrl.replace(/^https?:\/\//, '')}/join` : '...'}
           </p>
           <p style={{ margin: '10px 0 0 0', fontSize: '2.4rem', color: '#FF9800', fontWeight: 900, letterSpacing: '2px' }}>
             #{formattedRoomCode}
@@ -1066,9 +999,9 @@ export default function HostControlRoom() {
               <ChevronLeft size={24} />
             </button>
             <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {status === 'waiting' && '🏆 Live Session'}
-              {status === 'active' && !showQuestionLeaderboard && `🏆 Live quiz (${currentQuestionIndex + 1}/${quiz.questions.length})`}
-              {(showQuestionLeaderboard || status === 'ended') && '🏆 Leaderboard'}
+              {status === 'waiting' && `🏆 ${sessionName ? `${sessionName}` : (quiz?.title || 'Live Session')}`}
+              {status === 'active' && !showQuestionLeaderboard && `🏆 ${sessionName ? `${sessionName} — ` : ''}Q${currentQuestionIndex + 1}/${quiz?.questions?.length || 0}`}
+              {(showQuestionLeaderboard || status === 'ended') && `🏆 ${sessionName ? `${sessionName} — ` : ''}Leaderboard`}
             </span>
           </div>
 

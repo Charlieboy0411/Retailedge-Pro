@@ -24,6 +24,10 @@ const Session = sequelize.define('Session', {
   endedAt: {
     type: DataTypes.DATE,
   },
+  session_name: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   current_question_index: {
     type: DataTypes.INTEGER,
     defaultValue: 0,

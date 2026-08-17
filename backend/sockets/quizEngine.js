@@ -74,17 +74,20 @@ module.exports = function(io) {
     // --- HOST EVENTS ---
     
     // Host starts or resumes a live quiz session
-    socket.on('host_start_quiz', async ({ quizId, hostId }) => {
+    socket.on('host_start_quiz', async ({ quizId, hostId, sessionName, roomCode: existingRoomCode }) => {
       try {
-        // Check if an active session already exists to prevent duplicate rooms on refresh
-        let session = await Session.findOne({
-          where: { quizId, hostId, status: ['waiting', 'active'] },
-          order: [['createdAt', 'DESC']]
-        });
-
-        let roomCode;
+        let session = null;
+        let roomCode = existingRoomCode;
         let recovered = false;
         let participantsData = [];
+
+        // If an explicit roomCode is given (reconnecting/recovering existing session on page refresh)
+        if (roomCode) {
+          session = await Session.findOne({
+            where: { roomCode, status: ['waiting', 'active'] },
+            order: [['createdAt', 'DESC']]
+          });
+        }
 
         if (session) {
           roomCode = session.roomCode;
@@ -98,16 +101,23 @@ module.exports = function(io) {
           }));
           console.log(`[QuizEngine] Host recovered existing session. Room: ${roomCode}`);
         } else {
-          // Generate a 6-digit random code
-          roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+          // Always generate a unique 6-digit room code for fresh quiz launch
+          let uniqueCodeFound = false;
+          while (!uniqueCodeFound) {
+            roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const collision = await Session.findOne({ where: { roomCode, status: ['waiting', 'active'] } });
+            if (!collision) uniqueCodeFound = true;
+          }
+
           session = await Session.create({
             quizId,
             hostId,
             roomCode: roomCode,
+            session_name: sessionName || null,
             status: 'waiting',
             current_question_index: 0
           });
-          console.log(`[QuizEngine] Host started new quiz. Room: ${roomCode}`);
+          console.log(`[QuizEngine] Host started NEW quiz session. Room: ${roomCode}, Subject/Batch: ${sessionName || 'Default'}`);
         }
 
         // Init room tracking
@@ -117,6 +127,7 @@ module.exports = function(io) {
         socket.emit('session_created', { 
           roomCode, 
           sessionId: session.id,
+          sessionName: session.session_name || sessionName || null,
           recovered,
           status: session.status,
           currentQuestionIndex: session.current_question_index - 1, // 0-indexed in frontend

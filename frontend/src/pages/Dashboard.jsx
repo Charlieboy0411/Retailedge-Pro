@@ -41,6 +41,11 @@ export default function Dashboard() {
   const [isOfflineSuccessView, setIsOfflineSuccessView] = useState(false);
   const [offlineBaseUrl, setOfflineBaseUrl] = useState(window.location.origin);
 
+  // Launch Live Quiz Session States
+  const [launchModalOpen, setLaunchModalOpen] = useState(false);
+  const [selectedQuizToLaunch, setSelectedQuizToLaunch] = useState(null);
+  const [launchSessionName, setLaunchSessionName] = useState('');
+
   const [meetingForm, setMeetingForm] = useState({
     title: '',
     description: '',
@@ -204,8 +209,18 @@ export default function Dashboard() {
     }
   };
 
-  const handleLaunchQuiz = async (quizId) => {
-    navigate(`/host/${quizId}`);
+  const handleLaunchQuiz = (quiz) => {
+    setSelectedQuizToLaunch(quiz);
+    setLaunchSessionName(quiz.title || '');
+    setLaunchModalOpen(true);
+  };
+
+  const handleConfirmLaunch = (e) => {
+    e.preventDefault();
+    if (!selectedQuizToLaunch) return;
+    const sName = launchSessionName.trim() || selectedQuizToLaunch.title;
+    navigate(`/host/${selectedQuizToLaunch.id}?sessionName=${encodeURIComponent(sName)}`);
+    setLaunchModalOpen(false);
   };
 
   const handleDeleteQuiz = async (quizId) => {
@@ -675,7 +690,7 @@ export default function Dashboard() {
                         <button 
                           className="btn btn-primary" 
                           style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }} 
-                          onClick={() => handleLaunchQuiz(quiz.id)}
+                          onClick={() => handleLaunchQuiz(quiz)}
                         >
                           <Play size={15} /> Host Live
                         </button>
@@ -1130,6 +1145,100 @@ export default function Dashboard() {
               </div>
             )}
             
+          </div>
+        </div>
+      )}
+
+      {/* ─── LAUNCH LIVE QUIZ SESSION MODAL ─── */}
+      {launchModalOpen && selectedQuizToLaunch && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(5, 8, 22, 0.85)', backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          zIndex: 10000, padding: '20px'
+        }}>
+          <div className="glass-card" style={{
+            width: '100%', maxWidth: '480px', background: '#FFFFFF',
+            borderRadius: '20px', padding: '32px', border: '1.5px solid #CBD5E1',
+            boxShadow: '0 25px 60px rgba(0,0,0,0.3)', color: '#0F172A'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div style={{ width: '38px', height: '38px', borderRadius: '12px', background: 'rgba(255, 107, 53, 0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF6B35' }}>
+                  <Play size={20} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>Start Live Session</h3>
+                  <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>Launch a fresh interactive room</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setLaunchModalOpen(false)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94A3B8', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmLaunch} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
+              <div style={{ background: '#F8FAFC', padding: '14px 16px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>Selected Quiz</span>
+                <div style={{ fontSize: '1rem', fontWeight: 700, color: '#0F172A', marginTop: '2px' }}>
+                  {selectedQuizToLaunch.title}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: 700, color: '#1E293B', marginBottom: '6px' }}>
+                  Subject / Batch / Session Name *
+                </label>
+                <input 
+                  type="text" 
+                  value={launchSessionName}
+                  onChange={(e) => setLaunchSessionName(e.target.value)}
+                  placeholder="e.g. Batch 1 - Mumbai Sales Team"
+                  required
+                  autoFocus
+                  style={{
+                    width: '100%', padding: '12px 14px', borderRadius: '10px',
+                    border: '1.5px solid #CBD5E1', background: '#FFFFFF',
+                    color: '#0F172A', fontSize: '0.95rem', fontWeight: 500,
+                    outline: 'none', boxSizing: 'border-box'
+                  }}
+                  onFocus={e => e.currentTarget.style.borderColor = '#FF6B35'}
+                  onBlur={e => e.currentTarget.style.borderColor = '#CBD5E1'}
+                />
+                <span style={{ fontSize: '0.75rem', color: '#64748B', display: 'block', marginTop: '5px' }}>
+                  A unique 6-digit room code will be generated for this session.
+                </span>
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+                <button 
+                  type="button" 
+                  onClick={() => setLaunchModalOpen(false)}
+                  style={{
+                    flex: 1, padding: '12px', borderRadius: '10px',
+                    border: '1.5px solid #E2E8F0', background: '#F1F5F9',
+                    color: '#475569', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="submit" 
+                  style={{
+                    flex: 2, padding: '12px', borderRadius: '10px',
+                    border: 'none', background: 'linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%)',
+                    color: '#FFFFFF', fontWeight: 800, fontSize: '0.95rem', cursor: 'pointer',
+                    boxShadow: '0 4px 14px rgba(255, 107, 53, 0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'
+                  }}
+                >
+                  <Play size={16} fill="#FFFFFF" /> Launch Session
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
