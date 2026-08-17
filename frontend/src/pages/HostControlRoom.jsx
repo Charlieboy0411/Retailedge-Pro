@@ -96,13 +96,34 @@ export default function HostControlRoom() {
   }, [roomCode, joinBaseUrl]);
 
   useEffect(() => {
-    // 1. Fetch Quiz Data
-    axios.get('/api/quizzes', {
+    // 1. Fetch Quiz Data directly by ID
+    axios.get(`/api/quizzes/${quizId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {
-        const target = res.data.find(q => q.id === quizId);
-        if (target) setQuiz(target);
+        if (res.data) {
+          const qData = res.data;
+          if (qData.questions && Array.isArray(qData.questions)) {
+            qData.questions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          }
+          setQuiz(qData);
+        }
+      })
+      .catch(err => {
+        console.warn('Direct quiz fetch fallback:', err.message);
+        axios.get('/api/quizzes', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => {
+            const target = res.data.find(q => q.id === quizId);
+            if (target) {
+              if (target.questions && Array.isArray(target.questions)) {
+                target.questions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              }
+              setQuiz(target);
+            }
+          })
+          .catch(e => console.error('Failed to load quiz:', e));
       });
 
     // 2. Initialize Socket connection

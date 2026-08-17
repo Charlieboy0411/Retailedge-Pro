@@ -24,7 +24,10 @@ router.get('/', requireAuth, async (req, res) => {
         { model: Project },
         { model: Question, as: 'questions' }
       ],
-      order: [['createdAt', 'DESC']]
+      order: [
+        ['createdAt', 'DESC'],
+        [{ model: Question, as: 'questions' }, 'createdAt', 'ASC']
+      ]
     });
     res.json(quizzes);
   } catch (err) {
@@ -267,6 +270,9 @@ router.get('/:id/offline-details', async (req, res) => {
       include: [
         { model: Project },
         { model: Question, as: 'questions' }
+      ],
+      order: [
+        [{ model: Question, as: 'questions' }, 'createdAt', 'ASC']
       ]
     });
 
@@ -502,6 +508,9 @@ router.get('/:id', requireAuth, async (req, res) => {
       include: [
         { model: Project },
         { model: Question, as: 'questions' }
+      ],
+      order: [
+        [{ model: Question, as: 'questions' }, 'createdAt', 'ASC']
       ]
     });
     if (!quiz) {
