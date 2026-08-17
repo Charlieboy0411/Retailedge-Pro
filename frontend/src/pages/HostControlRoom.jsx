@@ -701,7 +701,7 @@ export default function HostControlRoom() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           border-radius: 20px;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -784,7 +784,8 @@ export default function HostControlRoom() {
           align-items: center;
           gap: 20px;
           font-size: 1.35rem;
-          color: var(--bg-tertiary);
+          color: #FFFFFF;
+          font-weight: 600;
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           padding: 18px 28px;

@@ -82,10 +82,11 @@ const css = `
 
   .qh-card {
     width: 100%; max-width: 440px;
-    background: var(--bg-tertiary);
+    background: #FFFFFF;
+    color: #0F172A;
     border-radius: 28px;
     padding: 36px 30px;
-    border: 1px solid #E2E8F0;
+    border: 1.5px solid #E2E8F0;
     box-shadow: 0 10px 40px rgba(15,23,42,0.06);
     z-index: 2;
     position: relative;
