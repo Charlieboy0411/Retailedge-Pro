@@ -2,7 +2,7 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import io from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
-import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock } from 'lucide-react';
+import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock, ExternalLink, Copy, CheckCheck } from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
 
@@ -37,6 +37,7 @@ export default function HostControlRoom() {
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
   const [liveAnswers, setLiveAnswers] = useState([]);
   const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
@@ -429,6 +430,24 @@ export default function HostControlRoom() {
     return `${m}:${s < 10 ? '0' + s : s}`;
   };
 
+  const localJoinUrl = roomCode ? `${window.location.origin}/join?code=${roomCode}` : '';
+  const mobileJoinUrl = roomCode && joinBaseUrl ? `${joinBaseUrl}/join?code=${roomCode}` : localJoinUrl;
+
+  const handleCopyLink = () => {
+    const urlToCopy = mobileJoinUrl || localJoinUrl;
+    if (urlToCopy && navigator.clipboard) {
+      navigator.clipboard.writeText(urlToCopy);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
+
+  const handleOpenLocalTab = () => {
+    if (localJoinUrl) {
+      window.open(localJoinUrl, '_blank');
+    }
+  };
+
   if (!quiz) return <div style={{ padding: '40px', textAlign: 'center', color: '#F5F7FA' }}>Loading Quiz Data...</div>;
 
   const formattedRoomCode = getFormattedRoomCode(roomCode);
@@ -538,6 +557,7 @@ export default function HostControlRoom() {
           flex-shrink: 0;
           z-index: 5;
           box-shadow: 5px 0 25px rgba(0,0,0,0.3);
+          overflow-y: auto;
         }
 
         .main-content {
@@ -938,6 +958,37 @@ export default function HostControlRoom() {
           }}>
             📱 Mobile 4G/5G Ready
           </span>
+        </div>
+
+        {/* Instant 1-Click Testing Buttons (Local PC & Copy) */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          <button
+            onClick={handleOpenLocalTab}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)',
+              color: '#FFFFFF', border: 'none', fontWeight: 700, fontSize: '0.8rem',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)'
+            }}
+          >
+            <ExternalLink size={14} /> Open Test Tab (Local Machine)
+          </button>
+
+          <button
+            onClick={handleCopyLink}
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: '10px',
+              background: copiedLink ? 'rgba(0, 200, 150, 0.15)' : '#0A1128',
+              color: copiedLink ? '#00C896' : '#CBD5E1',
+              border: `1.5px solid ${copiedLink ? '#00C896' : 'rgba(255, 152, 0, 0.3)'}`,
+              fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+            }}
+          >
+            {copiedLink ? <CheckCheck size={14} color="#00C896" /> : <Copy size={14} />}
+            {copiedLink ? 'Link Copied to Clipboard!' : 'Copy Direct Join Link'}
+          </button>
         </div>
 
         {/* Access Instructions */}

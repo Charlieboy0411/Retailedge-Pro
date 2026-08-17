@@ -567,26 +567,32 @@ export default function QuizBuilder() {
       {/* ─── HEADER BAR ─── */}
       <div className="section-header" style={{ flexShrink: 0, paddingBottom: '16px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <div>
-          <h2 className="section-title" style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.6rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <h2 className="section-title" style={{ fontWeight: 800, color: '#0F172A', fontSize: '1.6rem', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
             Quiz Builder <span style={{ textShadow: '0 0 8px rgba(243,111,33,0.3)' }}>✨</span>
           </h2>
-          <p className="section-desc" style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Create engaging quizzes for effective learning</p>
+          <p className="section-desc" style={{ color: '#64748B', fontSize: '0.88rem', margin: '4px 0 0 0' }}>Create and test interactive training assessments</p>
         </div>
         
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 
+            type="button"
             className="btn btn-secondary" 
             onClick={handleOpenPreview}
-            style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 16px', borderRadius: '10px', fontSize: '0.88rem', fontWeight: 600, background: 'var(--bg-glass)', border: '1px solid #E2E8F0' }}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px',
+              borderRadius: '10px', fontSize: '0.88rem', fontWeight: 700,
+              background: '#FFF7ED', border: '1.5px solid #F36F21', color: '#EA580C',
+              cursor: 'pointer', boxShadow: '0 2px 8px rgba(243,111,33,0.15)'
+            }}
           >
-            <Eye size={16} color='var(--text-secondary)' /> Preview Quiz
+            <Eye size={16} color='#EA580C' /> 👁️ Test / Preview Quiz
           </button>
           
-          <div style={{ display: 'flex', background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+          <div style={{ display: 'flex', background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 4px 14px rgba(243, 111, 33, 0.3)' }}>
             <button 
               className="btn btn-primary" 
               onClick={handleSaveQuiz}
-              style={{ border: 'none', background: 'transparent', padding: '10px 18px', color: 'white', fontWeight: 600, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px' }}
+              style={{ border: 'none', background: 'transparent', padding: '10px 18px', color: 'white', fontWeight: 600, fontSize: '0.88rem', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
             >
               <Save size={16} /> Save & Publish
             </button>

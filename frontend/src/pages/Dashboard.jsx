@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useContext } from 'react';
-import { Users, BookOpen, Activity, Play, Settings, X, Copy, Mail, Check, TrendingUp, Target, Zap, WifiOff, Edit3, Trash2, RefreshCw } from 'lucide-react';
+import { Users, BookOpen, Activity, Play, Settings, X, Copy, Mail, Check, TrendingUp, Target, Zap, WifiOff, Edit3, Trash2, RefreshCw, Eye } from 'lucide-react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
@@ -679,6 +679,14 @@ export default function Dashboard() {
                         </div>
                       </div>
                       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <button 
+                          className="btn btn-secondary" 
+                          style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem', background: '#FFF7ED', border: '1.5px solid #F36F21', color: '#EA580C', fontWeight: 600 }} 
+                          onClick={() => navigate(`/builder/${quiz.id}`)} 
+                          title="Preview & Test Quiz Questions"
+                        >
+                          <Eye size={15} color="#EA580C" /> Test / Preview
+                        </button>
                         <button 
                           className="btn btn-secondary" 
                           style={{ padding: '8px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.85rem' }} 
