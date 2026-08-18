@@ -87,14 +87,25 @@ let tunnelStatus    = 'connecting'; // 'connecting' | 'active' | 'failed'
 
 // ─── Expose join URL for QR code generation ──────────────────────────────────
 app.get('/api/join-url', (req, res) => {
-  const ip   = getLanIp();
+  const forwardedHost = req.headers['x-forwarded-host'] || req.headers.host;
+  const forwardedProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  
+  let detectedPublicUrl = null;
+  if (forwardedHost && !forwardedHost.startsWith('127.0.0.1') && !forwardedHost.startsWith('localhost') && !forwardedHost.startsWith('172.31.')) {
+    detectedPublicUrl = `${forwardedProto}://${forwardedHost}`;
+  }
+
+  const ip = getLanIp();
   const port = process.env.PORT || 5000;
   const lanUrl = `http://${ip}:${port}`;
+
+  const finalUrl = publicTunnelUrl || detectedPublicUrl || lanUrl;
+
   res.json({
-    url: publicTunnelUrl || lanUrl,
+    url: finalUrl,
     lanUrl: lanUrl,
-    publicUrl: publicTunnelUrl,
-    mode: publicTunnelUrl ? 'public' : 'lan',
+    publicUrl: publicTunnelUrl || detectedPublicUrl,
+    mode: (publicTunnelUrl || detectedPublicUrl) ? 'public' : 'lan',
     tunnelStatus: tunnelStatus,
     lanIp: ip,
     port: port

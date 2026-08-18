@@ -228,40 +228,53 @@ module.exports = function(io) {
           return;
         }
 
-        // --- 1. SEARCH FOR EXISTING PARTICIPANT IN THIS SESSION (ONLY IF REJOINING) ---
+        // --- 1. SEARCH FOR EXISTING PARTICIPANT IN THIS SESSION (DEDUPLICATION) ---
         let participant = null;
         let isRejoin = false;
 
-        // If client provided a specific participantId from an active session
+        // A. Match by explicit participantId from client
         if (incomingParticipantId) {
           participant = await Participant.findOne({
             where: { id: incomingParticipantId, sessionId: session.id }
           });
         }
 
-        // If explicit rejoin flag is passed and deviceId exists
-        if (!participant && explicitRejoin && deviceId) {
+        // B. Match by deviceId (same phone / browser tab)
+        if (!participant && deviceId) {
           participant = await Participant.findOne({
             where: { sessionId: session.id, deviceId }
           });
         }
 
-        // If explicit rejoin flag is passed and employeeId exists
-        if (!participant && explicitRejoin && employeeId) {
+        // C. Match by employeeId if provided
+        if (!participant && employeeId) {
           participant = await Participant.findOne({
             where: { sessionId: session.id, employeeId }
           });
         }
 
+        // D. Match by logged-in userId
+        if (!participant && userId) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, userId }
+          });
+        }
+
+        // E. Match by name in the same session (prevent duplicate entry for same person)
+        if (!participant && name && name.trim()) {
+          const sessionParticipants = await Participant.findAll({ where: { sessionId: session.id } });
+          participant = sessionParticipants.find(p => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
+        }
+
         // --- 2. VALIDATE OR ESTABLISH CONNECTION STATUS ---
         if (participant) {
-          // Rejoining existing participant session
+          // Rejoining existing participant session - cleanly replace socket
           const roomMap = roomSockets[cleanCode] || {};
           const oldSocketId = Object.keys(roomMap).find(key => roomMap[key] === participant.id);
           if (oldSocketId && oldSocketId !== socket.id) {
             const oldSocket = io.sockets.sockets.get(oldSocketId);
             if (oldSocket) {
-              oldSocket.disconnect(true);
+              try { oldSocket.disconnect(true); } catch(e) {}
             }
             delete roomSockets[cleanCode][oldSocketId];
             delete socketRoom[oldSocketId];
@@ -274,7 +287,7 @@ module.exports = function(io) {
           if (deviceId) participant.deviceId = deviceId;
           await participant.save();
         } else {
-          // Fresh unique participant join (allows multiple participants smoothly)
+          // Fresh unique participant join
           participant = await Participant.create({
             sessionId: session.id,
             name: name || 'Anonymous Learner',

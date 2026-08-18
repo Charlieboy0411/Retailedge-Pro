@@ -61,7 +61,8 @@ export default function HostControlRoom() {
       axios.get('/api/join-url')
         .then(res => {
           if (res.data) {
-            const pub = res.data.publicUrl || res.data.url || window.location.origin;
+            // Prioritize publicUrl or client's own browser origin (e.g. http://13.126.155.96)
+            const pub = res.data.publicUrl || window.location.origin;
             setJoinBaseUrl(pub);
           }
         })
@@ -161,9 +162,9 @@ export default function HostControlRoom() {
 
     socket.on('participant_joined', (participant) => {
       setParticipants(prev => {
-        const exists = prev.find(p => p.id === participant.id);
+        const exists = prev.find(p => p.id === participant.id || (participant.name && p.name && p.name.trim().toLowerCase() === participant.name.trim().toLowerCase()));
         if (exists) {
-          return prev.map(p => p.id === participant.id ? { ...p, disconnected: false } : p);
+          return prev.map(p => (p.id === participant.id || (participant.name && p.name && p.name.trim().toLowerCase() === participant.name.trim().toLowerCase())) ? { ...p, ...participant, disconnected: false } : p);
         }
         return [...prev, participant];
       });
