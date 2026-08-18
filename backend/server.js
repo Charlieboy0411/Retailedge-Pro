@@ -147,19 +147,21 @@ server.listen(PORT, '0.0.0.0', async () => {
   console.log(`   Local:   http://localhost:${PORT}`);
   console.log(`   Network: http://${lanIp}:${PORT}`);
 
-  // ── Auto-start public tunnel (pointing to backend port 5000 which serves optimized production build) ──
-  startTunnel(PORT);
+  // ── Auto-start public tunnel only if in dev and not disabled ──
+  if (process.env.ENABLE_TUNNEL === 'true' || (process.env.NODE_ENV !== 'production' && process.env.DISABLE_TUNNEL !== 'true')) {
+    startTunnel(PORT).catch(err => console.warn('[Tunnel] Could not initialize tunnel:', err.message));
+  } else {
+    console.log('ℹ️ Public tunnel skipped (running in production / standard network mode).');
+  }
 });
 
-const { spawn } = require('child_process');
 let tunnelProcess = null;
 
 async function startTunnel(port) {
-  console.log('\n🌐 Starting public tunnel (so participants can join via mobile data)...');
-  const localtunnel = require('localtunnel');
-
   try {
-    // Generate a fresh random suffix to avoid 503 conflicts with stale sessions on loca.lt servers
+    const localtunnel = require('localtunnel');
+    console.log('\n🌐 Initializing optional development tunnel...');
+
     const sub = `retailedge-${Math.random().toString(36).substring(2, 7)}`;
     const tunnel = await localtunnel({ port: port, subdomain: sub });
     tunnelProcess = tunnel;
@@ -167,34 +169,34 @@ async function startTunnel(port) {
     publicTunnelUrl = tunnel.url;
     tunnelStatus = 'active';
     console.log(`\n✅ PUBLIC TUNNEL ACTIVE (via localtunnel)`);
-    console.log(`   Join URL: ${publicTunnelUrl}`);
-    console.log(`   Participants can join from any network (mobile data, other Wi-Fi, etc.)\n`);
+    console.log(`   Join URL: ${publicTunnelUrl}\n`);
 
     tunnel.on('close', () => {
-      console.log(`[Localtunnel] Tunnel closed. Reconnecting in 10s...`);
+      console.log(`[Localtunnel] Tunnel closed.`);
       publicTunnelUrl = null;
       tunnelStatus = 'connecting';
       tunnelProcess = null;
-      setTimeout(() => startTunnel(port), 10000);
     });
 
     tunnel.on('error', (err) => {
-      console.error('[Localtunnel] Tunnel error:', err);
+      console.warn('[Localtunnel] Tunnel error (non-fatal):', err.message);
       try { tunnel.close(); } catch(e) {}
-    });
-
-    process.once('SIGINT', () => {
-      if (tunnelProcess) {
-        tunnelProcess.close();
-      }
-      process.exit(0);
+      publicTunnelUrl = null;
+      tunnelProcess = null;
     });
 
   } catch (err) {
     tunnelStatus = 'failed';
-    console.warn(`\n⚠️  Localtunnel failed to start: ${err.message}`);
-    console.warn('   Retrying in 15 seconds...');
-    console.warn('   OR manually set a tunnel URL via: POST /api/set-tunnel-url { url: "..." }\n');
-    setTimeout(() => startTunnel(port), 15000);
+    console.warn(`\n⚠️ Localtunnel failed to start (server will continue normally on local/LAN): ${err.message}`);
   }
 }
+
+// Prevent any unhandled network drops from killing the server
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Caught exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Process] Handled promise rejection:', reason?.message || reason);
+});
+
