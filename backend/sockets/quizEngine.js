@@ -178,17 +178,6 @@ function quizEngine(io) {
             questionIndex: session.current_question_index,
           });
         } else {
-<<<<<<< HEAD
-          roomCode = Math.floor(100000 + Math.random() * 900000).toString();
-          session  = await Session.create({
-            quizId,
-            hostId,
-            roomCode,
-            status:                  'waiting',
-            current_question_index: 0,
-          });
-          logger.info('QuizEngine', roomCode, session.id, 'Host started new quiz session', { hostId, quizId });
-=======
           // Always generate a unique 6-digit room code for fresh quiz launch
           let uniqueCodeFound = false;
           while (!uniqueCodeFound) {
@@ -205,23 +194,16 @@ function quizEngine(io) {
             status: 'waiting',
             current_question_index: 0
           });
-          console.log(`[QuizEngine] Host started NEW quiz session. Room: ${roomCode}, Subject/Batch: ${sessionName || 'Default'}`);
->>>>>>> abhishek
+          logger.info('QuizEngine', roomCode, session.id, 'Host started NEW quiz session', { roomCode, sessionName: sessionName || 'Default' });
         }
 
         if (!roomSockets[roomCode]) roomSockets[roomCode] = {};
         socket.join(roomCode);
-<<<<<<< HEAD
 
-        socket.emit('session_created', {
-          roomCode,
-          sessionId:            session.id,
-=======
         socket.emit('session_created', { 
           roomCode, 
           sessionId: session.id,
           sessionName: session.session_name || sessionName || null,
->>>>>>> abhishek
           recovered,
           status:               session.status,
           currentQuestionIndex: session.current_question_index - 1,
