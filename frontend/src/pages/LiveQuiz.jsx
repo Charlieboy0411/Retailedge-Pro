@@ -23,20 +23,20 @@ export default function LiveQuiz() {
 
   const cleanCode = (roomCode || '').replace(/\s+/g, '');
 
-  // Get device fingerprint
+  // Get device fingerprint (tab-safe)
   const getDeviceId = () => {
-    let id = localStorage.getItem('qh_device_id');
+    let id = sessionStorage.getItem('qh_device_id');
     if (!id) {
       id = 'dev_' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-      localStorage.setItem('qh_device_id', id);
+      sessionStorage.setItem('qh_device_id', id);
     }
     return id;
   };
 
-  // Load session from localStorage if present
+  // Load session from storage if present
   const getSavedSession = () => {
     try {
-      const raw = localStorage.getItem(`qh_session_${cleanCode}`);
+      const raw = sessionStorage.getItem(`qh_session_${cleanCode}`) || localStorage.getItem(`qh_session_${cleanCode}`);
       return raw ? JSON.parse(raw) : null;
     } catch { return null; }
   };
@@ -119,84 +119,99 @@ export default function LiveQuiz() {
 
   useEffect(() => {
     socket = io(window.location.origin, {
-      transports: ['websocket', 'polling'],
       reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
     });
 
-    // ── Named handlers — required for socket.off() to remove the exact function reference ──
-
-    const onConnect = () => {
-      const cleanCode = (roomCode || '').replace(/\s+/g, '');
+    const joinRoom = () => {
+      const cleanCode = roomCode.replace(/\s+/g, '');
       socket.emit('participant_join', {
         roomCode: cleanCode,
-        name:         playerName,
-        employeeId:   playerEmpId,
+        name: playerName,
+        employeeId: playerEmpId,
         mobileNumber: playerMobile,
-        avatar:       playerAvatar,
-        userId:       currentUser?.id,
-        deviceId:     playerDevice,
+        avatar: playerAvatar,
+        userId: currentUser?.id,
+        deviceId: playerDevice,
+        participantId: participantId || saved.participantId,
+        isRejoin: Boolean(location.state?.isRejoin || participantId || saved.participantId),
+        zone: location.state?.zone || saved.zone
       });
     };
 
-    const onJoinedSession = (data) => {
+    socket.on('connect', joinRoom);
+
+    // Auto-resync when returning to the tab or unlocking phone
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && socket) {
+        if (!socket.connected) {
+          socket.connect();
+        } else {
+          joinRoom();
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    socket.on('joined_session', (data) => {
       setParticipantId(data.participantId);
       if (data.avatar) setMyAvatar(data.avatar);
       if (data.score !== undefined) setMyScore(data.score);
       if (data.participants) setParticipants(data.participants);
 
-      // Persist session in localStorage for reconnect recovery
+      // Save/update session in storage
       const sessionData = {
-        name:          playerName,
-        employeeId:    playerEmpId,
-        mobileNumber:  playerMobile,
-        avatar:        data.avatar || playerAvatar,
-        deviceId:      playerDevice,
+        name: playerName,
+        employeeId: playerEmpId,
+        mobileNumber: playerMobile,
+        zone: location.state?.zone || saved.zone,
+        avatar: data.avatar || playerAvatar,
+        deviceId: playerDevice,
         participantId: data.participantId,
-        score:         data.score !== undefined ? data.score : 0,
+        score: data.score !== undefined ? data.score : 0
       };
+      sessionStorage.setItem(`qh_session_${cleanCode}`, JSON.stringify(sessionData));
       localStorage.setItem(`qh_session_${cleanCode}`, JSON.stringify(sessionData));
-    };
+    });
 
-    const onParticipantJoined = (p) => {
+    socket.on('participant_joined', (p) => {
       setParticipants(prev => {
         if (prev.find(item => item.id === p.id)) return prev;
         return [...prev, p];
       });
-    };
+    });
 
-    const onNewQuestion = (question) => {
+    socket.on('new_question', (question) => {
       setCurrentQuestion(question);
       setSelectedAnswer(null);
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setStatus('question');
-      setTimeLeft(question.time_limit || 30); // Initial value; server timer_tick will update
+      setTimeLeft(question.time_limit || 30);
       setQuestionStartTime(Date.now());
-    };
+    });
 
-    const onAnswerReceived = (data) => {
+    socket.on('answer_received', (data) => {
       setLiveAnswers(prev => [...prev, data]);
-    };
+    });
 
-    const onAnswerRevealed = (data) => {
-      setCorrectAnswer(data?.correctAnswer); // Always sourced from server, never from local state
+    socket.on('answer_revealed', (data) => {
+      setCorrectAnswer(data?.correctAnswer);
       setAnswerRevealed(true);
       setStatus('revealed');
-    };
+    });
 
-    const onLeaderboardUpdate = (data) => {
+    socket.on('leaderboard_update', (data) => {
       setLeaderboard(data);
       setStatus('leaderboard');
 
-      // Update local score from server leaderboard
       let currentPartId = participantId;
       try {
         const raw = localStorage.getItem(`qh_session_${cleanCode}`);
-        if (raw) currentPartId = JSON.parse(raw).participantId;
+        if (raw) {
+          currentPartId = JSON.parse(raw).participantId;
+        }
       } catch (e) {}
 
       const me = data.find(p => p.id === (currentPartId || participantId || saved.participantId));
@@ -211,58 +226,28 @@ export default function LiveQuiz() {
           }
         } catch (e) {}
       }
-    };
+    });
 
-    const onLobbyReset = () => {
+    socket.on('lobby_reset', () => {
       setStatus('waiting');
       setCurrentQuestion(null);
       setSelectedAnswer(null);
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setCorrectAnswer(null);
-    };
+    });
 
-    const onQuizEnded = () => setStatus('ended');
+    socket.on('quiz_ended', () => {
+      setStatus('ended');
+    });
 
-    const onError = (msg) => {
+    socket.on('error', (msg) => {
       alert(msg);
       navigate('/join');
-    };
-
-    // Server-authoritative timer — replaces client-side setInterval countdown
-    const onTimerTick = ({ remaining }) => setTimeLeft(remaining);
-    const onTimerExpired = () => {
-      setTimeLeft(0);
-      // Lock submission — actual answer reveal is controlled by host via answer_revealed
-      setStatus(prev => prev === 'question' ? 'answered' : prev);
-    };
-
-    socket.on('connect',              onConnect);
-    socket.on('joined_session',       onJoinedSession);
-    socket.on('participant_joined',   onParticipantJoined);
-    socket.on('new_question',         onNewQuestion);
-    socket.on('answer_received',      onAnswerReceived);
-    socket.on('answer_revealed',      onAnswerRevealed);
-    socket.on('leaderboard_update',   onLeaderboardUpdate);
-    socket.on('lobby_reset',          onLobbyReset);
-    socket.on('quiz_ended',           onQuizEnded);
-    socket.on('error',                onError);
-    socket.on('timer_tick',           onTimerTick);
-    socket.on('timer_expired',        onTimerExpired);
+    });
 
     return () => {
-      socket.off('connect',              onConnect);
-      socket.off('joined_session',       onJoinedSession);
-      socket.off('participant_joined',   onParticipantJoined);
-      socket.off('new_question',         onNewQuestion);
-      socket.off('answer_received',      onAnswerReceived);
-      socket.off('answer_revealed',      onAnswerRevealed);
-      socket.off('leaderboard_update',   onLeaderboardUpdate);
-      socket.off('lobby_reset',          onLobbyReset);
-      socket.off('quiz_ended',           onQuizEnded);
-      socket.off('error',                onError);
-      socket.off('timer_tick',           onTimerTick);
-      socket.off('timer_expired',        onTimerExpired);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       socket.disconnect();
     };
   }, [roomCode, playerName, navigate, currentUser]);
@@ -277,14 +262,24 @@ export default function LiveQuiz() {
     }
   }, [status]);
 
-  // Server-authoritative timer: timeLeft is updated by onTimerTick in the socket useEffect.
-  // This effect only handles the auto-lock of UI when time reaches 0.
-  // (The actual reveal of the correct answer is always controlled by the host.)
+  // Timer Countdown Effect
   useEffect(() => {
-    if (status === 'question' && timeLeft === 0) {
-      setStatus('answered'); // Lock submission input
+    let timerId;
+    if (status === 'question' && timeLeft > 0) {
+      timerId = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timerId);
+            // Auto-reveal results when time expires
+            revealResults();
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-  }, [timeLeft, status]);
+    return () => clearInterval(timerId);
+  }, [status, timeLeft]);
 
   const getOptions = (question) => {
     if (!question || !question.options) return [];
@@ -406,7 +401,7 @@ export default function LiveQuiz() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.2);
           border-radius: 16px;
-          color: var(--text-primary);
+          color: var(--bg-tertiary);
           display: flex;
           align-items: center;
           gap: 10px;
@@ -480,9 +475,10 @@ export default function LiveQuiz() {
           align-items: center;
           gap: 16px;
           font-size: 1.1rem;
-          color: var(--text-primary);
+          color: #FFFFFF;
+          font-weight: 600;
           background: #0F1A36;
-          border: 1.5px solid rgba(255, 107, 53, 0.2);
+          border: 1.5px solid rgba(255, 107, 53, 0.25);
           padding: 14px 20px;
           border-radius: 16px;
           box-shadow: 0 4px 10px rgba(0,0,0,0.2);
@@ -496,8 +492,8 @@ export default function LiveQuiz() {
 
         .retail-shelf-item:hover:not(:disabled) {
           border-color: #FF6B35;
-          box-shadow: 0 6px 16px rgba(255, 107, 53, 0.15);
-          background: rgba(255, 107, 53, 0.05);
+          box-shadow: 0 6px 16px rgba(255, 107, 53, 0.25);
+          background: rgba(255, 107, 53, 0.1);
         }
 
         .retail-shelf-item:disabled {
@@ -581,15 +577,15 @@ export default function LiveQuiz() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF6B35 0%, #FF8C42 100%);
-          border: 2px solid rgba(255, 107, 53, 0.35);
-          color: #ffffff;
+          border: 2px solid #FFFFFF;
+          color: #FFFFFF;
           box-shadow: 0 8px 20px rgba(255, 107, 53, 0.35);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 107, 53, 0.25);
-          color: var(--text-primary);
+          color: #FFFFFF;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -634,7 +630,7 @@ export default function LiveQuiz() {
       {/* A. WAITING LOBBY STATE */}
       {status === 'waiting' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', overflowY: 'auto', zIndex: 5 }}>
-          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: '#0F1A36', borderRadius: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '460px', padding: '40px 32px', textAlign: 'center', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '2px solid rgba(255,107,53,0.25)', background: '#0F1A36', borderRadius: '24px', color: '#FFFFFF' }}>
             <div style={{ marginBottom: '28px' }}>
               <span style={{ fontSize: '0.78rem', fontWeight: 700, letterSpacing: '2px', textTransform: 'uppercase', color: '#FF6B35', background: 'rgba(255,107,53,0.1)', padding: '6px 16px', borderRadius: '20px', border: '1px solid rgba(255,107,53,0.2)' }}>
                 RetailEdge Pro Lobby
@@ -647,11 +643,11 @@ export default function LiveQuiz() {
 
             {/* Join Code & Mock Countdown Row */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: '#0F1A36', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: '#0A1128', padding: '12px', borderRadius: '16px', border: '2px dashed rgba(255,107,53,0.4)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Room Code</span>
                 <span style={{ fontSize: '1.35rem', fontWeight: 900, letterSpacing: '2px', color: '#FF6B35', fontFamily: 'Courier New, monospace' }}>{roomCode}</span>
               </div>
-              <div style={{ background: '#0F1A36', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+              <div style={{ background: '#0A1128', padding: '12px', borderRadius: '16px', border: '1px solid rgba(255,107,53,0.2)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <span style={{ display: 'block', fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: '2px' }}>Est. Start</span>
                 <span style={{ fontSize: '1.15rem', fontWeight: 900, color: '#FF9800', fontFamily: 'monospace', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
                   <Clock size={14} />
@@ -663,7 +659,7 @@ export default function LiveQuiz() {
             {/* Player avatar */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center', background: 'rgba(255,107,53,0.05)', padding: '12px 18px', borderRadius: '30px', margin: '0 auto 28px', width: 'fit-content', border: '1px solid rgba(255,107,53,0.15)' }}>
               <span style={{ fontSize: '1.4rem' }}>{myAvatar}</span>
-              <span style={{ fontSize: '0.95rem', fontWeight: 500 }}>Associate: <strong style={{ color: '#FF6B35' }}>{playerName}</strong></span>
+              <span style={{ fontSize: '0.95rem', fontWeight: 500, color: '#FFFFFF' }}>Associate: <strong style={{ color: '#FF6B35' }}>{playerName}</strong></span>
             </div>
 
             {/* Connected Participants List */}
@@ -677,14 +673,14 @@ export default function LiveQuiz() {
                 gap: '10px 8px',
                 maxHeight: '150px',
                 overflowY: 'auto',
-                background: '#0F1A36',
+                background: '#0A1128',
                 padding: '12px',
                 borderRadius: '16px',
                 border: '1px solid rgba(255,107,53,0.15)',
                 justifyContent: 'center'
               }}>
                 {participants.map((p, i) => (
-                  <div key={p.id || i} className="sales-rep-card" style={{ fontSize: '0.82rem', padding: '6px 12px', borderRadius: '10px' }}>
+                  <div key={p.id || i} className="sales-rep-card" style={{ fontSize: '0.82rem', padding: '6px 12px', borderRadius: '10px', color: '#FFFFFF' }}>
                     <span>{p.avatar || getSmileyForName(p.name)}</span>
                     <div className="status-dot-active" style={{ width: '6px', height: '6px' }} />
                     <span>{p.name}</span>
@@ -706,7 +702,7 @@ export default function LiveQuiz() {
             </div>
 
             {/* Quiz Rules Panel */}
-            <div style={{ textAlign: 'left', background: 'rgba(255,255,255,0.03)', padding: '20px', borderRadius: '16px', color: 'rgba(255,255,255,0.9)', border: '1px solid rgba(255,107,53,0.15)', backdropFilter: 'blur(10px)' }}>
+            <div style={{ textAlign: 'left', background: '#0A1128', padding: '20px', borderRadius: '16px', color: '#FFFFFF', border: '1px solid rgba(255,107,53,0.15)' }}>
               <h3 style={{ margin: '0 0 12px 0', fontSize: '0.85rem', fontWeight: 700, color: '#FF6B35', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Assessment Rules</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.85rem', color: 'rgba(255,255,255,0.75)' }}>
                 {[
@@ -826,7 +822,7 @@ export default function LiveQuiz() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', flexWrap: 'wrap', gap: '8px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span style={{ fontSize: '1.4rem' }}>{myAvatar}</span>
-                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <span style={{ fontSize: '1.05rem', fontWeight: 700, color: '#FFFFFF' }}>
                   Hi {playerName} 🏆
                 </span>
               </div>
@@ -866,14 +862,14 @@ export default function LiveQuiz() {
                 {/* Question Text */}
                 <div style={{ 
                   background: '#0F1A36', 
-                  border: '2px solid rgba(255, 107, 53, 0.3)', 
+                  border: '2px solid rgba(255, 107, 53, 0.35)', 
                   padding: '24px', 
                   borderRadius: '20px', 
                   boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
                   marginBottom: '28px',
                   textAlign: 'center'
                 }}>
-                  <h2 style={{ fontSize: '1.5rem', color: 'white', fontWeight: '700', margin: 0 }}>
+                  <h2 style={{ fontSize: '1.5rem', color: '#FFFFFF', fontWeight: '700', margin: 0, lineHeight: 1.45 }}>
                     {currentQuestion.text}
                   </h2>
                 </div>
@@ -922,14 +918,14 @@ export default function LiveQuiz() {
                           }}
                           className="retail-shelf-item"
                           style={{
-                            borderColor: isSelected ? '#FF6B35' : undefined,
-                            background: isSelected ? 'rgba(255, 107, 53, 0.12)' : undefined,
-                            boxShadow: isSelected ? '0 0 15px rgba(255, 107, 53, 0.3)' : undefined,
+                            borderColor: isSelected ? '#FF6B35' : 'rgba(255, 107, 53, 0.25)',
+                            background: isSelected ? 'rgba(255, 107, 53, 0.18)' : '#0F1A36',
+                            boxShadow: isSelected ? '0 0 15px rgba(255, 107, 53, 0.4)' : undefined,
                             opacity: status === 'answered' && !isSelected ? 0.6 : 1,
                           }}
                         >
-                          <span className="price-tag-badge" style={{ background: isSelected ? '#FF6B35' : 'rgba(255, 107, 53, 0.2)', color: isSelected ? 'var(--bg-primary)' : 'var(--bg-glass)' }}>{letter}</span>
-                          <span style={{ fontWeight: 600 }}>{opt}</span>
+                          <span className="price-tag-badge" style={{ background: isSelected ? '#FF6B35' : 'rgba(255, 107, 53, 0.3)', color: isSelected ? '#081120' : '#FFFFFF' }}>{letter}</span>
+                          <span style={{ fontWeight: 600, color: '#FFFFFF' }}>{opt}</span>
                         </button>
                       );
                     })}
@@ -955,15 +951,15 @@ export default function LiveQuiz() {
                           flexDirection: 'column', 
                           gap: '12px', 
                           width: '100%',
-                          background: 'var(--text-primary)',
+                          background: '#0F1A36',
                           padding: '14px 20px',
                           borderRadius: '16px',
                           border: isCorrect ? '2px solid #00C896' : (isMyChoice ? '1.5px dashed #FF6B35' : '1px solid rgba(255, 107, 53, 0.2)'),
                           boxShadow: isCorrect ? '0 0 12px rgba(0, 200, 150, 0.15)' : 'none'
                         }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: 'var(--bg-primary)', flexWrap: 'wrap' }}>
-                            <span className="price-tag-badge" style={{ background: isCorrect ? '#00C896' : '#FF6B35' }}>{letter}</span>
-                            <span>{opt}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF', flexWrap: 'wrap' }}>
+                            <span className="price-tag-badge" style={{ background: isCorrect ? '#00C896' : '#FF6B35', color: '#081120' }}>{letter}</span>
+                            <span style={{ color: '#FFFFFF' }}>{opt}</span>
                             {isMyChoice && (
                               <span style={{ fontSize: '0.72rem', background: 'rgba(255, 107, 53, 0.15)', color: '#FF6B35', padding: '3px 8px', borderRadius: '10px', border: '1px solid rgba(255, 107, 53, 0.3)' }}>
                                 Your Choice
@@ -1026,7 +1022,7 @@ export default function LiveQuiz() {
                         padding: '16px',
                         borderRadius: '16px',
                         border: '2px solid rgba(255,107,53,0.3)',
-                        background: 'var(--text-primary)',
+                        background: '#0F1A36',
                         color: 'white',
                         fontSize: '1.1rem',
                         resize: 'none',
@@ -1050,14 +1046,14 @@ export default function LiveQuiz() {
                         return (
                           <div key={idx} style={{ 
                             padding: '14px 18px', 
-                            background: 'var(--text-primary)', 
+                            background: '#0F1A36', 
                             border: isMe ? '1.5px dashed #FF6B35' : '1px solid rgba(255, 107, 53, 0.15)', 
                             borderRadius: '12px', 
                             textAlign: 'left', 
                             fontSize: '1.05rem', 
                             fontWeight: 600, 
-                            color: 'var(--bg-primary)', 
-                            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
+                            color: '#FFFFFF', 
+                            boxShadow: '0 4px 16px rgba(0,0,0,0.3)',
                             display: 'flex',
                             justifyContent: 'space-between',
                             alignItems: 'center'
@@ -1108,7 +1104,7 @@ export default function LiveQuiz() {
                 {currentQuestion.type === 'rating' && status === 'revealed' && (
                   <div style={{ 
                     textAlign: 'center', 
-                    background: 'var(--text-primary)', 
+                    background: '#0F1A36', 
                     padding: '24px', 
                     borderRadius: '20px', 
                     border: '2px solid rgba(255, 107, 53, 0.3)', 
@@ -1133,7 +1129,7 @@ export default function LiveQuiz() {
                       const displayStars = roundedAvg >= 0 ? '★'.repeat(roundedAvg).padEnd(5, '☆') : '☆☆☆☆☆';
                       return (
                         <>
-                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: 'var(--bg-primary)', fontWeight: 800 }}>{avg}</h2>
+                          <h2 style={{ fontSize: '3.5rem', margin: '0 0 8px 0', color: '#FFFFFF', fontWeight: 800 }}>{avg}</h2>
                           <div style={{ fontSize: '2rem', color: '#FF6B35', marginBottom: '12px', letterSpacing: '3px' }}>
                             {displayStars}
                           </div>
@@ -1184,7 +1180,7 @@ export default function LiveQuiz() {
 
                 {/* Submitting Status (Answered state) */}
                 {status === 'answered' && (
-                  <div style={{ marginTop: 'auto', textAlign: 'center', padding: '20px', background: 'var(--text-primary)', borderRadius: '16px', color: 'white', border: '2px dashed rgba(255,107,53,0.3)' }}>
+                  <div style={{ marginTop: 'auto', textAlign: 'center', padding: '20px', background: '#0F1A36', borderRadius: '16px', color: 'white', border: '2px dashed rgba(255,107,53,0.3)' }}>
                     <strong>Answer submitted!</strong> Waiting for host to reveal results...
                   </div>
                 )}

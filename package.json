@@ -1,0 +1,14 @@
+{
+  "name": "retailedge-pro-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Retailedge Pro - LMS & Interactive Training Platform",
+  "scripts": {
+    "start": "node backend/server.js",
+    "dev:backend": "cd backend && node server.js",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "health": "cd backend && node db_health_check.js",
+    "users": "cd backend && node check_users.js"
+  }
+}

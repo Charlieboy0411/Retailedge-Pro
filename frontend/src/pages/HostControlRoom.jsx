@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { io } from 'socket.io-client';
+import io from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
-import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock } from 'lucide-react';
+import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock, ExternalLink, Copy, CheckCheck } from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
 
@@ -23,8 +23,8 @@ export default function HostControlRoom() {
   const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) || window.location.hostname.endsWith('.local');
-
+  const querySessionName = new URLSearchParams(window.location.search).get('sessionName') || '';
+  const [sessionName, setSessionName] = useState(querySessionName);
   const [quiz, setQuiz] = useState(null);
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -37,11 +37,9 @@ export default function HostControlRoom() {
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [copiedLink, setCopiedLink] = useState(false);
   const [liveAnswers, setLiveAnswers] = useState([]);
-  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin); // public tunnel or LAN IP
-  const [joinMode, setJoinMode] = useState('lan');    // 'public' | 'lan'
-  const [lanBaseUrl, setLanBaseUrl] = useState('');
-  const [useLanQr, setUseLanQr] = useState(false);
+  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
   // Participant connection metrics (PRD trainer dashboard)
@@ -54,104 +52,103 @@ export default function HostControlRoom() {
   // Layout States
   const [showControlsSidebar, setShowControlsSidebar] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const containerRef   = useRef(null);
-  const sessionStarted  = useRef(false); // guard: only call host_start_quiz once per mount
-  const roomCodeRef     = useRef('');    // stores roomCode for reconnect handler (avoids stale closure)
+  const containerRef = useRef(null);
+  const sessionStarted = useRef(false); // guard: only call host_start_quiz once per mount
 
-  // Fetch public tunnel URL (or LAN fallback) — poll every 5s until tunnel is up
+  // Fetch public cloud / mobile data join URL — poll every 5s
   useEffect(() => {
-    if (!isLocalHost) {
-      setJoinBaseUrl(window.location.origin);
-      setJoinMode('public');
-      return;
-    }
-
     const fetchJoinUrl = () => {
       axios.get('/api/join-url')
         .then(res => {
-          if (res.data && res.data.url) {
-            setJoinBaseUrl(res.data.url);
-            setJoinMode(res.data.mode || 'lan');
+          if (res.data) {
+            // Prioritize publicUrl or client's own browser origin (e.g. http://13.126.155.96)
+            const pub = res.data.publicUrl || window.location.origin;
+            setJoinBaseUrl(pub);
           }
         })
         .catch(() => {
-          // Fallback: use current window hostname
-          setJoinBaseUrl(`${window.location.protocol}//${window.location.hostname}:${window.location.port}`);
-          setJoinMode('lan');
+          setJoinBaseUrl(window.location.origin);
         });
-
-      axios.get('/api/host-ip')
-        .then(res => {
-          if (res.data && res.data.ip) {
-            const port = window.location.port || '5000';
-            setLanBaseUrl(`http://${res.data.ip}:${port}`);
-          }
-        })
-        .catch(() => {});
     };
     fetchJoinUrl();
-    // Poll every 5 seconds — the tunnel URL arrives ~2-4s after server start
     const pollInterval = setInterval(fetchJoinUrl, 5000);
     return () => clearInterval(pollInterval);
   }, []);
 
   useEffect(() => {
-    if (roomCode) {
-      const activeUrl = (useLanQr && lanBaseUrl) ? lanBaseUrl : (joinBaseUrl || window.location.origin);
-      const cleanCode = String(roomCode).replace(/\s+/g, '');
-      if (activeUrl) {
-        QRCode.toDataURL(`${activeUrl}/join?code=${cleanCode}`, {
-          width: 200,
-          margin: 1,
-          color: {
-            dark: '#050816',
-            light: '#ffffff'
-          }
-        })
-          .then(url => setQrDataUrl(url))
-          .catch(err => console.error('Failed to generate QR code', err));
-      }
+    if (roomCode && joinBaseUrl) {
+      const targetUrl = `${joinBaseUrl}/join?code=${roomCode}`;
+      QRCode.toDataURL(targetUrl, {
+        width: 220,
+        margin: 1,
+        color: {
+          dark: '#050816',
+          light: '#ffffff'
+        }
+      })
+        .then(url => setQrDataUrl(url))
+        .catch(err => {
+          console.error('Failed to generate QR code', err);
+          QRCode.toDataURL(targetUrl)
+            .then(url => setQrDataUrl(url))
+            .catch(() => {});
+        });
     }
-  }, [roomCode, joinBaseUrl, lanBaseUrl, useLanQr]);
+  }, [roomCode, joinBaseUrl]);
 
   useEffect(() => {
-    // 1. Fetch Quiz Data
-    axios.get('/api/quizzes', {
+    // 1. Fetch Quiz Data directly by ID
+    axios.get(`/api/quizzes/${quizId}`, {
       headers: { Authorization: `Bearer ${token}` }
     })
       .then(res => {
-        const target = res.data.find(q => q.id === quizId);
-        if (target) setQuiz(target);
+        if (res.data) {
+          const qData = res.data;
+          if (qData.questions && Array.isArray(qData.questions)) {
+            qData.questions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+          }
+          setQuiz(qData);
+        }
+      })
+      .catch(err => {
+        console.warn('Direct quiz fetch fallback:', err.message);
+        axios.get('/api/quizzes', {
+          headers: { Authorization: `Bearer ${token}` }
+        })
+          .then(res => {
+            const target = res.data.find(q => q.id === quizId);
+            if (target) {
+              if (target.questions && Array.isArray(target.questions)) {
+                target.questions.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+              }
+              setQuiz(target);
+            }
+          })
+          .catch(e => console.error('Failed to load quiz:', e));
       });
 
-    // 2. Initialize Socket connection with reconnection + WebSocket transport
-    socket = io(window.location.origin, {
-      transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
-    });
+    // 2. Initialize Socket connection
+    socket = io(window.location.origin);
 
-    // ── Named handlers — required so socket.off() removes the exact same function reference ──
-
-    const onConnect = () => {
-      console.log('[HostControlRoom] Socket connected:', socket.id);
+    socket.on('connect', () => {
+      console.log('Connected to QuizEngine');
+      // Only start a new session once per component mount — prevents duplicate sessions
+      // on HMR hot-reloads or socket reconnections.
       if (!sessionStarted.current) {
         sessionStarted.current = true;
-        socket.emit('host_start_quiz', { quizId, hostId: user.id });
-      } else if (roomCodeRef.current) {
-        // Reconnect path — use ref to avoid stale closure over React state
-        console.log('[HostControlRoom] Reconnected. Rejoining room:', roomCodeRef.current);
-        socket.emit('host_rejoin_room', { roomCode: roomCodeRef.current });
+        socket.emit('host_start_quiz', { quizId, hostId: user.id, sessionName: querySessionName });
+      } else if (roomCode) {
+        // Rejoin the existing room on reconnect (host recovers after network blip)
+        socket.emit('host_rejoin_room', { roomCode });
       }
-    };
+    });
 
-    const onSessionCreated = (data) => {
-      roomCodeRef.current = data.roomCode; // keep ref in sync so reconnect knows the room
+    socket.on('session_created', (data) => {
       setRoomCode(data.roomCode);
       setSessionId(data.sessionId);
+      if (data.sessionName) {
+        setSessionName(data.sessionName);
+      }
       if (data.recovered) {
         setStatus(data.status);
         if (data.currentQuestionIndex !== undefined) {
@@ -161,87 +158,75 @@ export default function HostControlRoom() {
           setParticipants(data.participants);
         }
       }
-    };
+    });
 
-    const onParticipantJoined = (participant) => {
+    socket.on('participant_joined', (participant) => {
       setParticipants(prev => {
-        const exists = prev.find(p => p.id === participant.id);
+        const exists = prev.find(p => p.id === participant.id || (participant.name && p.name && p.name.trim().toLowerCase() === participant.name.trim().toLowerCase()));
         if (exists) {
-          return prev.map(p => p.id === participant.id ? { ...p, disconnected: false } : p);
+          return prev.map(p => (p.id === participant.id || (participant.name && p.name && p.name.trim().toLowerCase() === participant.name.trim().toLowerCase())) ? { ...p, ...participant, disconnected: false } : p);
         }
         return [...prev, participant];
       });
-    };
+    });
 
-    const onAnswerReceived = (data) => {
+    socket.on('answer_received', (data) => {
+      console.log('Answer received:', data);
       setLiveAnswers(prev => [...prev, data]);
-    };
+    });
 
-    const onLeaderboardUpdate = (data) => {
+    socket.on('leaderboard_update', (data) => {
       setLeaderboard(data);
-    };
+    });
 
-    const onEmojiReceived = (data) => {
+    socket.on('emoji_received', (data) => {
       if (data && data.emoji) {
-        const id       = Date.now() + Math.random().toString();
-        const x        = Math.random() * 80 + 10;
+        const id = Date.now() + Math.random().toString();
+        const x = Math.random() * 80 + 10;
         const duration = Math.random() * 2 + 2;
-        const scale    = Math.random() * 0.5 + 0.8;
+        const scale = Math.random() * 0.5 + 0.8;
         setFloatingEmojis(prev => [...prev, { id, emoji: data.emoji, x, duration, scale }]);
         setTimeout(() => {
           setFloatingEmojis(prev => prev.filter(e => e.id !== id));
         }, duration * 1000);
       }
-    };
+    });
 
-    const onParticipantMetrics = (data) => {
+    socket.on('participant_metrics', (data) => {
       setMetrics(data);
-    };
+    });
 
-    const onParticipantDisconnected = ({ participantId }) => {
+    socket.on('participant_disconnected', ({ participantId }) => {
       setParticipants(prev => prev.map(p => p.id === participantId ? { ...p, disconnected: true } : p));
-    };
-
-    // Server-authoritative timer — host display is driven by server ticks, no local setInterval
-    const onTimerTick    = ({ remaining }) => setTimeLeft(remaining);
-    const onTimerExpired = () => setTimeLeft(0);
-
-    socket.on('connect',                onConnect);
-    socket.on('session_created',        onSessionCreated);
-    socket.on('participant_joined',     onParticipantJoined);
-    socket.on('answer_received',        onAnswerReceived);
-    socket.on('leaderboard_update',     onLeaderboardUpdate);
-    socket.on('emoji_received',         onEmojiReceived);
-    socket.on('participant_metrics',    onParticipantMetrics);
-    socket.on('participant_disconnected', onParticipantDisconnected);
-    socket.on('timer_tick',             onTimerTick);
-    socket.on('timer_expired',          onTimerExpired);
+    });
 
     return () => {
-      // Remove named handlers — prevents duplicate listeners if effect re-runs
-      socket.off('connect',                onConnect);
-      socket.off('session_created',        onSessionCreated);
-      socket.off('participant_joined',     onParticipantJoined);
-      socket.off('answer_received',        onAnswerReceived);
-      socket.off('leaderboard_update',     onLeaderboardUpdate);
-      socket.off('emoji_received',         onEmojiReceived);
-      socket.off('participant_metrics',    onParticipantMetrics);
-      socket.off('participant_disconnected', onParticipantDisconnected);
-      socket.off('timer_tick',             onTimerTick);
-      socket.off('timer_expired',          onTimerExpired);
       socket.disconnect();
     };
   }, [quizId, user.id, token]);
 
-  // Initialize timer display when question changes.
-  // Actual countdown is driven by server timer_tick events — no local setInterval.
+  // Timer Countdown Effect
   useEffect(() => {
+    let timer;
     if (status === 'active' && currentQuestionIndex >= 0 && quiz?.questions) {
       const currentQuestion = quiz.questions[currentQuestionIndex];
-      const limit = currentQuestion?.time_limit || 20;
-      setTimeLeft(limit);         // Initial value; server will update via timer_tick
-      setQuestionDuration(limit); // Used for the SVG progress ring
+      const limit = currentQuestion?.time_limit || 20; // default 20s
+      setTimeLeft(limit);
+      setQuestionDuration(limit);
+      
+      timer = setInterval(() => {
+        setTimeLeft(prev => {
+          if (prev <= 1) {
+            clearInterval(timer);
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
   }, [currentQuestionIndex, status, quiz]);
 
   // Fullscreen event listener
@@ -467,6 +452,24 @@ export default function HostControlRoom() {
     return `${m}:${s < 10 ? '0' + s : s}`;
   };
 
+  const localJoinUrl = roomCode ? `${window.location.origin}/join?code=${roomCode}` : '';
+  const mobileJoinUrl = roomCode && joinBaseUrl ? `${joinBaseUrl}/join?code=${roomCode}` : localJoinUrl;
+
+  const handleCopyLink = () => {
+    const urlToCopy = mobileJoinUrl || localJoinUrl;
+    if (urlToCopy && navigator.clipboard) {
+      navigator.clipboard.writeText(urlToCopy);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
+    }
+  };
+
+  const handleOpenLocalTab = () => {
+    if (localJoinUrl) {
+      window.open(localJoinUrl, '_blank');
+    }
+  };
+
   if (!quiz) return <div style={{ padding: '40px', textAlign: 'center', color: '#F5F7FA' }}>Loading Quiz Data...</div>;
 
   const formattedRoomCode = getFormattedRoomCode(roomCode);
@@ -480,7 +483,7 @@ export default function HostControlRoom() {
   const strokeDashoffset = questionDuration > 0 ? circumference - (timeLeft / questionDuration) * circumference : circumference;
 
   // Generate confetti elements for final slide
-  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', 'var(--bg-glass)', '#a855f7'];
+  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', '#FFFFFF', '#a855f7'];
   const confettiList = Array.from({ length: 65 }).map((_, i) => {
     const left = Math.random() * 100 + '%';
     const delay = Math.random() * 5 + 's';
@@ -526,11 +529,11 @@ export default function HostControlRoom() {
         }
 
         .host-presenter-container {
-          font-family: 'Outfit', 'Inter', var(--font-body), sans-serif;
+          font-family: 'Outfit', 'Inter', sans-serif;
           height: 100vh;
           display: flex;
           background-color: #0A1128;
-          color: var(--text-primary);
+          color: #FFFFFF;
           overflow: hidden;
           width: 100vw;
           position: relative;
@@ -576,6 +579,7 @@ export default function HostControlRoom() {
           flex-shrink: 0;
           z-index: 5;
           box-shadow: 5px 0 25px rgba(0,0,0,0.3);
+          overflow-y: auto;
         }
 
         .main-content {
@@ -633,7 +637,7 @@ export default function HostControlRoom() {
         .toolbar-btn {
           background: transparent;
           border: none;
-          color: #cbd5e1;
+          color: #FFFFFF;
           padding: 8px 14px;
           border-radius: 10px;
           font-size: 0.9rem;
@@ -657,7 +661,7 @@ export default function HostControlRoom() {
 
         .toolbar-btn.stop {
           background-color: #EF4444;
-          color: #ffffff;
+          color: #FFFFFF;
           width: 38px;
           height: 38px;
           padding: 0;
@@ -674,7 +678,7 @@ export default function HostControlRoom() {
         .toolbar-select {
           background-color: #0A1128;
           border: 1px solid rgba(255, 152, 0, 0.3);
-          color: #cbd5e1;
+          color: #FFFFFF;
           padding: 8px 14px;
           border-radius: 10px;
           outline: none;
@@ -690,7 +694,7 @@ export default function HostControlRoom() {
 
         .toolbar-select option {
           background-color: #0F1A36;
-          color: #cbd5e1;
+          color: #FFFFFF;
         }
 
         .qr-card-edgepro {
@@ -708,7 +712,7 @@ export default function HostControlRoom() {
         }
 
         .qr-inner-frame {
-          background: var(--bg-tertiary);
+          background: #FFFFFF;
           padding: 12px;
           border-radius: 16px;
           border: 1px solid rgba(255, 152, 0, 0.1);
@@ -719,7 +723,7 @@ export default function HostControlRoom() {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           border-radius: 20px;
-          color: var(--text-primary);
+          color: #FFFFFF;
           display: flex;
           align-items: center;
           gap: 12px;
@@ -802,7 +806,8 @@ export default function HostControlRoom() {
           align-items: center;
           gap: 20px;
           font-size: 1.35rem;
-          color: var(--text-primary);
+          color: #FFFFFF;
+          font-weight: 600;
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
           padding: 18px 28px;
@@ -895,15 +900,15 @@ export default function HostControlRoom() {
 
         .sales-board-top {
           background: linear-gradient(135deg, #FF9800 0%, #FF5722 100%);
-          border: 2px solid rgba(255, 152, 0, 0.3);
-          color: #ffffff;
+          border: 2px solid #FFFFFF;
+          color: #FFFFFF;
           box-shadow: 0 8px 24px rgba(255, 152, 0, 0.4);
         }
 
         .sales-board-regular {
           background: #0F1A36;
           border: 1.5px solid rgba(255, 152, 0, 0.2);
-          color: var(--text-primary);
+          color: #FFFFFF;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
@@ -962,52 +967,51 @@ export default function HostControlRoom() {
                 }}
               />
             ) : (
-              <div style={{ width: '170px', height: '170px', background: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF9800' }}>
+              <div style={{ width: '170px', height: '170px', background: '#0F1A36', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF9800', fontWeight: 600, fontSize: '0.9rem' }}>
                 Generating QR...
               </div>
             )}
           </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
-            Scan with phone camera
+          <span style={{ fontSize: '0.78rem', color: '#CBD5E1', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
+            Scan with phone camera to join
           </span>
-          {/* Mode indicator */}
-          <div 
-            onClick={() => {
-              if (isLocalHost) setUseLanQr(prev => !prev);
-            }} 
-            style={{ cursor: isLocalHost ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', marginTop: '-6px' }}
-            title={isLocalHost ? "Click to toggle QR between Local LAN and Public Tunnel" : "Live Public Production Server"}
+          <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center', marginTop: '-4px',
+            background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
+            borderRadius: '20px', padding: '3px 12px'
+          }}>
+            📱 Mobile 4G/5G Ready
+          </span>
+        </div>
+
+        {/* Instant 1-Click Testing Buttons (Local PC & Copy) */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+          <button
+            onClick={handleOpenLocalTab}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: '10px',
+              background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)',
+              color: '#FFFFFF', border: 'none', fontWeight: 700, fontSize: '0.8rem',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
+              boxShadow: '0 4px 12px rgba(255, 152, 0, 0.3)'
+            }}
           >
-            {!isLocalHost ? (
-              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                🌐 Public Server Mode
-              </span>
-            ) : (useLanQr && lanBaseUrl) ? (
-              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                📡 QR: LAN Mode (Click to toggle)
-              </span>
-            ) : joinMode === 'public' ? (
-              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                🌐 QR: Public Mode (Click to toggle)
-              </span>
-            ) : (
-              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                📡 QR: LAN Mode (Click to toggle)
-              </span>
-            )}
-          </div>
+            <ExternalLink size={14} /> Open Test Tab (Local Machine)
+          </button>
+
+          <button
+            onClick={handleCopyLink}
+            style={{
+              width: '100%', padding: '8px 12px', borderRadius: '10px',
+              background: copiedLink ? 'rgba(0, 200, 150, 0.15)' : '#0A1128',
+              color: copiedLink ? '#00C896' : '#CBD5E1',
+              border: `1.5px solid ${copiedLink ? '#00C896' : 'rgba(255, 152, 0, 0.3)'}`,
+              fontWeight: 600, fontSize: '0.78rem', cursor: 'pointer',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+            }}
+          >
+            {copiedLink ? <CheckCheck size={14} color="#00C896" /> : <Copy size={14} />}
+            {copiedLink ? 'Link Copied to Clipboard!' : 'Copy Direct Join Link'}
+          </button>
         </div>
 
         {/* Access Instructions */}
@@ -1015,10 +1019,8 @@ export default function HostControlRoom() {
           <p style={{ margin: 0, fontSize: '0.85rem', color: '#FF9800', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
             Join the Live Quiz
           </p>
-          <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500, wordBreak: 'break-all', lineHeight: 1.4 }}>
-            {((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl) 
-              ? `${((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join` 
-              : '...'}
+          <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.85)', fontWeight: 600, wordBreak: 'break-all', lineHeight: 1.4 }}>
+            {joinBaseUrl ? `${joinBaseUrl.replace(/^https?:\/\//, '')}/join` : '...'}
           </p>
           <p style={{ margin: '10px 0 0 0', fontSize: '2.4rem', color: '#FF9800', fontWeight: 900, letterSpacing: '2px' }}>
             #{formattedRoomCode}
@@ -1029,12 +1031,11 @@ export default function HostControlRoom() {
         {sessionId && (
           <div style={{
             width: '100%',
-            background: 'rgba(10, 17, 40, 0.5)',
+            background: '#0F1A36',
             borderRadius: '18px',
-            border: '1.5px solid rgba(255,152,0,0.25)',
+            border: '1.5px solid rgba(255,152,0,0.2)',
             padding: '14px 12px',
             marginBottom: '16px',
-            backdropFilter: 'blur(10px)'
           }}>
             <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#FF9800', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: '10px', textAlign: 'center' }}>
               Live Participants
@@ -1047,14 +1048,14 @@ export default function HostControlRoom() {
                 { label: 'Rejoined',      value: metrics.rejoined,    color: '#FF9800' },
               ].map(({ label, value, color }) => (
                 <div key={label} style={{
-                  background: 'rgba(15, 26, 54, 0.5)',
+                  background: '#0A1128',
                   borderRadius: '12px',
                   padding: '10px 8px',
                   textAlign: 'center',
                   border: `1px solid ${color}33`,
                 }}>
                   <div style={{ fontSize: '1.3rem', fontWeight: 900, color }}>{value}</div>
-                  <div style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '2px', fontWeight: 600 }}>{label}</div>
+                  <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.7)', marginTop: '2px' }}>{label}</div>
                 </div>
               ))}
             </div>
@@ -1071,10 +1072,10 @@ export default function HostControlRoom() {
             <button className="btn-circle" onClick={() => navigate('/dashboard')} title="Exit Presenter Room">
               <ChevronLeft size={24} />
             </button>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {status === 'waiting' && '🏆 Live Session'}
-              {status === 'active' && !showQuestionLeaderboard && `🏆 Live quiz (${currentQuestionIndex + 1}/${quiz.questions.length})`}
-              {(showQuestionLeaderboard || status === 'ended') && '🏆 Leaderboard'}
+            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              {status === 'waiting' && `🏆 ${sessionName ? `${sessionName}` : (quiz?.title || 'Live Session')}`}
+              {status === 'active' && !showQuestionLeaderboard && `🏆 ${sessionName ? `${sessionName} — ` : ''}Q${currentQuestionIndex + 1}/${quiz?.questions?.length || 0}`}
+              {(showQuestionLeaderboard || status === 'ended') && `🏆 ${sessionName ? `${sessionName} — ` : ''}Leaderboard`}
             </span>
           </div>
 
@@ -1149,7 +1150,7 @@ export default function HostControlRoom() {
                 justifyContent: 'space-between',
                 gap: '24px' 
               }}>
-                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1 }}>
+                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#FFFFFF', margin: 0, lineHeight: 1.3, flex: 1 }}>
                   {activeQuestion.text}
                 </h1>
                 {activeQuestion.time_limit && !answerRevealed && (
@@ -1208,14 +1209,14 @@ export default function HostControlRoom() {
                             flexDirection: 'column', 
                             gap: '12px', 
                             width: '100%',
-                            background: 'var(--text-primary)',
+                            background: '#0A1128',
                             padding: '16px 24px',
                             borderRadius: '16px',
                             border: isCorrect ? '2px solid #8BCF00' : '1px solid rgba(255, 152, 0, 0.2)',
                             boxShadow: isCorrect ? '0 0 15px rgba(139, 207, 0, 0.15)' : 'none'
                           }}>
                             {/* Option text and optional check badge */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.3rem', fontWeight: 700, color: 'var(--bg-primary)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.3rem', fontWeight: 700, color: '#FFFFFF' }}>
                               <span className="price-tag-badge" style={{ background: isCorrect ? '#8BCF00' : '#FF9800' }}>{letter}</span>
                               <span>{opt}</span>
                               {isCorrect && (
@@ -1270,14 +1271,14 @@ export default function HostControlRoom() {
                   {liveAnswers.map((ans, idx) => (
                     <div key={idx} style={{ 
                       padding: '20px 24px', 
-                      background: 'var(--text-primary)', 
+                      background: '#0F1A36', 
                       border: '1.5px solid rgba(255, 152, 0, 0.25)', 
                       borderRadius: '16px', 
                       textAlign: 'left', 
                       fontSize: '1.35rem', 
                       fontWeight: 600, 
-                      color: 'var(--bg-primary)', 
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' 
+                      color: '#FFFFFF', 
+                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4)' 
                     }}>
                       "{ans.answer}"
                     </div>
@@ -1292,7 +1293,7 @@ export default function HostControlRoom() {
               {activeQuestion.type === 'rating' && (
                 <div style={{ 
                   textAlign: 'center', 
-                  background: 'var(--text-primary)', 
+                  background: '#0F1A36', 
                   padding: '40px', 
                   borderRadius: '24px', 
                   border: '2px solid rgba(255, 152, 0, 0.3)', 
@@ -1313,7 +1314,7 @@ export default function HostControlRoom() {
                     const avg = count > 0 ? (sum / count).toFixed(1) : '0.0';
                     return (
                       <>
-                        <h2 style={{ fontSize: '5rem', margin: '0 0 12px 0', color: 'var(--bg-primary)', fontWeight: 800 }}>{avg}</h2>
+                        <h2 style={{ fontSize: '5rem', margin: '0 0 12px 0', color: '#FFFFFF', fontWeight: 800 }}>{avg}</h2>
                         <div style={{ fontSize: '3rem', color: '#FF9800', marginBottom: '16px', letterSpacing: '4px' }}>
                           {'★'.repeat(Math.round(parseFloat(avg))).padEnd(5, '☆')}
                         </div>
@@ -1342,7 +1343,7 @@ export default function HostControlRoom() {
                 fontWeight: 900, 
                 background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)', 
                 WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
+                WebkitTextFillColor: 'transparent', 
                 marginBottom: '40px', 
                 textAlign: 'center' 
               }}>
@@ -1366,7 +1367,7 @@ export default function HostControlRoom() {
                     <div key={p.id} className={`sales-board-entry ${isFirst ? 'sales-board-top' : 'sales-board-regular'}`}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                         <span style={{ 
-                          color: isFirst ? 'var(--bg-glass)' : '#FF9800', 
+                          color: isFirst ? '#FFFFFF' : '#FF9800', 
                           fontWeight: 900
                         }}>
                           #{i+1}
@@ -1378,7 +1379,7 @@ export default function HostControlRoom() {
                       <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '1.2rem', fontWeight: 700 }}>
                         {showMetrics ? (
                           <>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirst ? 'var(--bg-glass)' : '#8BCF00' }}>
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirst ? '#FFFFFF' : '#8BCF00' }}>
                               ✓ {correctCount}/{quiz.questions.length}
                             </span>
                             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
@@ -1386,7 +1387,7 @@ export default function HostControlRoom() {
                             </span>
                           </>
                         ) : (
-                          <span style={{ color: isFirst ? 'var(--bg-glass)' : '#FF9800' }}>{p.score} pts</span>
+                          <span style={{ color: isFirst ? '#FFFFFF' : '#FF9800' }}>{p.score} pts</span>
                         )}
                       </div>
                     </div>
@@ -1418,7 +1419,7 @@ export default function HostControlRoom() {
             }} 
             title="Stop Presenting"
           >
-            <Square size={16} fill='#ffffff' stroke="none" />
+            <Square size={16} fill='#FFFFFF' stroke="none" />
           </button>
 
           <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 152, 0, 0.2)' }} />
@@ -1446,7 +1447,7 @@ export default function HostControlRoom() {
               }
             }}
             disabled={status === 'waiting' || status === 'ended'}
-            style={{ color: showQuestionLeaderboard ? '#8BCF00' : 'var(--bg-glass)' }}
+            style={{ color: showQuestionLeaderboard ? '#8BCF00' : '#FFFFFF' }}
             title="Toggle Leaderboard"
           >
             <Award size={16} />
@@ -1478,7 +1479,7 @@ export default function HostControlRoom() {
               } else {
                 handleJumpToQuestion(idx);
               }
-            }}
+            }} 
             className="toolbar-select"
             title="Select Question"
           >
@@ -1506,7 +1507,7 @@ export default function HostControlRoom() {
           <button 
             className="toolbar-btn" 
             onClick={() => setShowControlsSidebar(prev => !prev)}
-            style={{ color: showControlsSidebar ? '#FF9800' : 'var(--bg-glass)' }}
+            style={{ color: showControlsSidebar ? '#FF9800' : '#FFFFFF' }}
             title="Toggle Right Controls"
           >
             {showControlsSidebar ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
@@ -1522,7 +1523,7 @@ export default function HostControlRoom() {
           background: '#0F1A36', 
           borderLeft: '2px solid rgba(255, 152, 0, 0.2)', 
           display: 'flex', 
-          flexDirection: 'column',
+          flexDirection: 'column', 
           height: '100%',
           flexShrink: 0,
           zIndex: 50,
@@ -1530,7 +1531,7 @@ export default function HostControlRoom() {
         }}>
           {/* Header */}
           <div style={{ padding: '24px', borderBottom: '1px solid rgba(255, 152, 0, 0.15)' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.2rem', fontWeight: 800 }}>Present Controls</h3>
+            <h3 style={{ margin: 0, color: '#FFFFFF', fontSize: '1.2rem', fontWeight: 800 }}>Present Controls</h3>
             <p style={{ margin: '4px 0 0 0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem' }}>Manual presentation operations</p>
           </div>
 
@@ -1539,7 +1540,7 @@ export default function HostControlRoom() {
             {status === 'active' && !answerRevealed && (
               <button 
                 className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#FF9800', borderColor: '#FF9800', color: 'var(--text-primary)' }} 
+                style={{ width: '100%', justifyContent: 'center', background: '#FF9800', borderColor: '#FF9800', color: '#0A1128', fontWeight: 700 }} 
                 onClick={revealAnswer}
               >
                 Reveal Answer
@@ -1549,7 +1550,7 @@ export default function HostControlRoom() {
             {status === 'active' && !showQuestionLeaderboard && (
               <button 
                 className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#8BCF00', borderColor: '#8BCF00', color: '#0A1128' }} 
+                style={{ width: '100%', justifyContent: 'center', background: '#8BCF00', borderColor: '#8BCF00', color: '#0A1128', fontWeight: 700 }} 
                 onClick={handleShowLeaderboard}
               >
                 Show Leaderboard
@@ -1580,7 +1581,7 @@ export default function HostControlRoom() {
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {participants.map((p, i) => (
-                <div key={i} style={{ padding: '10px 14px', background: 'rgba(10, 17, 40, 0.4)', borderRadius: '8px', border: '1px solid rgba(255, 152, 0, 0.15)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 500 }}>
+                <div key={i} style={{ padding: '10px 14px', background: '#0A1128', borderRadius: '8px', border: '1px solid rgba(255, 152, 0, 0.15)', color: '#FFFFFF', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 500 }}>
                   <div className="status-dot-active"></div>
                   {p.name}
                 </div>

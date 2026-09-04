@@ -36,6 +36,7 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ─── Serve built React frontend ───────────────────────────────────────────────
 const DIST_PATH = path.join(__dirname, '..', 'frontend', 'dist');
 app.use((req, res, next) => {
+  res.setHeader('bypass-tunnel-reminder', 'true');
   if (req.path === '/' || req.path === '/index.html') {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     res.setHeader('Pragma', 'no-cache');
@@ -100,21 +101,29 @@ let tunnelStatus    = 'connecting'; // 'connecting' | 'active' | 'failed'
 
 // ─── Expose join URL for QR code generation ──────────────────────────────────
 app.get('/api/join-url', (req, res) => {
-  if (publicTunnelUrl) {
-    res.json({ url: publicTunnelUrl, mode: 'public', tunnelStatus: 'active' });
-  } else {
-    const hostHeader = req.headers.host || '';
-    const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'http';
-    const isPublicHost = hostHeader && !hostHeader.includes('localhost') && !hostHeader.includes('127.0.0.1');
-
-    if (isPublicHost) {
-      res.json({ url: `${protocol}://${hostHeader}`, mode: 'public', tunnelStatus: 'direct' });
-    } else {
-      const ip   = getLanIp();
-      const port = process.env.PORT || 5000;
-      res.json({ url: `http://${ip}:${port}`, mode: 'lan', tunnelStatus });
-    }
+  const forwardedHost = req.headers['x-forwarded-host'] || req.headers.host;
+  const forwardedProto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  
+  let detectedPublicUrl = null;
+  if (forwardedHost && !forwardedHost.startsWith('127.0.0.1') && !forwardedHost.startsWith('localhost') && !forwardedHost.startsWith('172.31.')) {
+    detectedPublicUrl = `${forwardedProto}://${forwardedHost}`;
   }
+
+  const ip = getLanIp();
+  const port = process.env.PORT || 5000;
+  const lanUrl = `http://${ip}:${port}`;
+
+  const finalUrl = publicTunnelUrl || detectedPublicUrl || lanUrl;
+
+  res.json({
+    url: finalUrl,
+    lanUrl: lanUrl,
+    publicUrl: publicTunnelUrl || detectedPublicUrl,
+    mode: (publicTunnelUrl || detectedPublicUrl) ? 'public' : 'lan',
+    tunnelStatus: tunnelStatus,
+    lanIp: ip,
+    port: port
+  });
 });
 
 // ─── Allow trainer to manually set a custom public URL ───────────────────────
@@ -181,12 +190,14 @@ server.listen(PORT, '0.0.0.0', async () => {
   console.log(`   Local:   http://localhost:${PORT}`);
   console.log(`   Network: http://${lanIp}:${PORT}`);
 
-  // ── Auto-start public tunnel (pointing to backend port 5000 which serves optimized production build) ──
-  startTunnel(PORT);
+  // ── Auto-start public tunnel only if in dev and not disabled ──
+  if (process.env.ENABLE_TUNNEL === 'true' || (process.env.NODE_ENV !== 'production' && process.env.DISABLE_TUNNEL !== 'true')) {
+    startTunnel(PORT).catch(err => console.warn('[Tunnel] Could not initialize tunnel:', err.message));
+  } else {
+    console.log('ℹ️ Public tunnel skipped (running in production / standard network mode).');
+  }
 });
 
-// ─── SIGINT cleanup — registered once at startup (not inside startTunnel) ──────
-// Previously this was inside startTunnel(), causing duplicate listeners on restarts.
 let tunnelProcess = null;
 process.once('SIGINT', () => {
   if (tunnelProcess) tunnelProcess.close();
@@ -194,45 +205,45 @@ process.once('SIGINT', () => {
 });
 
 async function startTunnel(port) {
-  if (process.env.DISABLE_TUNNEL === 'true' || process.env.NODE_ENV === 'production') {
-    console.log('\n🌐 Localtunnel disabled. Set FRONTEND_URL env var for the public join URL.');
-    tunnelStatus = 'disabled';
-    return;
-  }
-
-  console.log('\n🌐 Starting public tunnel (so participants can join via mobile data)...');
-  const localtunnel = require('localtunnel');
-
   try {
-    const isLocal = process.platform === 'win32' || !process.env.RAILWAY_STATIC_URL;
-    const requestedSubdomain = isLocal
-      ? `retailedge-pro-${Math.random().toString(36).slice(2, 7)}`
-      : 'retailedge-pro';
+    const localtunnel = require('localtunnel');
+    console.log('\n🌐 Initializing optional development tunnel...');
 
-    const tunnel = await localtunnel({ port, subdomain: requestedSubdomain });
+    const sub = `retailedge-${Math.random().toString(36).substring(2, 7)}`;
+    const tunnel = await localtunnel({ port: port, subdomain: sub });
     tunnelProcess = tunnel;
 
     publicTunnelUrl = tunnel.url;
-    tunnelStatus    = 'active';
-    console.log(`\n✅ PUBLIC TUNNEL ACTIVE: ${publicTunnelUrl}`);
-    console.log(`   Participants can join from any network (mobile data, other Wi-Fi, etc.)\n`);
+    tunnelStatus = 'active';
+    console.log(`\n✅ PUBLIC TUNNEL ACTIVE (via localtunnel)`);
+    console.log(`   Join URL: ${publicTunnelUrl}\n`);
 
     tunnel.on('close', () => {
-      console.log('[Localtunnel] Tunnel closed. Reconnecting in 10s...');
+      console.log(`[Localtunnel] Tunnel closed.`);
       publicTunnelUrl = null;
-      tunnelStatus    = 'connecting';
-      tunnelProcess   = null;
-      setTimeout(() => startTunnel(port), 10000);
+      tunnelStatus = 'connecting';
+      tunnelProcess = null;
     });
 
     tunnel.on('error', (err) => {
-      console.error('[Localtunnel] Tunnel error:', err.message);
+      console.warn('[Localtunnel] Tunnel error (non-fatal):', err.message);
+      try { tunnel.close(); } catch(e) {}
+      publicTunnelUrl = null;
+      tunnelProcess = null;
     });
 
   } catch (err) {
     tunnelStatus = 'failed';
-    console.warn(`\n⚠️  Localtunnel failed: ${err.message}`);
-    console.warn('   Retrying in 15s, or set a URL via: POST /api/set-tunnel-url { url: "..." }\n');
-    setTimeout(() => startTunnel(port), 15000);
+    console.warn(`\n⚠️ Localtunnel failed to start (server will continue normally on local/LAN): ${err.message}`);
   }
 }
+
+// Prevent any unhandled network drops from killing the server
+process.on('uncaughtException', (err) => {
+  console.error('[Process] Caught exception:', err.message);
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.warn('[Process] Handled promise rejection:', reason?.message || reason);
+});
+
