@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const Client = require('../models/Client');
 const Project = require('../models/Project');
 const multer = require('multer');
@@ -50,8 +50,8 @@ router.get('/public', async (req, res) => {
   }
 });
 
-// GET /api/clients
-router.get('/', requireAuth, async (req, res) => {
+// GET /api/clients (Enterprise Directory - Restricted to Administrators & Managers)
+router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const clients = await Client.findAll({
       order: [['name', 'ASC']]

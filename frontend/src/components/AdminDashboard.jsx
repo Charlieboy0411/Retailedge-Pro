@@ -38,139 +38,255 @@ export default function AdminDashboard({ allUsers = [], projectsList = [], repor
   }, [token, syncTrigger]);
 
   if (loading || !stats) {
-    return <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-secondary)' }}>Loading command center data...</div>;
+    return (
+      <div style={{ padding: '60px', textAlign: 'center', color: '#64748B' }}>
+        <div style={{ width: '36px', height: '36px', borderRadius: '50%', border: '3px solid #2563EB', borderTopColor: 'transparent', animation: 'spin 1s linear infinite', margin: '0 auto 16px auto' }} />
+        Loading administrative command center...
+      </div>
+    );
   }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Quick Actions Widget */}
-      <div className="glass-card" style={{ padding: '24px', background: 'var(--bg-glass)' }}>
-        <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', color: 'var(--text-primary)' }}>Quick Actions</h3>
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px' }}>
-          <button className="btn btn-primary" onClick={() => navigate('/trainings')}><Calendar size={16} /> Create Training Session</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/users')}><Users size={16} /> Add Users</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/users')}><Upload size={16} /> Import Learners</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/builder')}><PenTool size={16} /> Create Quiz</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/reports')}><FileText size={16} /> Publish Assessment</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/certificates')}><Award size={16} /> Issue Certificate</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/reports')}><BarChart3 size={16} /> Generate Report</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/notifications')}><Bell size={16} /> Broadcast Notification</button>
-          <button className="btn btn-secondary" onClick={() => navigate('/offline-sync')}><RefreshCw size={16} /> Force Device Sync</button>
+      {/* ─── QUICK ACTIONS WIDGET ─── */}
+      <div className="glass-card" style={{ padding: '24px' }}>
+        <h3 style={{ margin: '0 0 16px 0', fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
+          Administrative Quick Actions
+        </h3>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+          <button className="btn btn-primary" onClick={() => navigate('/trainings')}>
+            <Calendar size={15} /> Create Training Session
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/users')}>
+            <Users size={15} /> Add Users
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/users')}>
+            <Upload size={15} /> Import Learners
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/builder')}>
+            <PenTool size={15} /> Create Quiz
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/reports')}>
+            <FileText size={15} /> Publish Assessment
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/certificates')}>
+            <Award size={15} /> Issue Certificate
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/reports')}>
+            <BarChart3 size={15} /> Generate Report
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/notifications')}>
+            <Bell size={15} /> Broadcast Notification
+          </button>
+          <button className="btn btn-secondary" onClick={() => navigate('/offline-sync')}>
+            <RefreshCw size={15} /> Force Device Sync
+          </button>
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px' }}>
+      {/* ─── METRICS CARDS GRID ─── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         
-        {/* Workforce */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #3E5C8A', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(62,92,138,0.1)', borderRadius: '10px' }}><Users size={22} color='var(--primary)' /></div>
-            Workforce
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Total Registered Users</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.workforce.totalRegisteredUsers}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Active Users</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.workforce.activeUsers}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Trainers</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.workforce.trainers}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Supervisors</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.workforce.supervisors}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Learners</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.workforce.learners}</strong></div>
-          </div>
-        </div>
-
-        {/* Training */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #3B8C68', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(59,140,104,0.1)', borderRadius: '10px' }}><Presentation size={22} color="#3B8C68" /></div>
-            Training Sessions
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Trainings Conducted</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.training.trainingsConducted}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Upcoming Trainings</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.training.upcomingTrainings}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Ongoing Sessions</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.training.ongoingSessions}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Cancelled Sessions</span><strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.training.cancelledSessions}</strong></div>
-          </div>
-        </div>
-
-        {/* Attendance */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #F59E0B', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(245,158,11,0.1)', borderRadius: '10px' }}><ClipboardList size={22} color="#F59E0B" /></div>
-            Attendance Analytics
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Attendance Recorded</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.attendance.attendanceRecorded}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Attendance %</span><strong style={{ fontSize: '1.1rem', color: '#3B8C68' }}>{stats.attendance.attendancePercent}%</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Absentees</span><strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.attendance.absentees}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Exceptions</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.attendance.exceptions}</strong></div>
-          </div>
-        </div>
-
-        {/* Assessments */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #8B5CF6', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(139,92,246,0.1)', borderRadius: '10px' }}><FileText size={22} color="#8B5CF6" /></div>
-            Assessments
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Assessments Conducted</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.assessments.assessmentsConducted}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Participants Assessed</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.assessments.participantsAssessed}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Pass Rate</span><strong style={{ fontSize: '1.1rem', color: '#3B8C68' }}>{stats.assessments.passRate}%</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Fail Rate</span><strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.assessments.failRate}%</strong></div>
-          </div>
-        </div>
-
-        {/* Certifications */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #F97316', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(249,115,22,0.1)', borderRadius: '10px' }}><Award size={22} color="#F97316" /></div>
-            Certifications
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Certificates Issued</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.certifications.certificatesIssued}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Expiring Certificates</span><strong style={{ fontSize: '1.1rem', color: '#F59E0B' }}>{stats.certifications.expiringCertificates}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Revoked Certificates</span><strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.certifications.revokedCertificates}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Re-certification Due</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.certifications.recertificationDue}</strong></div>
-          </div>
-        </div>
-
-        {/* Offline Sync */}
-        <div className="glass-card stat-card" style={{ borderTop: '4px solid #14B8A6', padding: '24px', background: 'var(--bg-glass)', alignItems: 'flex-start' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--text-primary)', margin: '0', fontSize: '1.1rem', width: '180px', flexShrink: 0 }}>
-            <div style={{ padding: '10px', background: 'rgba(20,184,166,0.1)', borderRadius: '10px' }}><Smartphone size={22} color="#14B8A6" /></div>
-            Offline Sync
-          </h4>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', flex: 1 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Devices Synced Today</span><strong style={{ fontSize: '1.1rem', color: '#14B8A6' }}>{stats.offlineSync.devicesSyncedToday}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Pending Synchronizations</span><strong style={{ fontSize: '1.1rem', color: 'var(--text-primary)' }}>{stats.offlineSync.pendingSyncs}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Failed Synchronizations</span><strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.offlineSync.failedSyncs}</strong></div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}><span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Last Sync Timestamp</span><strong style={{ fontSize: '0.85rem', color: 'var(--text-primary)' }}>{stats.offlineSync.lastSyncTimestamp ? new Date(stats.offlineSync.lastSyncTimestamp).toLocaleString() : 'N/A'}</strong></div>
-          </div>
-        </div>
-
-        {/* Projects */}
-        <div className="glass-card stat-card" style={{ borderLeft: '4px solid #6366F1', padding: '20px', gridColumn: '1 / -1' }}>
-          <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-primary)', margin: '0 0 16px 0' }}><Briefcase size={20} color="#6366F1" /> Projects & Clients</h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
-            <div style={{ background: 'rgba(99,102,241,0.05)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Active Projects</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.projects.activeProjects}</div>
+        {/* Workforce Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #2563EB', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(37, 99, 235, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+              <Users size={20} />
             </div>
-            <div style={{ background: 'rgba(99,102,241,0.05)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Clients Served</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.projects.clientsServed}</div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Workforce Roster</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Total Registered Users</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.workforce.totalRegisteredUsers}</strong>
             </div>
-            <div style={{ background: 'rgba(99,102,241,0.05)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Regions Covered</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.projects.regionsCovered}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Active Users</span>
+              <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{stats.workforce.activeUsers}</strong>
             </div>
-            <div style={{ background: 'rgba(99,102,241,0.05)', padding: '16px', borderRadius: '12px', textAlign: 'center' }}>
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '8px' }}>Stores Covered</div>
-              <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)' }}>{stats.projects.storesCovered}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Trainers</span>
+              <strong style={{ fontSize: '1.1rem', color: '#2563EB' }}>{stats.workforce.trainers}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Supervisors</span>
+              <strong style={{ fontSize: '1.1rem', color: '#06B6D4' }}>{stats.workforce.supervisors}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Learners</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.workforce.learners}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Training Sessions Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #10B981', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#10B981' }}>
+              <Presentation size={20} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Training Sessions</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Trainings Conducted</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.training.trainingsConducted}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Upcoming Trainings</span>
+              <strong style={{ fontSize: '1.1rem', color: '#2563EB' }}>{stats.training.upcomingTrainings}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Ongoing Sessions</span>
+              <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{stats.training.ongoingSessions}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Cancelled Sessions</span>
+              <strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.training.cancelledSessions}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Attendance Analytics Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #F59E0B', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(245, 158, 11, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F59E0B' }}>
+              <ClipboardList size={20} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Attendance Tracking</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Attendance Recorded</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.attendance.attendanceRecorded}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Attendance %</span>
+              <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{stats.attendance.attendancePercent}%</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Absentees</span>
+              <strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.attendance.absentees}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Exceptions</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.attendance.exceptions}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Assessments Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #8B5CF6', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(139, 92, 246, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8B5CF6' }}>
+              <FileText size={20} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Assessments &amp; Testing</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Assessments Conducted</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.assessments.assessmentsConducted}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Participants Assessed</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.assessments.participantsAssessed}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Pass Rate</span>
+              <strong style={{ fontSize: '1.1rem', color: '#10B981' }}>{stats.assessments.passRate}%</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Fail Rate</span>
+              <strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.assessments.failRate}%</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Certifications Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #06B6D4', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(6, 182, 212, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#06B6D4' }}>
+              <Award size={20} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Certifications</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Certificates Issued</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.certifications.certificatesIssued}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Expiring Certificates</span>
+              <strong style={{ fontSize: '1.1rem', color: '#F59E0B' }}>{stats.certifications.expiringCertificates}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Revoked Certificates</span>
+              <strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.certifications.revokedCertificates}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Re-certification Due</span>
+              <strong style={{ fontSize: '1.1rem', color: '#2563EB' }}>{stats.certifications.recertificationDue}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Offline Sync Card */}
+        <div className="glass-card" style={{ borderTop: '3px solid #0891B2', padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ width: '40px', height: '40px', background: 'rgba(8, 145, 178, 0.1)', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0891B2' }}>
+              <Smartphone size={20} />
+            </div>
+            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>Field &amp; Offline Sync</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Devices Synced Today</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0891B2' }}>{stats.offlineSync.devicesSyncedToday}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Pending Synchronizations</span>
+              <strong style={{ fontSize: '1.1rem', color: '#0F172A' }}>{stats.offlineSync.pendingSyncs}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Failed Synchronizations</span>
+              <strong style={{ fontSize: '1.1rem', color: '#EF4444' }}>{stats.offlineSync.failedSyncs}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#64748B', fontSize: '0.88rem' }}>Last Sync Timestamp</span>
+              <strong style={{ fontSize: '0.85rem', color: '#0F172A' }}>{stats.offlineSync.lastSyncTimestamp ? new Date(stats.offlineSync.lastSyncTimestamp).toLocaleTimeString() : 'Active'}</strong>
             </div>
           </div>
         </div>
 
       </div>
+
+      {/* ─── PROJECTS & CLIENTS BANNER ─── */}
+      <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid #2563EB' }}>
+        <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#0F172A', margin: '0 0 16px 0', fontSize: '1.05rem', fontWeight: 800 }}>
+          <Briefcase size={18} color="#2563EB" /> Projects &amp; Commercial Accounts
+        </h4>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '10px', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Active Projects</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A' }}>{stats.projects.activeProjects}</div>
+          </div>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '10px', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Clients Served</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A' }}>{stats.projects.clientsServed}</div>
+          </div>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '10px', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Regions Covered</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A' }}>{stats.projects.regionsCovered}</div>
+          </div>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '16px', borderRadius: '10px', textAlign: 'center' }}>
+            <div style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', marginBottom: '6px' }}>Stores &amp; Outlets</div>
+            <div style={{ fontSize: '1.6rem', fontWeight: 800, color: '#0F172A' }}>{stats.projects.storesCovered}</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   );
 }

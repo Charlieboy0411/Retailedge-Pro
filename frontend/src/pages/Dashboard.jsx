@@ -5,8 +5,11 @@ import { AuthContext } from '../context/AuthContext';
 import { useNavigate, Link } from 'react-router-dom';
 import { getSocket } from '../utils/socketService';
 import TDManagerDashboard from '../components/TDManagerDashboard';
+import TDCapabilityCockpit from '../components/TDCapabilityCockpit';
 import AdminDashboard from '../components/AdminDashboard';
 import TrainerDashboard from '../components/TrainerDashboard';
+import SupervisorDashboard from '../components/SupervisorDashboard';
+import ClientCockpit from '../components/ClientCockpit';
 import CalendarWidget from '../components/CalendarWidget';
 
 export default function Dashboard() {
@@ -53,7 +56,8 @@ export default function Dashboard() {
   const [meetings, setMeetings] = useState([]);
 
   useEffect(() => {
-    if (user && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager'].includes(user.role)) {
+    // Only route dedicated PM and executive roles to the PM dashboard
+    if (user && ['Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(user.role)) {
       navigate('/pm-dashboard', { replace: true });
     }
   }, [user, navigate]);
@@ -66,7 +70,7 @@ export default function Dashboard() {
         fetchQuizzes(),
         fetchMeetings()
       ]);
-      if (token && ['Trainer', 'T&D Manager', 'Admin', 'Super Admin'].includes(user?.role)) {
+      if (token && ['Trainer', 'Admin', 'Super Admin'].includes(user?.role)) {
         await Promise.all([fetchProjects(), fetchUsers()]);
       }
       setSyncTrigger(prev => prev + 1);
@@ -167,7 +171,10 @@ export default function Dashboard() {
 
   const fetchProjects = async () => {
     try {
-      const response = await axios.get('/api/projects', {
+      const endpoint = (user?.role === 'Trainer' || user?.role === 'Employee')
+        ? '/api/projects/my-projects'
+        : '/api/projects';
+      const response = await axios.get(endpoint, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setProjects(response.data);
@@ -177,6 +184,10 @@ export default function Dashboard() {
   };
 
   const fetchUsers = async () => {
+    if (user?.role === 'Trainer' || user?.role === 'Employee') {
+      setUsersList([]);
+      return;
+    }
     try {
       const response = await axios.get('/api/users', {
         headers: { Authorization: `Bearer ${token}` }
@@ -351,43 +362,7 @@ export default function Dashboard() {
   if (user?.role === 'T&D Manager') {
     return (
       <div className="view-section active">
-        <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
-              <img src="/logo.png" alt="Idonneous Logo" style={{ height: '22px', objectFit: 'contain' }} />
-            </div>
-            <div>
-              <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>
-                🎓 Learning &amp; Development Dashboard
-              </h2>
-              <p className="section-desc" style={{ margin: '4px 0 0 0' }}>Welcome back, <strong>{user?.name || 'T&D Manager'}</strong>! Track capabilities and skill gaps here.</p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              setSyncing(true);
-              await fetchAllData(true);
-              setSyncing(false);
-            }}
-            disabled={syncing || loading}
-            className="btn btn-secondary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.82rem',
-              height: '38px',
-            }}
-          >
-            <RefreshCw size={15} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-            Sync Live Data
-          </button>
-        </div>
-        <TDManagerDashboard projectUsers={usersList} projectsList={projects} reports={quizzes} />
+        <TDCapabilityCockpit />
       </div>
     );
   }
@@ -458,6 +433,22 @@ export default function Dashboard() {
     );
   }
 
+  if (user?.role === 'Supervisor') {
+    return (
+      <div className="view-section active">
+        <SupervisorDashboard />
+      </div>
+    );
+  }
+
+  if (user?.role === 'Client') {
+    return (
+      <div className="view-section active">
+        <ClientCockpit />
+      </div>
+    );
+  }
+
   return (
     <div className="view-section active">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
@@ -521,7 +512,7 @@ export default function Dashboard() {
             {/* Card 2 */}
             <div className="glass-card stat-card" style={{ borderLeft: '4px solid #2EA8FF' }}>
               <div className="stat-info">
-                <span className="stat-label">Supervisors Enrolled</span>
+                <span className="stat-label">{user?.role === 'Employee' ? 'Quizzes Completed' : 'Supervisors Enrolled'}</span>
                 <span className="stat-value" style={{ color: '#2EA8FF' }}>{stats.totalParticipants}</span>
               </div>
               <div className="stat-icon-wrapper" style={{ background: 'rgba(46,168,255,0.1)', color: '#2EA8FF' }}>
@@ -577,6 +568,7 @@ export default function Dashboard() {
           </div>
 
           {/* ── Zone Performance Preview ── */}
+          {user?.role !== 'Employee' && (
           <div className="glass-card" style={{ marginBottom: '24px', padding: '24px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <div>
@@ -602,6 +594,7 @@ export default function Dashboard() {
               ))}
             </div>
           </div>
+          )}
 
           <div className="dashboard-columns">
             <div className="glass-card" style={{ flex: 2 }}>
@@ -702,17 +695,27 @@ export default function Dashboard() {
             <div className="glass-card" style={{ flex: 1 }}>
               <h3>Quick Actions</h3>
               <div style={{display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '16px'}}>
-                {user?.role === 'Trainer' && (
+                {user?.role === 'Employee' ? (
                   <>
-                    <button className="btn btn-primary" onClick={() => navigate('/builder')}>Create New Quiz</button>
-                    <button className="btn btn-secondary" onClick={() => {
-                      setIsSuccessView(false);
-                      setIsUrlCustom(false);
-                      setIsMeetingModalOpen(true);
-                    }}>Create New Meeting</button>
+                    <button className="btn btn-primary" onClick={() => navigate('/join')}>Join Live Quiz</button>
+                    <button className="btn btn-secondary" onClick={() => navigate('/trainings')}>My Learning Modules</button>
+                    <button className="btn btn-secondary" onClick={() => navigate('/certificates')}>My Certificates</button>
+                  </>
+                ) : (
+                  <>
+                    {user?.role === 'Trainer' && (
+                      <>
+                        <button className="btn btn-primary" onClick={() => navigate('/builder')}>Create New Quiz</button>
+                        <button className="btn btn-secondary" onClick={() => {
+                          setIsSuccessView(false);
+                          setIsUrlCustom(false);
+                          setIsMeetingModalOpen(true);
+                        }}>Create New Meeting</button>
+                      </>
+                    )}
+                    <button className="btn btn-secondary" onClick={() => navigate('/reports')}>View Reports</button>
                   </>
                 )}
-                <button className="btn btn-secondary" onClick={() => navigate('/reports')}>View Reports</button>
               </div>
             </div>
           </div>

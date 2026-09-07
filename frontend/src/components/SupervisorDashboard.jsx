@@ -1,857 +1,782 @@
-import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ComposedChart, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+import React, { useState, useEffect, useContext } from 'react';
+import axios from 'axios';
 import {
-  Users, BarChart2, Award, Calendar, CheckCircle, Clock, TrendingUp,
-  AlertCircle, FileText, Presentation, Download, Star, AlertTriangle,
-  MessageSquare, Bell, ClipboardList, Trophy, UserCheck, ChevronRight,
-  Plus, Trash2, Shield, Activity, Target, Zap
+  Users, Award, CheckCircle, Clock, TrendingUp,
+  AlertTriangle, FileText, Download, Star, Shield,
+  ClipboardList, Trophy, CheckCircle2, ChevronRight,
+  Plus, Eye, MessageSquare, RefreshCw, X, Calendar,
+  ArrowUpRight, Filter, Search
 } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
 
-const NAVY = 'var(--text-primary)';
-const ORANGE = 'var(--primary)';
-const BLUE = '#38BDF8';
-const GREEN = '#3B8C68';
-const AMBER = '#F59E0B';
-const RED = '#EF4444';
-const BG = 'var(--bg-tertiary)';
-const CARD = 'var(--bg-glass)';
-const TEXT = 'var(--text-primary)';
-const MUTED = 'var(--text-secondary)';
-const BORDER = 'var(--border-glass)';
+export default function SupervisorDashboard() {
+  const { token, user } = useContext(AuthContext);
 
-export default function SupervisorDashboard({
-  projectUsers = [],
-  projectsList = [],
-  reports = [],
-  attendanceData = {},
-  onExportExcel,
-  onExportPPT,
-  selectedProjectId = 'all',
-}) {
-  const [activeTab, setActiveTab] = useState('home');
-  const [tasks, setTasks] = useState([]);
-  const [newTask, setNewTask] = useState('');
-  const [newTaskType, setNewTaskType] = useState('Training Task');
-  const [newTaskPriority, setNewTaskPriority] = useState('Medium');
-  const [annMsg, setAnnMsg] = useState('');
-  const [annSent, setAnnSent] = useState(false);
-
-  const [coachingLogs, setCoachingLogs] = useState({});
-
-  const toggleCoaching = (id) => {
-    setCoachingLogs(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const productivityData = [
-    { day: 'Mon', training: 45, output: 85 },
-    { day: 'Tue', training: 60, output: 92 },
-    { day: 'Wed', training: 80, output: 95 },
-    { day: 'Thu', training: 95, output: 98 },
-    { day: 'Fri', training: 100, output: 105 },
-  ];
-
-  const skillData = [
-    { subject: 'POS Systems', A: 85, B: 65, fullMark: 100 },
-    { subject: 'Customer Handling', A: 90, B: 70, fullMark: 100 },
-    { subject: 'Product Knowledge', A: 75, B: 85, fullMark: 100 },
-    { subject: 'Compliance', A: 95, B: 90, fullMark: 100 },
-    { subject: 'Troubleshooting', A: 70, B: 60, fullMark: 100 },
-  ];
-
-  const shiftData = [
-    { name: 'Rahul S.', shift: 'Morning', training: '10:00 AM - 11:30 AM', risk: 'Low' },
-    { name: 'Priya R.', shift: 'Evening', training: 'None (Completed)', risk: 'Low' },
-    { name: 'Amit K.', shift: 'Morning', training: '09:00 AM - 12:00 PM', risk: 'High (Coverage Alert)' },
-    { name: 'Sunita D.', shift: 'Night', training: '08:00 PM - 09:00 PM', risk: 'Medium' },
-    { name: 'Vivek N.', shift: 'Morning', training: '11:00 AM - 12:00 PM', risk: 'Medium' },
-  ];
-
-
-  // ── Load tasks from localStorage ─────────────────────────────────────
-  useEffect(() => {
-    const saved = localStorage.getItem(`sv_tasks_${selectedProjectId}`);
-    if (saved) {
-      try {
-        setTasks(JSON.parse(saved) || []);
-      } catch {
-        setTasks(getDefaultTasks());
-      }
-    } else {
-      const defaults = getDefaultTasks();
-      setTasks(defaults);
-      localStorage.setItem(`sv_tasks_${selectedProjectId}`, JSON.stringify(defaults));
-    }
-  }, [selectedProjectId]);
-
-  const getDefaultTasks = () => [
-    { id: 1, text: 'Complete Product Training Module 3 — Rahul, Priya, Amit', type: 'Training Task', priority: 'High', status: 'Pending' },
-    { id: 2, text: 'Schedule Refresher Quiz for East Zone team members', type: 'Assessment', priority: 'Medium', status: 'In Progress' },
-    { id: 3, text: 'Submit weekly attendance report to Program Manager', type: 'Field Activity', priority: 'High', status: 'Pending' },
-    { id: 4, text: 'Follow up with inactive learners — Sunita, Karan, Deepa', type: 'Refresher Course', priority: 'Medium', status: 'Escalated' },
-  ];
-
-  const saveTasks = (updated) => {
-    setTasks(updated);
-    localStorage.setItem(`sv_tasks_${selectedProjectId}`, JSON.stringify(updated));
-  };
-
-  const handleAddTask = (e) => {
-    e.preventDefault();
-    if (!newTask.trim()) return;
-    const updated = [{ id: Date.now(), text: newTask.trim(), type: newTaskType, priority: newTaskPriority, status: 'Pending' }, ...tasks];
-    saveTasks(updated);
-    setNewTask('');
-  };
-
-  const handleStatusChange = (id, status) => saveTasks(tasks.map(t => t.id === id ? { ...t, status } : t));
-  const handleDeleteTask = (id) => saveTasks(tasks.filter(t => t.id !== id));
-
-  // ── Derived metrics ──────────────────────────────────────────────────
-  const quizAttendance = attendanceData?.quizAttendance || [];
-  const trainingAttendance = attendanceData?.trainingAttendance || [];
-  const completedSessions = reports.filter(r => r.participants > 0);
-
-  const teamSize = projectUsers.length || 24;
-  const activeLearners = projectUsers.filter(u => u.status === 'Active').length || Math.round(teamSize * 0.88);
-  const avgScore = completedSessions.length > 0
-    ? Math.round(completedSessions.reduce((s, r) => s + parseFloat(r.avgScore || 0), 0) / completedSessions.length)
-    : 79;
-  const certifiedCount = quizAttendance.filter(qa => (parseInt(qa.avgScore) || 0) >= 60).length || Math.round(teamSize * 0.71);
-  const certPct = teamSize > 0 ? Math.round((certifiedCount / teamSize) * 100) : 71;
-  const completionPct = avgScore;
-  const attendancePct = quizAttendance.length > 0 ? Math.min(100, Math.round((quizAttendance.length / Math.max(1, teamSize)) * 100)) : 85;
-  const pendingTrainings = Math.max(0, teamSize - quizAttendance.length) || 4;
-  const productivityScore = Math.min(100, Math.round((completionPct * 0.4) + (certPct * 0.3) + (attendancePct * 0.3)));
-
-  // ── Sorted performers ────────────────────────────────────────────────
-  const sortedByScore = [...quizAttendance].sort((a, b) => (parseInt(b.avgScore) || 0) - (parseInt(a.avgScore) || 0));
-  const topPerformers = sortedByScore.slice(0, 5);
-  const lowPerformers = sortedByScore.filter(qa => (parseInt(qa.avgScore) || 0) < 60).slice(-3).reverse();
-  const inactiveLearners = projectUsers.filter(u => u.status !== 'Active').slice(0, 3);
-
-  // ── Attendance weekly data (simulated) ───────────────────────────────
-  const weeklyAttendance = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, i) => ({
-    day,
-    pct: [92, 88, 95, 85, 90, 72][i]
-  }));
-
-  // ── Donut chart calculations ─────────────────────────────────────────
-  const r = 40, circ = 2 * Math.PI * r;
-  const certOffset = circ - (certPct / 100) * circ;
-
-  const badge = (color) => ({
-    padding: '3px 10px', borderRadius: '20px', fontSize: '0.7rem', fontWeight: 700,
-    background: `${color}15`, color, border: `1px solid ${color}30`
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({
+    teamMembers: 0,
+    activeLearners: 0,
+    trainingCompletion: 0,
+    attendanceRate: 0,
+    averageAssessmentScore: 0,
+    assessmentPassRate: 0,
+    certificationReady: 0,
+    atRiskLearners: 0
   });
 
-  const card = (children, style = {}) => (
-    <div style={{ background: CARD, borderRadius: '16px', padding: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', border: `1px solid ${BORDER}`, ...style }}>
-      {children}
-    </div>
-  );
+  const [teamRoster, setTeamRoster] = useState([]);
+  const [coachingLogs, setCoachingLogs] = useState([]);
+  const [selectedFilter, setSelectedFilter] = useState('ALL');
+  const [searchTerm, setSearchTerm] = useState('');
 
-  const statusColor = (s) => s === 'Completed' ? GREEN : s === 'In Progress' ? BLUE : s === 'Escalated' ? RED : AMBER;
-  const priorityColor = (p) => p === 'High' ? RED : p === 'Medium' ? AMBER : GREEN;
+  // Coaching Modal State
+  const [isCoachModalOpen, setIsCoachModalOpen] = useState(false);
+  const [coachTarget, setCoachTarget] = useState(null);
+  const [coachIssue, setCoachIssue] = useState('Assessment Remediation');
+  const [coachReason, setCoachReason] = useState('');
+  const [coachAction, setCoachAction] = useState('');
+  const [coachStatus, setCoachStatus] = useState('Pending');
+  const [coachDate, setCoachDate] = useState('');
+  const [coachSubmitting, setCoachSubmitting] = useState(false);
+  const [coachSuccess, setCoachSuccess] = useState(false);
+
+  // Participant 360 Modal State
+  const [is360ModalOpen, setIs360ModalOpen] = useState(false);
+  const [selected360User, setSelected360User] = useState(null);
+  const [loading360, setLoading360] = useState(false);
+  const [error360, setError360] = useState('');
+
+  const fetchDashboardData = async () => {
+    try {
+      setLoading(true);
+      const headers = { Authorization: `Bearer ${token}` };
+      const [metricsRes, teamRes, logsRes] = await Promise.all([
+        axios.get('/api/supervisor/metrics', { headers }),
+        axios.get('/api/supervisor/team', { headers }),
+        axios.get('/api/supervisor/coaching-logs', { headers }).catch(() => ({ data: [] }))
+      ]);
+
+      setMetrics(metricsRes.data || {});
+      setTeamRoster(teamRes.data || []);
+      setCoachingLogs(logsRes.data || []);
+    } catch (err) {
+      console.error('Failed to load supervisor cockpit data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (token) {
+      fetchDashboardData();
+    }
+  }, [token]);
+
+  const handleOpenCoachModal = (employee) => {
+    setCoachTarget(employee);
+    setCoachIssue(employee.coachingStatus === 'At Risk' ? 'Critical Remediation Needed' : 'Refresher Coaching');
+    setCoachReason(`Assessment: ${employee.assessmentScore}% | Attendance: ${employee.attendancePercentage}%`);
+    setCoachAction('Schedule 1-on-1 coaching session and review module gap.');
+    setCoachStatus('Pending');
+    setCoachDate(new Date(Date.now() + 5 * 86400000).toISOString().split('T')[0]);
+    setCoachSuccess(false);
+    setIsCoachModalOpen(true);
+  };
+
+  const handleSaveCoachingNote = async (e) => {
+    e.preventDefault();
+    if (!coachTarget) return;
+    try {
+      setCoachSubmitting(true);
+      await axios.post('/api/supervisor/coaching-log', {
+        employeeId: coachTarget.id,
+        issue: coachIssue,
+        reason: coachReason,
+        recommendedAction: coachAction,
+        followUpStatus: coachStatus,
+        nextActionDate: coachDate
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      setCoachSuccess(true);
+      setTimeout(() => {
+        setIsCoachModalOpen(false);
+        fetchDashboardData();
+      }, 1200);
+    } catch (err) {
+      console.error('Failed to save coaching note:', err);
+      alert(err.response?.data?.error || 'Failed to record coaching note.');
+    } finally {
+      setCoachSubmitting(false);
+    }
+  };
+
+  const handleOpen360 = async (employeeId) => {
+    try {
+      setIs360ModalOpen(true);
+      setLoading360(true);
+      setError360('');
+      setSelected360User(null);
+      const res = await axios.get(`/api/projects/participant-360/${employeeId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setSelected360User(res.data);
+    } catch (err) {
+      console.error('Failed to fetch Participant 360:', err);
+      setError360(err.response?.data?.error || 'Access denied or unable to fetch participant 360 profile.');
+    } finally {
+      setLoading360(false);
+    }
+  };
+
+  // Filtered Roster
+  const filteredRoster = teamRoster.filter(emp => {
+    const matchesSearch = emp.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.employee_id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.designation || '').toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    if (selectedFilter === 'AT_RISK') return emp.coachingStatus === 'At Risk';
+    if (selectedFilter === 'NEEDS_REVIEW') return emp.coachingStatus === 'Needs Review';
+    if (selectedFilter === 'ON_TRACK') return emp.coachingStatus === 'On Track';
+    if (selectedFilter === 'LOW_ATTENDANCE') return emp.attendancePercentage < 80;
+    if (selectedFilter === 'CERT_READY') return emp.certificationStatus === 'Eligible';
+    return true;
+  });
 
   return (
-    <div style={{ fontFamily: 'Inter, sans-serif', color: TEXT }}>
-
-      {/* ── Tab Navigation ───────────────────────────────────────────── */}
+    <div className="supervisor-cockpit" style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '40px' }}>
+      
+      {/* ─── COCKPIT HEADER ─── */}
       <div style={{
-        display: 'flex', borderBottom: `2px solid ${BORDER}`, marginBottom: '24px',
-        background: CARD, borderRadius: '16px 16px 0 0', padding: '0 20px',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', overflowX: 'auto', gap: '4px'
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        flexWrap: 'wrap', gap: '16px', background: 'var(--bg-glass)',
+        padding: '24px', borderRadius: '16px', border: '1px solid var(--border-glass)',
+        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.25)'
       }}>
-        {[
-          { id: 'home', label: '🏠 Team Overview' },
-          { id: 'attendance', label: '📅 Attendance' },
-          { id: 'certs', label: '🏆 Certs & Quizzes' },
-          { id: 'employees', label: '👤 Employee Monitoring' },
-          { id: 'shift', label: '📅 Shift & Capacity' },
-          { id: 'skills', label: '🎯 Skill Matrix' },
-          { id: 'tasks', label: '✅ Task Assignment' },
-          { id: 'reports', label: '📋 Reports' },
-        ].map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-            padding: '14px 18px', border: 'none', background: 'none', cursor: 'pointer',
-            fontSize: '0.85rem', fontWeight: 700, whiteSpace: 'nowrap',
-            color: activeTab === tab.id ? ORANGE : MUTED,
-            borderBottom: activeTab === tab.id ? `3px solid ${ORANGE}` : '3px solid transparent',
-            marginBottom: '-2px', transition: 'all 0.2s',
-          }}>
-            {tab.label}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{
+              background: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8',
+              border: '1px solid rgba(56, 189, 248, 0.25)', padding: '4px 10px',
+              borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em'
+            }}>
+              🎯 FIELD SUPERVISOR COCKPIT
+            </span>
+            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>•</span>
+            <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 600 }}>Active Roster Live</span>
+          </div>
+          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
+            Welcome back, {user?.name || 'Supervisor'}!
+          </h1>
+          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+            Operational Command — Monitor Team Readiness, Drive Performance & Remediate Learning Gaps
+          </p>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          <button
+            onClick={fetchDashboardData}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px',
+              padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-glass)',
+              background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)',
+              cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
+            }}
+          >
+            <RefreshCw size={15} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            <span>Refresh</span>
           </button>
-        ))}
+        </div>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: TEAM OVERVIEW (HOME)                                     */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'home' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      {/* ─── SECTION 1: TEAM SNAPSHOT (8 OPERATIONAL KPIS) ─── */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: '16px'
+      }}>
+        {/* KPI 1: Team Members */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Direct Reports
+            </span>
+            <Users size={18} color="#38BDF8" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+            {loading ? '...' : metrics.teamMembers}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Assigned to your direct team</span>
+        </div>
 
-          {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px' }}>
+        {/* KPI 2: Active Learners */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Active Learners
+            </span>
+            <TrendingUp size={18} color="#10B981" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#10B981' }}>
+            {loading ? '...' : metrics.activeLearners}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Engaged in curriculum this cycle</span>
+        </div>
+
+        {/* KPI 3: Training Completion */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Module Completion
+            </span>
+            <CheckCircle size={18} color="#A855F7" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+            {loading ? '...' : `${metrics.trainingCompletion}%`}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Modules finished by cohort</span>
+        </div>
+
+        {/* KPI 4: Attendance Rate */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Attendance Rate
+            </span>
+            <ClipboardList size={18} color="#2563EB" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: metrics.attendanceRate >= 80 ? '#10B981' : '#F59E0B' }}>
+            {loading ? '...' : `${metrics.attendanceRate}%`}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {metrics.attendanceRate >= 80 ? '✓ Meeting ≥80% benchmark' : '⚠️ Below 80% benchmark'}
+          </span>
+        </div>
+
+        {/* KPI 5: Average Assessment Score */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Average Quiz Score
+            </span>
+            <Star size={18} color="#EAB308" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+            {loading ? '...' : `${metrics.averageAssessmentScore}%`}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+            {metrics.averageAssessmentScore >= 70 ? '✓ Passing benchmark ≥70%' : '⚠️ Under 70% passing standard'}
+          </span>
+        </div>
+
+        {/* KPI 6: Assessment Pass Rate */}
+        <div className="kpi-card" style={{
+          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              Pass Rate (≥70%)
+            </span>
+            <Trophy size={18} color="#10B981" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
+            {loading ? '...' : `${metrics.assessmentPassRate}%`}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Attempts meeting passing threshold</span>
+        </div>
+
+        {/* KPI 7: Certification Ready */}
+        <div className="kpi-card" style={{
+          background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#10B981', textTransform: 'uppercase' }}>
+              Certification Ready
+            </span>
+            <Award size={18} color="#10B981" />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#10B981' }}>
+            {loading ? '...' : metrics.certificationReady}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: '#10B981' }}>Att ≥80% & Score ≥70% (Not certified)</span>
+        </div>
+
+        {/* KPI 8: At-Risk Learners */}
+        <div className="kpi-card" style={{
+          background: metrics.atRiskLearners > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-glass)',
+          border: metrics.atRiskLearners > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--border-glass)',
+          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-secondary)', textTransform: 'uppercase' }}>
+              At-Risk Learners
+            </span>
+            <AlertTriangle size={18} color={metrics.atRiskLearners > 0 ? '#EF4444' : '#64748B'} />
+          </div>
+          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-primary)' }}>
+            {loading ? '...' : metrics.atRiskLearners}
+          </div>
+          <span style={{ fontSize: '0.75rem', color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-muted)' }}>
+            Score &lt;60% OR Attendance &lt;80%
+          </span>
+        </div>
+      </div>
+
+      {/* ─── SECTION 2: ATTENTION REQUIRED (TRIAGE BANNER & FILTERS) ─── */}
+      <div style={{
+        background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+        borderRadius: '16px', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px'
+      }}>
+        {/* Operational Boundary Notice */}
+        <div style={{
+          background: 'rgba(37, 99, 235, 0.08)', border: '1px solid rgba(37, 99, 235, 0.25)',
+          borderRadius: '10px', padding: '12px 18px', display: 'flex', justifyContent: 'space-between',
+          alignItems: 'center', flexWrap: 'wrap', gap: '12px', fontSize: '0.82rem'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93C5FD' }}>
+            <Shield size={16} color="#60A5FA" />
+            <span><strong>COACHING STATUS:</strong> &lt;60% At Risk • 60–74% Needs Review • ≥75% On Track</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34D399' }}>
+            <Award size={16} color="#34D399" />
+            <span><strong>CERTIFICATION ELIGIBILITY:</strong> Attendance ≥80% AND Passing Score ≥70%</span>
+          </div>
+        </div>
+
+        {/* Filters & Search */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
             {[
-              { label: 'Team Members', val: teamSize, color: NAVY, icon: <Users size={20} /> },
-              { label: 'Active Learners', val: activeLearners, color: GREEN, icon: <UserCheck size={20} /> },
-              { label: 'Completion %', val: `${completionPct}%`, color: ORANGE, icon: <CheckCircle size={20} /> },
-              { label: 'Avg Quiz Score', val: `${avgScore}%`, color: BLUE, icon: <BarChart2 size={20} /> },
-              { label: 'Certification %', val: `${certPct}%`, color: GREEN, icon: <Award size={20} /> },
-              { label: 'Attendance %', val: `${attendancePct}%`, color: AMBER, icon: <Calendar size={20} /> },
-              { label: 'Pending Trainings', val: pendingTrainings, color: RED, icon: <AlertCircle size={20} /> },
-              { label: 'Productivity Score', val: `${productivityScore}/100`, color: NAVY, icon: <Zap size={20} /> },
-            ].map((c, i) => (
-              <div key={i} style={{
-                background: CARD, padding: '16px 18px', borderRadius: '14px',
-                boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', borderTop: `4px solid ${c.color}`,
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                transition: 'transform 0.18s',
-              }}
-                onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
-                onMouseOut={e => e.currentTarget.style.transform = 'none'}
+              { id: 'ALL', label: `All Team (${teamRoster.length})` },
+              { id: 'AT_RISK', label: `At Risk (${teamRoster.filter(e => e.coachingStatus === 'At Risk').length})` },
+              { id: 'NEEDS_REVIEW', label: `Needs Review (${teamRoster.filter(e => e.coachingStatus === 'Needs Review').length})` },
+              { id: 'ON_TRACK', label: `On Track (${teamRoster.filter(e => e.coachingStatus === 'On Track').length})` },
+              { id: 'LOW_ATTENDANCE', label: `Low Attendance (<80%)` },
+              { id: 'CERT_READY', label: `Cert Ready (${teamRoster.filter(e => e.certificationStatus === 'Eligible').length})` }
+            ].map(pill => (
+              <button
+                key={pill.id}
+                className="filter-pill"
+                onClick={() => setSelectedFilter(pill.id)}
+                style={{
+                  padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700,
+                  cursor: 'pointer', transition: 'all 0.15s',
+                  background: selectedFilter === pill.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
+                  color: selectedFilter === pill.id ? '#FFFFFF' : 'var(--text-secondary)',
+                  border: selectedFilter === pill.id ? '1px solid var(--primary)' : '1px solid var(--border-glass)'
+                }}
               >
-                <div>
-                  <div style={{ fontSize: '0.7rem', color: MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px' }}>{c.label}</div>
-                  <div style={{ fontSize: '1.5rem', fontWeight: 900, color: NAVY, fontFamily: 'Poppins, sans-serif', marginTop: '4px' }}>{c.val}</div>
-                </div>
-                <div style={{ color: c.color, background: `${c.color}12`, width: '38px', height: '38px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  {c.icon}
-                </div>
-              </div>
+                {pill.label}
+              </button>
             ))}
           </div>
 
-          
-          {/* Training vs Productivity KPI */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <TrendingUp size={18} color={ORANGE} /> Training vs. Floor Productivity
-              </h4>
-              <div style={{ width: '100%', height: '220px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={productivityData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={BORDER} vertical={false} />
-                    <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: MUTED }} dy={5} />
-                    <YAxis yAxisId="left" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: MUTED }} />
-                    <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: MUTED }} />
-                    <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)' }} contentStyle={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: '8px', color: TEXT }} />
-                    <Legend wrapperStyle={{ fontSize: '10px' }} />
-                    <Bar yAxisId="left" dataKey="output" name="Floor Output KPI" fill={BLUE} radius={[4, 4, 0, 0]} maxBarSize={30} />
-                    <Line yAxisId="right" type="monotone" dataKey="training" name="Training %" stroke={ORANGE} strokeWidth={3} dot={{ r: 4, fill: ORANGE }} />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              </div>
-            </>
-          )}
-
-          {/* Team Scoreboard + Training status */}
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
-
-            {/* Team Scoreboard */}
-            {card(
-              <>
-                <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Trophy size={18} color={AMBER} /> Team Performance Scoreboard
-                </h4>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {(topPerformers.length > 0 ? topPerformers : [
-                    { name: 'Rahul Singh', avgScore: '94', projectName: 'North Zone' },
-                    { name: 'Priya Rao', avgScore: '91', projectName: 'South Zone' },
-                    { name: 'Amit Kapoor', avgScore: '88', projectName: 'West Zone' },
-                    { name: 'Sunita Das', avgScore: '85', projectName: 'East Zone' },
-                    { name: 'Vivek Nair', avgScore: '82', projectName: 'North Zone' },
-                  ]).map((p, idx) => (
-                    <div key={idx} style={{
-                      display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 12px',
-                      background: idx === 0 ? `${AMBER}10` : BG, borderRadius: '10px',
-                      border: `1px solid ${idx === 0 ? AMBER : BORDER}`, borderLeft: `3px solid ${[AMBER, BLUE, GREEN, ORANGE, NAVY][idx]}`
-                    }}>
-                      <span style={{
-                        width: '24px', height: '24px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: idx === 0 ? AMBER : BORDER, color: idx === 0 ? '#fff' : MUTED, fontSize: '0.75rem', fontWeight: 900, flexShrink: 0
-                      }}>
-                        #{idx + 1}
-                      </span>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: NAVY }}>{p.name}</div>
-                        <div style={{ fontSize: '0.7rem', color: MUTED }}>{p.projectName || 'Zone'}</div>
-                      </div>
-                      <div>
-                        <span style={{ fontSize: '1rem', fontWeight: 900, color: GREEN }}>{p.avgScore}%</span>
-                      </div>
-                      <span style={badge(p.avgScore >= 80 ? GREEN : p.avgScore >= 60 ? AMBER : RED)}>
-                        {p.avgScore >= 80 ? 'Certified' : p.avgScore >= 60 ? 'In Progress' : 'At Risk'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Training Status */}
-            {card(
-              <>
-                <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <ClipboardList size={18} color={BLUE} /> Training Progress Status
-                </h4>
-                {[
-                  { label: 'Assigned', count: teamSize, color: NAVY },
-                  { label: 'In Progress', count: Math.round(teamSize * 0.32), color: BLUE },
-                  { label: 'Completed', count: quizAttendance.length || Math.round(teamSize * 0.78), color: GREEN },
-                  { label: 'Overdue', count: pendingTrainings, color: RED },
-                ].map((s, i) => (
-                  <div key={i} style={{ marginBottom: '14px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', fontWeight: 700, marginBottom: '5px' }}>
-                      <span style={{ color: TEXT }}>{s.label}</span>
-                      <span style={{ color: s.color }}>{s.count}</span>
-                    </div>
-                    <div style={{ height: '8px', background: BORDER, borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${Math.min(100, (s.count / teamSize) * 100)}%`, background: s.color, borderRadius: '4px', transition: 'width 0.7s' }} />
-                    </div>
-                  </div>
-                ))}
-
-                {/* Escalation Alert Panel */}
-                <div style={{ marginTop: '16px', padding: '12px 14px', background: `${ORANGE}08`, borderRadius: '10px', border: `1px solid ${ORANGE}30`, borderLeft: `4px solid ${ORANGE}` }}>
-                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: ORANGE, marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <AlertTriangle size={14} /> Escalation Alerts
-                  </div>
-                  <ul style={{ margin: 0, padding: '0 0 0 16px', fontSize: '0.75rem', color: TEXT, lineHeight: '1.7' }}>
-                    <li>{pendingTrainings} members have missed mandatory training deadlines.</li>
-                    <li>{Math.round(teamSize * 0.08)} certifications expire in the next 30 days.</li>
-                    <li>Quiz pass rate dropped 5% compared to last month.</li>
-                  </ul>
-                </div>
-              </>
-            )}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+            <Search size={15} color="var(--text-muted)" />
+            <input
+              type="text"
+              placeholder="Search team member..."
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', fontSize: '0.85rem' }}
+            />
           </div>
         </div>
-      )}
 
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: ATTENDANCE                                               */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'attendance' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        {/* ─── SECTION 3: TEAM PERFORMANCE MATRIX TABLE ─── */}
+        <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <thead>
+              <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid var(--border-glass)' }}>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Employee</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Designation</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Training Progress</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Attendance %</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Assessment Score</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Coaching Status</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Certification</th>
+                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredRoster.length === 0 ? (
+                <tr>
+                  <td colSpan={8} style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                    No team members match the selected filter.
+                  </td>
+                </tr>
+              ) : (
+                filteredRoster.map(emp => {
+                  const isAtRisk = emp.coachingStatus === 'At Risk';
+                  const isNeedsReview = emp.coachingStatus === 'Needs Review';
 
-          {/* Attendance Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '14px' }}>
-            {[
-              { label: 'Today Present', val: Math.round(teamSize * 0.92), total: teamSize, color: GREEN },
-              { label: 'This Week Avg', val: `${attendancePct}%`, total: null, color: BLUE },
-              { label: 'This Month Avg', val: `${Math.round(attendancePct * 0.95)}%`, total: null, color: ORANGE },
-              { label: 'Absent Today', val: Math.round(teamSize * 0.08), total: null, color: RED },
-            ].map((s, i) => (
-              <div key={i} style={{ background: CARD, padding: '16px', borderRadius: '14px', border: `1px solid ${BORDER}`, borderTop: `4px solid ${s.color}` }}>
-                <div style={{ fontSize: '0.72rem', color: MUTED, fontWeight: 700, textTransform: 'uppercase' }}>{s.label}</div>
-                <div style={{ fontSize: '1.6rem', fontWeight: 900, color: s.color, marginTop: '6px', fontFamily: 'Poppins, sans-serif' }}>
-                  {s.val}{s.total ? ` / ${s.total}` : ''}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Attendance Trend Chart */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY }}>
-                <Activity size={16} style={{ marginRight: '8px', color: BLUE }} />
-                Weekly Attendance Trend
-              </h4>
-              <svg viewBox="0 0 420 140" style={{ width: '100%', height: '140px' }}>
-                {[0, 25, 50, 75, 100].map((pct, i) => {
-                  const y = 120 - pct * 1.1;
-                  return <line key={i} x1="30" y1={y} x2="410" y2={y} stroke={BORDER} strokeWidth="1" strokeDasharray="3,3" />;
-                })}
-                {weeklyAttendance.map((d, i) => {
-                  const x = 50 + i * 64;
-                  const barH = d.pct * 1.1;
-                  const y = 120 - barH;
-                  const col = d.pct >= 90 ? GREEN : d.pct >= 75 ? BLUE : AMBER;
                   return (
-                    <g key={i}>
-                      <rect x={x - 20} y={y} width="40" height={barH} rx="6" fill={`${col}AA`} />
-                      <text x={x} y={y - 6} fill={NAVY} fontSize="10" fontWeight="800" textAnchor="middle">{d.pct}%</text>
-                      <text x={x} y="133" fill={MUTED} fontSize="10" fontWeight="600" textAnchor="middle">{d.day}</text>
-                    </g>
+                    <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-glass)', transition: 'background 0.15s' }}>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.name}</span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.employee_id} • {emp.email}</span>
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
+                        {emp.designation}
+                      </td>
+
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <div style={{ width: '80px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ width: `${emp.trainingProgress}%`, height: '100%', background: '#38BDF8', borderRadius: '3px' }} />
+                          </div>
+                          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{emp.trainingProgress}%</span>
+                        </div>
+                      </td>
+
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: emp.attendancePercentage >= 80 ? '#10B981' : '#EF4444'
+                        }}>
+                          {emp.attendancePercentage}%
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          fontWeight: 700,
+                          color: emp.assessmentScore >= 70 ? '#10B981' : (emp.assessmentScore >= 60 ? '#F59E0B' : '#EF4444')
+                        }}>
+                          {emp.assessmentScore}%
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{
+                          padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800,
+                          background: isAtRisk ? 'rgba(239, 68, 68, 0.15)' : (isNeedsReview ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
+                          color: isAtRisk ? '#EF4444' : (isNeedsReview ? '#F59E0B' : '#10B981'),
+                          border: isAtRisk ? '1px solid rgba(239, 68, 68, 0.3)' : (isNeedsReview ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)')
+                        }}>
+                          {emp.coachingStatus}
+                        </span>
+                      </td>
+
+                      <td style={{ padding: '14px 16px' }}>
+                        {emp.certificationStatus === 'Certified' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>
+                            <CheckCircle2 size={14} /> Certified
+                          </span>
+                        ) : emp.certificationStatus === 'Eligible' ? (
+                          <span style={{
+                            padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
+                            background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)'
+                          }}>
+                            Eligible
+                          </span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>In Progress</span>
+                        )}
+                      </td>
+
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                          <button
+                            onClick={() => handleOpen360(emp.id)}
+                            title="View Participant 360"
+                            style={{
+                              padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border-glass)',
+                              background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem'
+                            }}
+                          >
+                            <Eye size={13} /> 360
+                          </button>
+                          <button
+                            onClick={() => handleOpenCoachModal(emp)}
+                            className="btn-coach"
+                            style={{
+                              padding: '5px 12px', borderRadius: '6px', border: 'none',
+                              background: isAtRisk ? '#EF4444' : 'var(--primary)', color: '#FFFFFF',
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
+                              fontSize: '0.78rem', fontWeight: 700
+                            }}
+                          >
+                            <MessageSquare size={13} /> Coach
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
                   );
-                })}
-              </svg>
-            </>
-          )}
-
-          {/* Absent Employees */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY }}>
-                <AlertCircle size={16} style={{ marginRight: '8px', color: RED }} />
-                Absent / Non-Compliant Employees
-              </h4>
-              {[
-                { name: 'Deepa Menon', date: 'Today', zone: 'South', reason: 'No login' },
-                { name: 'Karan Joshi', date: 'Today', zone: 'East', reason: 'No training' },
-                ...(inactiveLearners.map(u => ({ name: u.name, date: 'This week', zone: u.location || 'N/A', reason: 'Inactive' })))
-              ].map((e, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: BG, borderRadius: '8px', marginBottom: '6px', border: `1px solid ${BORDER}`, borderLeft: `3px solid ${RED}` }}>
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: NAVY }}>{e.name}</div>
-                    <div style={{ fontSize: '0.72rem', color: MUTED }}>{e.zone} Zone · {e.reason}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={badge(AMBER)}>{e.date}</span>
-                    <button style={{ padding: '5px 10px', borderRadius: '6px', background: `${ORANGE}10`, border: `1px solid ${ORANGE}30`, color: ORANGE, fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}>
-                      Remind
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: CERTIFICATIONS & QUIZ                                    */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'certs' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
-
-            {/* Donut Chart */}
-            {card(
-              <>
-                <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY }}>Certification Status</h4>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <div style={{ position: 'relative', width: '160px', height: '160px' }}>
-                    <svg viewBox="0 0 100 100" style={{ transform: 'rotate(-90deg)', width: '100%', height: '100%' }}>
-                      <circle cx="50" cy="50" r={r} fill="transparent" stroke={BORDER} strokeWidth="12" />
-                      <circle cx="50" cy="50" r={r} fill="transparent" stroke={GREEN} strokeWidth="12"
-                        strokeDasharray={circ} strokeDashoffset={certOffset} strokeLinecap="round" />
-                    </svg>
-                    <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                      <span style={{ fontSize: '1.8rem', fontWeight: 900, color: NAVY, fontFamily: 'Poppins, sans-serif' }}>{certPct}%</span>
-                      <span style={{ fontSize: '0.65rem', color: MUTED, fontWeight: 700, textTransform: 'uppercase' }}>Certified</span>
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '14px', marginTop: '16px', fontSize: '0.78rem' }}>
-                    {[{ label: `Certified (${certifiedCount})`, color: GREEN }, { label: `Pending (${teamSize - certifiedCount})`, color: BORDER }].map((l, i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-                        <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: l.color }} />
-                        <span style={{ color: TEXT }}>{l.label}</span>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ marginTop: '16px', width: '100%' }}>
-                    <div style={{ padding: '10px', background: `${AMBER}10`, border: `1px solid ${AMBER}30`, borderRadius: '8px', fontSize: '0.78rem', color: TEXT, textAlign: 'center' }}>
-                      ⚠️ <strong>{Math.round(certifiedCount * 0.08)}</strong> certifications expiring within 30 days
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Quiz Performance Table + Leaderboard */}
-            {card(
-              <>
-                <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Trophy size={18} color={AMBER} /> Quiz Performance & Leaderboard
-                </h4>
-
-                {/* Stats row */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 140px), 1fr))', gap: '10px', marginBottom: '16px' }}>
-                  {[
-                    { label: 'Participated', val: quizAttendance.length || Math.round(teamSize * 0.82), color: BLUE },
-                    { label: 'Pass Rate', val: `${certPct}%`, color: GREEN },
-                    { label: 'Avg Score', val: `${avgScore}%`, color: ORANGE },
-                    { label: 'Sessions', val: reports.length || 12, color: NAVY },
-                  ].map((s, i) => (
-                    <div key={i} style={{ padding: '10px', background: BG, borderRadius: '8px', border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 900, color: s.color }}>{s.val}</div>
-                      <div style={{ fontSize: '0.68rem', color: MUTED, fontWeight: 600, marginTop: '2px' }}>{s.label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Leaderboard */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                  {(topPerformers.length > 0 ? topPerformers : [
-                    { name: 'Rahul Singh', avgScore: '94', projectName: 'North' },
-                    { name: 'Priya Rao', avgScore: '91', projectName: 'South' },
-                    { name: 'Amit Kapoor', avgScore: '88', projectName: 'West' },
-                    { name: 'Sunita Das', avgScore: '85', projectName: 'East' },
-                    { name: 'Vivek Nair', avgScore: '82', projectName: 'North' },
-                  ]).map((p, idx) => (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '8px 12px', background: idx === 0 ? `${AMBER}10` : BG, borderRadius: '8px', border: `1px solid ${idx === 0 ? AMBER : BORDER}` }}>
-                      <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: [AMBER, '#C0C0C0', '#CD7F32', BORDER, BORDER][idx], color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.72rem', fontWeight: 900, flexShrink: 0 }}>
-                        {idx + 1}
-                      </span>
-                      <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 700, color: NAVY }}>{p.name}</span>
-                      <span style={{ fontSize: '0.75rem', color: MUTED }}>{p.projectName}</span>
-                      <span style={{ fontWeight: 900, color: GREEN, fontSize: '0.9rem' }}>{p.avgScore}%</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: EMPLOYEE MONITORING                                      */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'employees' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
-
-          {/* Top Performers */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                🏆 Top Performers
-              </h4>
-              {(topPerformers.length > 0 ? topPerformers : [
-                { name: 'Rahul Singh', avgScore: '94', projectName: 'North', employeeId: 'EMP001' },
-                { name: 'Priya Rao', avgScore: '91', projectName: 'South', employeeId: 'EMP002' },
-                { name: 'Amit Kapoor', avgScore: '88', projectName: 'West', employeeId: 'EMP003' },
-                { name: 'Sunita Das', avgScore: '85', projectName: 'East', employeeId: 'EMP004' },
-                { name: 'Vivek Nair', avgScore: '82', projectName: 'North', employeeId: 'EMP005' },
-              ]).map((p, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: BG, borderRadius: '8px', marginBottom: '6px', border: `1px solid ${BORDER}`, borderLeft: `3px solid ${GREEN}` }}>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: NAVY }}>{p.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: MUTED }}>ID: {p.employeeId} · {p.projectName}</div>
-                  </div>
-                  <span style={{ fontWeight: 900, color: GREEN, fontSize: '0.9rem' }}>{p.avgScore}%</span>
-                </div>
-              ))}
-            </>
-          )}
-
-          {/* At-Risk / Low Performers */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                ⚠️ At-Risk Employees
-              </h4>
-              <p style={{ fontSize: '0.75rem', color: MUTED, margin: '-6px 0 12px 0' }}>Scoring below 60% or inactive for 7+ days</p>
-              {(lowPerformers.length > 0 ? lowPerformers : [
-                { name: 'Deepa Menon', avgScore: '42', employeeId: 'EMP018', projectName: 'South' },
-                { name: 'Karan Joshi', avgScore: '55', employeeId: 'EMP024', projectName: 'East' },
-                { name: 'Leena Shah', avgScore: '38', employeeId: 'EMP031', projectName: 'West' },
-              ]).map((p, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: `${RED}06`, borderRadius: '8px', marginBottom: '6px', border: `1px solid ${RED}20`, borderLeft: `3px solid ${RED}` }}>
-                  <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: NAVY }}>{p.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: MUTED }}>ID: {p.employeeId} · {p.projectName}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 900, color: RED }}>{p.avgScore}%</span>
-                    <button style={{ padding: '4px 8px', borderRadius: '6px', background: `${ORANGE}10`, border: `1px solid ${ORANGE}30`, color: ORANGE, fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer' }}>
-                      Assign Refresher
-                    </button>
-                    <button onClick={() => toggleCoaching(p.employeeId)} style={{ padding: '4px 8px', borderRadius: '6px', background: coachingLogs[p.employeeId] ? `${GREEN}10` : `${RED}10`, border: `1px solid ${coachingLogs[p.employeeId] ? GREEN : RED}30`, color: coachingLogs[p.employeeId] ? GREEN : RED, fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s' }}>
-                      {coachingLogs[p.employeeId] ? '✓ Coaching Logged' : 'Log 1-on-1 Coaching'}
-                    </button>
-                  </div>
-                </div>
-              ))}
-              {lowPerformers.length === 0 && projectUsers.length > 0 && (
-                <div style={{ textAlign: 'center', padding: '20px', color: GREEN, fontSize: '0.85rem', fontWeight: 700 }}>
-                  <CheckCircle size={24} style={{ display: 'block', margin: '0 auto 8px' }} />
-                  All team members are above the 60% threshold!
-                </div>
+                })
               )}
-
-              {/* Inactive Learners */}
-              <h5 style={{ margin: '16px 0 10px 0', fontWeight: 800, color: NAVY, fontSize: '0.85rem' }}>Inactive Learners</h5>
-              {(inactiveLearners.length > 0 ? inactiveLearners : [
-                { name: 'Rohit Patel', location: 'West', id: 'EMP042' },
-              ]).map((u, i) => (
-                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: BG, borderRadius: '8px', marginBottom: '4px', border: `1px solid ${BORDER}` }}>
-                  <div>
-                    <div style={{ fontSize: '0.82rem', fontWeight: 700, color: TEXT }}>{u.name}</div>
-                    <div style={{ fontSize: '0.7rem', color: MUTED }}>{u.location || u.employee_id}</div>
-                  </div>
-                  <span style={badge(MUTED)}>Inactive</span>
-                </div>
-              ))}
-            </>
-          )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
 
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: TASK ASSIGNMENT                                          */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'tasks' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      {/* ─── SECTION 4: COACHING & FOLLOW-UP LOG ─── */}
+      <div style={{
+        background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
+        borderRadius: '16px', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              Coaching & Remediation Follow-up Log
+            </h3>
+            <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Operational tracking of feedback sessions, knowledge gap follow-ups, and scheduled refreshers
+            </p>
+          </div>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+            {coachingLogs.length} Records Logged
+          </span>
+        </div>
 
-          {/* Add Task Form */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Plus size={16} color={ORANGE} /> Assign New Task
-              </h4>
-              <form onSubmit={handleAddTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <input
-                  value={newTask}
-                  onChange={e => setNewTask(e.target.value)}
-                  placeholder="Task description (e.g. Assign Module 4 training to East Zone team)..."
-                  style={{ padding: '10px 14px', borderRadius: '10px', border: `1px solid ${BORDER}`, fontSize: '0.85rem', color: TEXT, background: BG, outline: 'none' }}
-                />
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                  <select value={newTaskType} onChange={e => setNewTaskType(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${BORDER}`, background: CARD, fontSize: '0.85rem', color: TEXT }}>
-                    {['Training Task', 'Assessment', 'Refresher Course', 'Field Activity'].map(t => <option key={t}>{t}</option>)}
-                  </select>
-                  <select value={newTaskPriority} onChange={e => setNewTaskPriority(e.target.value)} style={{ flex: 1, padding: '9px 12px', borderRadius: '8px', border: `1px solid ${BORDER}`, background: CARD, fontSize: '0.85rem', color: TEXT }}>
-                    {['High', 'Medium', 'Low'].map(p => <option key={p}>{p}</option>)}
-                  </select>
-                  <button type="submit" style={{ padding: '9px 20px', borderRadius: '8px', background: ORANGE, color: '#fff', border: 'none', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}>
-                    Add Task
+        {coachingLogs.length === 0 ? (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+            No coaching logs recorded yet. Click "Coach" on any employee in the roster above to record a remediation note.
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+            {coachingLogs.slice(0, 6).map(log => {
+              const emp = teamRoster.find(e => e.id === log.employeeId);
+              return (
+                <div key={log.id} style={{
+                  background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)',
+                  borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
+                      {emp ? emp.name : 'Team Member'}
+                    </span>
+                    <span style={{
+                      fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '10px',
+                      background: log.followUpStatus === 'Resolved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      color: log.followUpStatus === 'Resolved' ? '#10B981' : '#F59E0B'
+                    }}>
+                      {log.followUpStatus}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    <strong>Issue:</strong> {log.issue}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                    <strong>Action:</strong> {log.recommendedAction}
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#38BDF8', marginTop: '4px' }}>
+                    📅 Next Action: {log.nextActionDate}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── MODAL: RECORD COACHING NOTE ─── */}
+      {isCoachModalOpen && coachTarget && (
+        <div className="modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div className="coaching-modal" style={{
+            background: '#0F172A', border: '1px solid var(--border-glass)', borderRadius: '16px',
+            width: '90%', maxWidth: '520px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Record Coaching Note — {coachTarget.name}
+                </h3>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  {coachTarget.employee_id} • Status: {coachTarget.coachingStatus}
+                </span>
+              </div>
+              <button className="btn-modal-close" onClick={() => setIsCoachModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            {coachSuccess ? (
+              <div style={{ padding: '30px 10px', textAlign: 'center' }}>
+                <CheckCircle2 size={48} color="#10B981" style={{ margin: '0 auto 12px auto' }} />
+                <h4 style={{ color: '#10B981', margin: '0 0 6px 0', fontSize: '1.2rem', fontWeight: 800 }}>Coaching Note Logged</h4>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Follow-up action registered for this team member.</p>
+              </div>
+            ) : (
+              <form onSubmit={handleSaveCoachingNote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                    Coaching Issue / Reason *
+                  </label>
+                  <input
+                    type="text"
+                    value={coachIssue}
+                    onChange={e => setCoachIssue(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                    Observations & Gap Notes
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="coaching-textarea"
+                    value={coachReason}
+                    onChange={e => setCoachReason(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                    Recommended Action / Refresher *
+                  </label>
+                  <input
+                    type="text"
+                    value={coachAction}
+                    onChange={e => setCoachAction(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                      Status
+                    </label>
+                    <select
+                      value={coachStatus}
+                      onChange={e => setCoachStatus(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#1E293B', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="In Progress">In Progress</option>
+                      <option value="Resolved">Resolved</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
+                      Next Follow-up Date
+                    </label>
+                    <input
+                      type="date"
+                      value={coachDate}
+                      onChange={e => setCoachDate(e.target.value)}
+                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#1E293B', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid var(--border-glass)', paddingTop: '14px' }}>
+                  <button type="button" onClick={() => setIsCoachModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-save-note" disabled={coachSubmitting} style={{ padding: '8px 20px', borderRadius: '8px', background: 'var(--primary)', border: 'none', color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>
+                    {coachSubmitting ? 'Saving...' : 'Save Coaching Note'}
                   </button>
                 </div>
               </form>
-            </>
-          )}
-
-          {/* Task Board */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '14px' }}>
-            {['Pending', 'In Progress', 'Completed', 'Escalated'].map(col => (
-              <div key={col} style={{ background: BG, borderRadius: '12px', padding: '14px', border: `1px solid ${BORDER}` }}>
-                <div style={{ fontWeight: 800, fontSize: '0.85rem', color: statusColor(col), marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: statusColor(col), display: 'inline-block' }} />
-                  {col} ({tasks.filter(t => t.status === col).length})
-                </div>
-                {tasks.filter(t => t.status === col).map(task => (
-                  <div key={task.id} style={{ padding: '10px', background: CARD, borderRadius: '8px', marginBottom: '8px', border: `1px solid ${BORDER}`, borderLeft: `3px solid ${priorityColor(task.priority)}` }}>
-                    <div style={{ fontSize: '0.78rem', fontWeight: 700, color: NAVY, lineHeight: '1.4', marginBottom: '8px' }}>{task.text}</div>
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
-                      <span style={badge(priorityColor(task.priority))}>{task.priority}</span>
-                      <span style={badge(BLUE)}>{task.type}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                      {['Pending', 'In Progress', 'Completed', 'Escalated'].filter(s => s !== col).map(s => (
-                        <button key={s} onClick={() => handleStatusChange(task.id, s)} style={{
-                          padding: '3px 7px', borderRadius: '5px', border: `1px solid ${BORDER}`, background: CARD,
-                          cursor: 'pointer', fontSize: '0.65rem', fontWeight: 700, color: statusColor(s)
-                        }}>→ {s}</button>
-                      ))}
-                      <button onClick={() => handleDeleteTask(task.id)} style={{ padding: '3px 7px', borderRadius: '5px', border: `1px solid ${RED}30`, background: `${RED}10`, cursor: 'pointer', fontSize: '0.65rem', color: RED }}>
-                        <Trash2 size={10} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {tasks.filter(t => t.status === col).length === 0 && (
-                  <div style={{ textAlign: 'center', fontSize: '0.75rem', color: MUTED, padding: '12px', fontStyle: 'italic' }}>No tasks</div>
-                )}
-              </div>
-            ))}
+            )}
           </div>
-
-          {/* Team Communication */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 12px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MessageSquare size={16} color={BLUE} /> Team Communication Center
-              </h4>
-              <textarea
-                value={annMsg}
-                onChange={e => setAnnMsg(e.target.value)}
-                placeholder="Write a team announcement, training reminder, or notification..."
-                rows={3}
-                style={{ width: '100%', padding: '10px 12px', borderRadius: '10px', border: `1px solid ${BORDER}`, fontSize: '0.85rem', color: TEXT, background: BG, resize: 'vertical', outline: 'none', boxSizing: 'border-box', marginBottom: '10px' }}
-              />
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                {[{ label: '📣 Team Announcement', color: ORANGE }, { label: '📱 Training Reminder', color: BLUE }, { label: '🎉 Event Notification', color: GREEN }].map((btn, i) => (
-                  <button key={i} onClick={() => { setAnnSent(true); setTimeout(() => { setAnnSent(false); setAnnMsg(''); }, 2500); }} style={{
-                    flex: 1, padding: '8px', borderRadius: '8px', border: `1px solid ${btn.color}30`,
-                    background: `${btn.color}10`, color: btn.color, fontWeight: 700, fontSize: '0.78rem', cursor: 'pointer'
-                  }}>
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
-              {annSent && <div style={{ marginTop: '10px', padding: '8px 12px', background: `${GREEN}10`, border: `1px solid ${GREEN}30`, borderRadius: '8px', color: GREEN, fontSize: '0.82rem', fontWeight: 700 }}>✓ Message sent to team!</div>}
-            </>
-          )}
         </div>
       )}
 
-      
+      {/* ─── MODAL: PARTICIPANT 360 DRAWER ─── */}
+      {is360ModalOpen && (
+        <div className="modal-overlay" style={{
+          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+          background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        }}>
+          <div style={{
+            background: '#0F172A', border: '1px solid var(--border-glass)', borderRadius: '16px',
+            width: '90%', maxWidth: '640px', padding: '24px', maxHeight: '85vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Eye size={20} color="#38BDF8" />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  Participant 360 Profile
+                </h3>
+              </div>
+              <button onClick={() => setIs360ModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
+                <X size={18} />
+              </button>
+            </div>
 
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: SHIFT & CAPACITY PLANNING                                */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'shift' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {card(
-            <>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h4 style={{ margin: 0, fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Clock size={18} color={BLUE} /> Weekly Roster & Training Deficit Tracker
-                </h4>
-                <div style={{ padding: '6px 12px', background: `${RED}10`, border: `1px solid ${RED}30`, borderRadius: '8px', color: RED, fontSize: '0.75rem', fontWeight: 700 }}>
-                  ⚠️ Warning: 14% Capacity Deficit detected during Morning Shift (Thurs)
+            {loading360 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
+                <span>Loading direct subordinate intelligence profile...</span>
+              </div>
+            ) : error360 ? (
+              <div style={{ padding: '20px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', color: '#EF4444' }}>
+                <strong>Access Guard:</strong> {error360}
+              </div>
+            ) : selected360User ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {/* Profile Header */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '10px' }}>
+                  <div>
+                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selected360User.participant?.name || 'Learner'}</h4>
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{selected360User.participant?.email} • {selected360User.participant?.employee_id}</span>
+                  </div>
+                  <span style={{ padding: '4px 10px', borderRadius: '10px', background: '#38BDF8', color: '#0F172A', fontWeight: 800, fontSize: '0.75rem' }}>
+                    Team Direct Report
+                  </span>
                 </div>
-              </div>
 
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED }}>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>Employee</th>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>Assigned Shift</th>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>Scheduled Training Hrs</th>
-                    <th style={{ padding: '12px', textAlign: 'left' }}>SLA Impact Risk</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shiftData.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                      <td style={{ padding: '12px', fontWeight: 700, color: TEXT }}>{row.name}</td>
-                      <td style={{ padding: '12px' }}>
-                        <span style={badge(row.shift === 'Morning' ? ORANGE : BLUE)}>{row.shift}</span>
-                      </td>
-                      <td style={{ padding: '12px', color: TEXT }}>{row.training}</td>
-                      <td style={{ padding: '12px', fontWeight: 700, color: row.risk.includes('High') ? RED : row.risk === 'Medium' ? AMBER : GREEN }}>{row.risk}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: SKILL PROFICIENCY MATRIX                                  */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'skills' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '20px' }}>
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Target size={18} color={GREEN} /> Team Skill Radar
-              </h4>
-              <div style={{ width: '100%', height: '300px' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="70%" data={skillData}>
-                    <PolarGrid stroke={BORDER} />
-                    <PolarAngleAxis dataKey="subject" tick={{ fill: MUTED, fontSize: 10 }} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                    <Tooltip contentStyle={{ background: BG, border: `1px solid ${BORDER}`, borderRadius: '8px', color: TEXT }} />
-                    <Radar name="Team Avg" dataKey="A" stroke={ORANGE} fill={ORANGE} fillOpacity={0.5} />
-                    <Radar name="Target" dataKey="B" stroke={BLUE} fill={BLUE} fillOpacity={0.2} />
-                    <Legend wrapperStyle={{ fontSize: '10px' }} />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-            </>
-          )}
-
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Users size={18} color={NAVY} /> Individual Competency Matrix
-              </h4>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.75rem', textAlign: 'center' }}>
-                  <thead>
-                    <tr style={{ borderBottom: `1px solid ${BORDER}`, color: MUTED }}>
-                      <th style={{ padding: '8px', textAlign: 'left' }}>Employee</th>
-                      <th style={{ padding: '8px' }}>POS</th>
-                      <th style={{ padding: '8px' }}>Support</th>
-                      <th style={{ padding: '8px' }}>Product</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {[
-                      { name: 'Rahul S.', scores: [95, 88, 92] },
-                      { name: 'Priya R.', scores: [82, 94, 89] },
-                      { name: 'Amit K.', scores: [65, 70, 60] },
-                      { name: 'Sunita D.', scores: [90, 85, 91] },
-                      { name: 'Vivek N.', scores: [72, 68, 75] },
-                    ].map((row, i) => (
-                      <tr key={i} style={{ borderBottom: `1px solid ${BORDER}` }}>
-                        <td style={{ padding: '10px 8px', textAlign: 'left', fontWeight: 700, color: TEXT }}>{row.name}</td>
-                        {row.scores.map((s, j) => (
-                          <td key={j} style={{ padding: '10px 8px' }}>
-                            <span style={{ padding: '4px 8px', borderRadius: '4px', background: s >= 90 ? `${GREEN}20` : s >= 75 ? `${BLUE}20` : `${RED}20`, color: s >= 90 ? GREEN : s >= 75 ? BLUE : RED, fontWeight: 700 }}>
-                              {s}%
-                            </span>
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </>
-          )}
-        </div>
-      )}
-
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {/* TAB: REPORTS                                                  */}
-      {/* TAB: REPORTS                                                  */}
-      {/* ══════════════════════════════════════════════════════════════ */}
-      {activeTab === 'reports' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 16px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Download size={16} color={ORANGE} /> Team Reports Center
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '14px' }}>
-                {[
-                  { title: 'Team Training Report', desc: 'Completion status and progress for all assigned courses.', type: 'reports' },
-                  { title: 'Attendance Report', desc: 'Daily, weekly, and monthly attendance records.', type: 'attendance-quiz' },
-                  { title: 'Certification Report', desc: 'Certified, pending, and expiring certification status.', type: 'reports' },
-                  { title: 'Quiz Performance Report', desc: 'Quiz scores, pass rates, and leaderboard rankings.', type: 'attendance-quiz' },
-                ].map((r, i) => (
-                  <div key={i} style={{ padding: '16px', background: BG, borderRadius: '12px', border: `1px solid ${BORDER}` }}>
-                    <div style={{ fontWeight: 800, fontSize: '0.9rem', color: NAVY, marginBottom: '6px' }}>{r.title}</div>
-                    <div style={{ fontSize: '0.75rem', color: MUTED, marginBottom: '14px', lineHeight: '1.4' }}>{r.desc}</div>
-                    <div style={{ display: 'flex', gap: '6px' }}>
-                      <button onClick={() => onExportExcel && onExportExcel(r.type)} style={{ padding: '5px 10px', borderRadius: '6px', background: NAVY, color: '#fff', border: 'none', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <FileText size={11} /> Excel
-                      </button>
-                      <button onClick={() => onExportPPT && onExportPPT(r.type)} style={{ padding: '5px 10px', borderRadius: '6px', background: ORANGE, color: '#fff', border: 'none', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                        <Presentation size={11} /> PPT
-                      </button>
-                      <span style={badge(BLUE)}>PDF</span>
+                {/* Overall Attendance & Score Meters */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Record</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#10B981', marginTop: '4px' }}>
+                      {selected360User.jitsiAttendance?.attendanceRate || 85}%
                     </div>
                   </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Supervisor Permissions Note */}
-          {card(
-            <>
-              <h4 style={{ margin: '0 0 14px 0', fontWeight: 800, color: NAVY, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Shield size={16} color={BLUE} /> Supervisor Access Permissions
-              </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '12px' }}>
-                {[
-                  { items: ['✅ View Team Data', '✅ Assign Training Tasks', '✅ Track Team Progress', '✅ View Team Reports', '✅ Monitor Certifications', '✅ Send Team Announcements'], label: 'Allowed', color: GREEN },
-                  { items: ['❌ Create New Projects', '❌ Manage LMS Settings', '❌ Create Courses or Quizzes', '❌ Manage Other Teams', '❌ Access Admin Panel', '❌ Bulk Upload Users'], label: 'Restricted', color: RED },
-                ].map((s, i) => (
-                  <div key={i} style={{ padding: '14px', background: `${s.color}08`, borderRadius: '10px', border: `1px solid ${s.color}20` }}>
-                    <div style={{ fontWeight: 800, color: s.color, fontSize: '0.82rem', marginBottom: '10px' }}>{s.label}</div>
-                    {s.items.map((item, j) => (
-                      <div key={j} style={{ fontSize: '0.78rem', color: TEXT, marginBottom: '5px' }}>{item}</div>
-                    ))}
+                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Assessment Average</span>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#38BDF8', marginTop: '4px' }}>
+                      {selected360User.quizIntelligence?.averageScore || 78}%
+                    </div>
                   </div>
-                ))}
+                </div>
+
+                {/* Certification Readiness Status */}
+                <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontWeight: 700, color: '#10B981', fontSize: '0.85rem' }}>Certification Readiness Audit</span>
+                    <span style={{ fontSize: '0.78rem', color: '#34D399', fontWeight: 800 }}>Rule: Att ≥80% & Score ≥70%</span>
+                  </div>
+                  <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                    {selected360User.certificationIntelligence?.hasCertificate ? '✓ Issued official certificate on file' : 'Evaluating learner completion and attendance requirements'}
+                  </p>
+                </div>
               </div>
-            </>
-          )}
+            ) : null}
+          </div>
         </div>
       )}
     </div>

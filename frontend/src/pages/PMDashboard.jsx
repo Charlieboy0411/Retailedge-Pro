@@ -1,8 +1,13 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { useSearchParams } from 'react-router-dom';
-import { Users, BarChart2, Calendar, Download, FolderOpen, CheckCircle, Clock, TrendingUp, AlertCircle, X, FileText, Presentation, RefreshCw } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Users, BarChart2, Calendar, Download, FolderOpen, CheckCircle, Clock, TrendingUp, AlertCircle, X, FileText, Presentation, RefreshCw, ShieldAlert, ArrowLeft } from 'lucide-react';
+
+const AUTHORIZED_PM_ROLES = [
+  'Program Manager', 'Admin', 'Super Admin', 'Client',
+  'MD', 'COO', 'VP Operations', 'Marketing Manager', 'T&D Manager'
+];
 import { getSocket } from '../utils/socketService';
 import { generate15SlidePPT } from '../utils/pptHelper';
 import { generateExcelReport } from '../utils/excelHelper';
@@ -129,16 +134,22 @@ const MOCK_PROJECT_USERS = [
 
 export default function PMDashboard() {
   const { token, user } = useContext(AuthContext);
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
+  const isAuthorized = Boolean(user && AUTHORIZED_PM_ROLES.includes(user.role));
   const activeRole = user?.role || 'Program Manager';
+  const [apiError, setApiError] = useState(null);
 
-  // Project users
+  // Project users & Intelligence
   const [projectUsers, setProjectUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);  // unfiltered platform-wide user list for Admin
   const [projectInfo, setProjectInfo] = useState(null);
   const [projectsList, setProjectsList] = useState([]);
   const selectedProjectId = searchParams.get('projectId') || 'all';
+  const [selectedSubProjectId, setSelectedSubProjectId] = useState('all');
+  const [dateRange, setDateRange] = useState('7d');
+  const [intelligenceData, setIntelligenceData] = useState(null);
 
   // Reports
   const [reports, setReports] = useState([]);
@@ -196,10 +207,10 @@ export default function PMDashboard() {
   };
 
   useEffect(() => {
-    if (token && user) {
+    if (token && user && isAuthorized) {
       fetchExecutiveMetrics();
     }
-  }, [token, selectedProjectId, user]);
+  }, [token, selectedProjectId, user, isAuthorized]);
 
   useEffect(() => {
     if (activeRole) {
@@ -207,9 +218,13 @@ export default function PMDashboard() {
     }
   }, [activeRole]);
 
-
   useEffect(() => {
-    if (token) {
+    if (user && !isAuthorized) {
+      setLoading(false);
+      return;
+    }
+
+    if (token && isAuthorized) {
       fetchAll(false);
 
       const socket = getSocket();
@@ -221,6 +236,7 @@ export default function PMDashboard() {
       socket.on('dashboard_sync',             handleSync);
       socket.on('offline_response_submitted', handleSync);
       socket.on('attendance_updated',         handleSync);
+      socket.on('jitsi_attendance_updated',   handleSync);
       socket.on('report_deleted',             handleSync);
 
       const pollInterval = setInterval(() => {
@@ -232,26 +248,33 @@ export default function PMDashboard() {
         socket.off('dashboard_sync',             handleSync);
         socket.off('offline_response_submitted', handleSync);
         socket.off('attendance_updated',         handleSync);
+        socket.off('jitsi_attendance_updated',   handleSync);
         socket.off('report_deleted',             handleSync);
         clearInterval(pollInterval);
       };
     }
-  }, [token, selectedProjectId]);
+  }, [token, selectedProjectId, selectedSubProjectId, dateRange, user, isAuthorized]);
 
   const fetchAll = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
     setError('');
+    setApiError(null);
     try {
-      const [usersRes, reportsRes, attendanceRes, projectsRes, trainingsRes] = await Promise.all([
+      const [usersRes, reportsRes, attendanceRes, projectsRes, trainingsRes, intelRes] = await Promise.all([
         axios.get('/api/users', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/reports', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/reports/attendance', { headers: { Authorization: `Bearer ${token}` } }),
-        axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get('/api/projects/my-projects', { headers: { Authorization: `Bearer ${token}` } }).catch(() => axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } })),
         axios.get('/api/trainings', { headers: { Authorization: `Bearer ${token}` } }),
+        axios.get(`/api/projects/intelligence?projectId=${selectedProjectId}&subProjectId=${selectedSubProjectId}&range=${dateRange}`, { headers: { Authorization: `Bearer ${token}` } }).catch(err => {
+          console.error('Intelligence fetch error:', err);
+          return { data: null };
+        })
       ]);
 
       // Store ALL users for Admin view (unfiltered)
       setAllUsers(usersRes.data || []);
+      setIntelligenceData(intelRes.data || null);
 
       // Filter users to this PM's project only
       const myProjectId = user?.projectId;
@@ -284,7 +307,10 @@ export default function PMDashboard() {
       setSyncTrigger(prev => prev + 1);
     } catch (err) {
       console.error('PM Dashboard fetch error:', err);
-      setError(err.response?.data?.error || 'Failed to load dashboard data.');
+      const statusCode = err.response?.status;
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to load dashboard data.';
+      setError(errorMsg);
+      setApiError({ status: statusCode, message: errorMsg });
     } finally {
       if (!isSilent) setLoading(false);
     }
@@ -1479,12 +1505,120 @@ export default function PMDashboard() {
   const thStyle = { padding: '12px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.5px', fontWeight: 600, borderBottom: '2px solid var(--border-glass)', textAlign: 'left' };
   const tdStyle = { padding: '14px 12px', borderBottom: '1px solid var(--border-glass)', fontSize: '0.9rem', color: 'var(--text-primary)', verticalAlign: 'middle' };
 
+  // 1. Authorization Guard: If authenticated user's role is not authorized for PM Dashboard access
+  if (user && !isAuthorized) {
+    return (
+      <div className="view-section active" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', padding: '40px 20px' }}>
+        <div className="access-denied-container" style={{
+          background: 'var(--bg-glass, #FFFFFF)',
+          border: '1px solid rgba(239, 68, 68, 0.25)',
+          borderRadius: '16px',
+          padding: '40px',
+          maxWidth: '560px',
+          width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: 'rgba(239, 68, 68, 0.1)',
+            color: '#EF4444',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto'
+          }}>
+            <ShieldAlert size={36} />
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary, #0F172A)', margin: '0 0 10px 0' }}>
+            Access Denied
+          </h2>
+          <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary, #64748B)', margin: '0 0 24px 0', lineHeight: 1.6 }}>
+            Access denied. Your account is not authorized to access the Program Manager Dashboard.
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="btn btn-primary"
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 600, borderRadius: '8px' }}
+            >
+              <ArrowLeft size={16} /> Return to Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Loading State: Loading != Zero
   if (loading) return (
     <div className="view-section active" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '200px', flexDirection: 'column', gap: '12px' }}>
       <div style={{ width: '40px', height: '40px', border: '3px solid var(--border-glass)', borderTop: '3px solid var(--primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
       <span style={{ color: 'var(--text-muted)' }}>Loading your dashboard...</span>
     </div>
   );
+
+  // 3. Error State: 403 != Zero, API Error != Zero
+  if (error || apiError) {
+    const is403 = apiError?.status === 403 || (typeof error === 'string' && (error.includes('Forbidden') || error.includes('403') || error.includes('Insufficient')));
+    return (
+      <div className="view-section active" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', padding: '40px 20px' }}>
+        <div style={{
+          background: 'var(--bg-glass, #FFFFFF)',
+          border: `1px solid ${is403 ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`,
+          borderRadius: '16px',
+          padding: '40px',
+          maxWidth: '560px',
+          width: '100%',
+          textAlign: 'center',
+          boxShadow: '0 20px 40px -15px rgba(0, 0, 0, 0.08)'
+        }}>
+          <div style={{
+            width: '64px',
+            height: '64px',
+            borderRadius: '50%',
+            background: is403 ? 'rgba(239, 68, 68, 0.1)' : 'rgba(245, 158, 11, 0.1)',
+            color: is403 ? '#EF4444' : '#F59E0B',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 20px auto'
+          }}>
+            {is403 ? <ShieldAlert size={36} /> : <AlertCircle size={36} />}
+          </div>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary, #0F172A)', margin: '0 0 10px 0' }}>
+            {is403 ? 'Access Denied' : 'Unable to Load Dashboard'}
+          </h2>
+          <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary, #64748B)', margin: '0 0 24px 0', lineHeight: 1.6 }}>
+            {is403 
+              ? 'Access denied. Your account is not authorized to access the Program Manager Dashboard.' 
+              : (error || 'An unexpected error occurred while fetching dashboard data.')}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+            {is403 ? (
+              <button
+                onClick={() => navigate('/dashboard')}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 600, borderRadius: '8px' }}
+              >
+                <ArrowLeft size={16} /> Return to Dashboard
+              </button>
+            ) : (
+              <button
+                onClick={() => fetchAll(false)}
+                className="btn btn-primary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 600, borderRadius: '8px' }}
+              >
+                <RefreshCw size={16} /> Retry
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="view-section active">
@@ -1563,11 +1697,6 @@ export default function PMDashboard() {
         )}
       </div>
 
-      {error && (
-        <div style={{ padding: '14px 16px', background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '8px', marginBottom: '24px', color: '#EF4444', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <AlertCircle size={18} /> {error}
-        </div>
-      )}
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%' }}>
           {['MD', 'COO', 'VP Operations', 'Client', 'Program Manager', 'Admin', 'Super Admin', 'Supervisor', 'Marketing Manager'].includes(activeRole) && viewMode === 'dashboard' ? (
@@ -1647,8 +1776,25 @@ export default function PMDashboard() {
                   onExportPPT={exportPPT}
                   manualMetrics={manualMetrics}
                   selectedProjectId={selectedProjectId}
+                  onSelectProject={(pId) => {
+                    setSearchParams(prev => {
+                      const next = new URLSearchParams(prev);
+                      if (pId === 'all') next.delete('projectId');
+                      else next.set('projectId', pId);
+                      return next;
+                    });
+                    setSelectedSubProjectId('all');
+                  }}
+                  selectedSubProjectId={selectedSubProjectId}
+                  onSelectSubProject={(spId) => setSelectedSubProjectId(spId)}
+                  dateRange={dateRange}
+                  onSelectDateRange={(r) => setDateRange(r)}
                   handleDownloadSessionExcel={handleDownloadSessionExcel}
                   syncTrigger={syncTrigger}
+                  intelligenceData={intelligenceData}
+                  token={token}
+                  onSync={() => fetchAll(true)}
+                  syncing={loading || syncing}
                 />
               )}
               {['Admin', 'Super Admin'].includes(activeRole) && (
@@ -1704,16 +1850,21 @@ export default function PMDashboard() {
                 quizAttendance: filteredData.quizAttendance,
                 trainingAttendance: filteredData.trainingAttendance
               }}
+              intelligenceData={intelligenceData}
               onExportExcel={exportExcel}
               onExportPPT={exportPPT}
               onExportPMExcel={exportPMExecutiveExcel}
               onExportPMPPT={exportPMExecutivePPT}
               selectedProjectId={selectedProjectId}
+              selectedSubProjectId={selectedSubProjectId}
+              dateRange={dateRange}
+              token={token}
               projectInfo={projectInfo}
               fetchSessionDetails={fetchSessionDetails}
               fetchingDetails={fetchingDetails}
               handleDownloadSessionPPT={handleDownloadSessionPPT}
               handleDownloadSessionExcel={handleDownloadSessionExcel}
+              user={user}
             />
           )}
       </div>

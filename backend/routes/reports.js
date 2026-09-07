@@ -10,7 +10,7 @@ const Question = require('../models/Question');
 const Response = require('../models/Response');
 const Training = require('../models/Training');
 const TrainingProgress = require('../models/TrainingProgress');
-const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const { Op } = require('sequelize');
 
 function getZoneFromCoords(lat, lng, defaultLocation) {
@@ -61,7 +61,7 @@ async function getAccessibleProjectIds(userProjectId) {
 }
 
 // GET /api/reports - Fetch reports with RBAC filtering
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Supervisor', 'Marketing Manager']), async (req, res) => {
   try {
     const userRole = req.user.role;
     const userProjectId = req.user.projectId;
@@ -88,22 +88,44 @@ router.get('/', requireAuth, async (req, res) => {
     const whereClause = {};
 
     // Apply RBAC filters
-    if (['Admin', 'Super Admin', 'T&D Manager'].includes(userRole)) {
+    if (['Admin', 'Super Admin'].includes(userRole)) {
       // Super Access: No project filtering needed
 
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const projectIds = await tdService.getAccessibleTDProjectIds(req.user, req.query.projectId || 'all', 'all');
+      if (!projectIds || projectIds.length === 0) {
+        return res.status(403).json({ error: 'Forbidden: You have no assigned capability projects.' });
+      }
+      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
     } else if (['MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(userRole)) {
       if (!userProjectId) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
       const projectIds = await getAccessibleProjectIds(userProjectId);
       whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
-    } else if (['Client', 'Program Manager', 'Manager'].includes(userRole)) {
+    } else if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      if (!projectIds || projectIds.length === 0) {
+        return res.status(403).json({ error: 'Forbidden: You have no assigned client projects.' });
+      }
+      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+    } else if (['Program Manager', 'Manager'].includes(userRole)) {
       // Restricted to specified project
       if (!userProjectId) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
       const projectIds = await getAccessibleProjectIds(userProjectId);
       whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+    } else if (userRole === 'Supervisor') {
+      const supervisorService = require('../utils/supervisorService');
+      const subordinateIds = await supervisorService.getTeamSubordinateIds(req.user.id);
+      const participantInclude = includeOptions.find(inc => inc.model === Participant);
+      if (participantInclude) {
+        participantInclude.where = { userId: { [Op.in]: subordinateIds } };
+        participantInclude.required = true;
+      }
     } else {
       // Default / Other roles (e.g., Trainer only sees their own sessions)
       whereClause.hostId = req.user.id;
@@ -258,9 +280,28 @@ router.get('/attendance', requireAuth, async (req, res) => {
       }
       const projectIds = await getAccessibleProjectIds(userProjectId);
       whereUser.projectId = { [Op.in]: projectIds };
-    } else if (['Client', 'Program Manager', 'Manager'].includes(userRole) && userProjectId) {
+    } else if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      whereUser.projectId = { [Op.in]: projectIds };
+    } else if (['Program Manager', 'Manager'].includes(userRole) && userProjectId) {
       const projectIds = await getAccessibleProjectIds(userProjectId);
       whereUser.projectId = { [Op.in]: projectIds };
+    } else if (userRole === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (projectIds.length === 0) {
+        return res.json({
+          summary: { quizCount: 0, avgScore: '0%', datesCount: 0 },
+          logs: [],
+          trainingLogs: []
+        });
+      }
+      whereUser.projectId = { [Op.in]: projectIds };
+    } else if (userRole === 'Supervisor') {
+      const supervisorService = require('../utils/supervisorService');
+      const subordinateIds = await supervisorService.getTeamSubordinateIds(req.user.id);
+      whereUser.id = { [Op.in]: subordinateIds };
     }
 
     const users = await User.findAll({
@@ -386,6 +427,10 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
         const projectIds = await getAccessibleProjectIds(projectId);
         quizWhere.projectId = { [Op.in]: projectIds };
       }
+    } else if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      quizWhere.projectId = { [Op.in]: projectIds };
     } else if (userProjectId) {
       const projectIds = await getAccessibleProjectIds(userProjectId);
       quizWhere.projectId = { [Op.in]: projectIds };
@@ -458,9 +503,325 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
   }
 });
 
+// ─── INTELLIGENT REPORTS & ANALYTICS ENGINE ROUTES ────────────────────────────
+const reportAnalyticsEngine = require('../utils/reportAnalyticsEngine');
+const reportExcelGenerator = require('../utils/reportExcelGenerator');
+const reportPPTGenerator = require('../utils/reportPPTGenerator');
+const ReportAudit = require('../models/ReportAudit');
+
+// 1. GET /api/reports/analytics/available
+router.get('/analytics/available', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+  try {
+    let reports = await reportAnalyticsEngine.getAvailableReports(req.query, req.user);
+    if (req.user.role === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      reports = reports.filter(r => r.level !== 'LEVEL_3_MASTER_MONTHLY' && r.projectId && tdProjectIds.includes(r.projectId));
+    }
+    res.json(reports);
+  } catch (error) {
+    console.error('GET /api/reports/analytics/available error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch available reports' });
+  }
+});
+
+// 2. GET /api/reports/analytics/data/:id
+router.get('/analytics/data/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+  try {
+    const report = await ReportAudit.findByPk(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Role-based security check
+    const user = req.user;
+    const isSuper = ['Admin', 'Super Admin'].includes(user.role);
+    if (user.role === 'T&D Manager') {
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
+        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to view enterprise Master Monthly reports' });
+      }
+      const tdService = require('../utils/tdService');
+      const tdProjectIds = await tdService.getAccessibleTDProjectIds(user, 'all', 'all');
+      if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to view reports outside your assigned capability portfolio' });
+      }
+    } else if (user.role === 'Client') {
+      const clientService = require('../utils/clientService');
+      const clientProjectIds = await clientService.getAccessibleClientProjectIds(user);
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to view this report' });
+      }
+    } else if (!isSuper) {
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(user, 'all', 'all');
+      if (report.projectId && !accessibleProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to view this project report' });
+      }
+    }
+
+    res.json(report.snapshotData || report);
+  } catch (error) {
+    console.error('GET /api/reports/analytics/data/:id error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch report data' });
+  }
+});
+
+// 3. GET /api/reports/analytics/export/excel/:id
+router.get('/analytics/export/excel/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+  try {
+    const report = await ReportAudit.findByPk(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Security check
+    const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    if (req.user.role === 'T&D Manager') {
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
+        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to export enterprise Master Monthly reports' });
+      }
+      const tdService = require('../utils/tdService');
+      const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export reports outside your assigned capability portfolio' });
+      }
+    } else if (req.user.role === 'Client') {
+      const clientService = require('../utils/clientService');
+      const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export this report' });
+      }
+    } else if (!isSuper) {
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (report.projectId && !accessibleProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export this report' });
+      }
+    }
+
+    // Fetch master outcome rows for Sheet 9
+    let outcomeRows = [];
+    try {
+      const pIds = report.projectId ? [report.projectId] : await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      outcomeRows = await intelligenceService.getMasterTrainingOutcomeData(pIds);
+    } catch (e) {
+      outcomeRows = [];
+    }
+
+    const buffer = await reportExcelGenerator.generate10SheetExcelWorkbook(report.snapshotData || report, outcomeRows);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.reportCode || 'Report'}_Analytics.xlsx"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('GET /api/reports/analytics/export/excel error:', error);
+    res.status(500).json({ error: error.message || 'Failed to export Excel report' });
+  }
+});
+
+// 4. GET /api/reports/analytics/export/ppt/:id
+router.get('/analytics/export/ppt/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+  try {
+    const report = await ReportAudit.findByPk(req.params.id);
+    if (!report) {
+      return res.status(404).json({ error: 'Report not found' });
+    }
+
+    // Security check
+    const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    if (req.user.role === 'T&D Manager') {
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
+        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to export enterprise Master Monthly decks' });
+      }
+      const tdService = require('../utils/tdService');
+      const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export decks outside your assigned capability portfolio' });
+      }
+    } else if (req.user.role === 'Client') {
+      const clientService = require('../utils/clientService');
+      const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export this presentation' });
+      }
+    } else if (!isSuper) {
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (report.projectId && !accessibleProjectIds.includes(report.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to export this presentation' });
+      }
+    }
+
+    const buffer = await reportPPTGenerator.generate14SlideManagementPPT(report.snapshotData || report);
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${report.reportCode || 'Report'}_ManagementDeck.pptx"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('GET /api/reports/analytics/export/ppt error:', error);
+    res.status(500).json({ error: error.message || 'Failed to export PowerPoint presentation' });
+  }
+});
+
+// 5. POST /api/reports/analytics/generate-on-demand
+router.post('/analytics/generate-on-demand', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+  try {
+    const { level = 2, projectId, quizId, sessionId, period = '2026-08', format = 'ALL' } = req.body;
+
+    // Check project permission
+    const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    if (req.user.role === 'T&D Manager') {
+      if (Number(level) === 3) {
+        return res.status(403).json({ error: 'Forbidden: T&D Managers cannot generate enterprise Master Monthly reports' });
+      }
+      const tdService = require('../utils/tdService');
+      const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (Number(level) === 2) {
+        if (!projectId || !tdProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate reports for this project' });
+        }
+      } else if (Number(level) === 1) {
+        const session = await Session.findOne({
+          where: sessionId ? { id: sessionId } : { quizId },
+          include: [{ model: Quiz, attributes: ['projectId'] }]
+        });
+        if (!session || !session.Quiz || !tdProjectIds.includes(session.Quiz.projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate report for this session' });
+        }
+      }
+    } else if (req.user.role === 'Client') {
+      if (Number(level) === 3) {
+        return res.status(403).json({ error: 'Forbidden: Clients cannot generate enterprise Master Monthly reports' });
+      }
+      const clientService = require('../utils/clientService');
+      const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      if (Number(level) === 2) {
+        if (!projectId || !clientProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate reports for this project' });
+        }
+      } else if (Number(level) === 1) {
+        const session = await Session.findOne({
+          where: sessionId ? { id: sessionId } : { quizId },
+          include: [{ model: Quiz, attributes: ['projectId'] }]
+        });
+        if (!session || !session.Quiz || !clientProjectIds.includes(session.Quiz.projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate report for this session' });
+        }
+      }
+    } else if (projectId && !isSuper) {
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You are not authorized to generate reports for this project' });
+      }
+    }
+
+    let reportPayload;
+    if (Number(level) === 1) {
+      reportPayload = await reportAnalyticsEngine.generateLevel1QuizReport(quizId, sessionId, req.user);
+    } else if (Number(level) === 2) {
+      if (!projectId) {
+        return res.status(400).json({ error: 'projectId is required for Level 2 Project Monthly Report' });
+      }
+      reportPayload = await reportAnalyticsEngine.generateLevel2ProjectMonthlyReport(projectId, period, req.user);
+    } else if (Number(level) === 3) {
+      reportPayload = await reportAnalyticsEngine.generateLevel3MasterMonthlyReport(period, req.user);
+    } else {
+      return res.status(400).json({ error: 'Invalid report level requested (must be 1, 2, or 3)' });
+    }
+
+    res.json({
+      message: 'Report generated successfully',
+      report: reportPayload
+    });
+  } catch (error) {
+    console.error('POST /api/reports/analytics/generate-on-demand error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate report' });
+  }
+});
+
+// 6. POST /api/reports/analytics/monthly-closing
+router.post('/analytics/monthly-closing', requireAuth, async (req, res) => {
+  try {
+    const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    if (!isSuper) {
+      return res.status(403).json({ error: 'Forbidden: Insufficient privileges for Monthly Closing' });
+    }
+
+    const { targetMonth = '2026-08' } = req.body;
+    const closingResult = await reportAnalyticsEngine.runMonthlyClosing(targetMonth, req.user);
+
+    res.json({
+      message: `Automatic monthly closing completed successfully for ${targetMonth}`,
+      summary: closingResult
+    });
+  } catch (error) {
+    console.error('POST /api/reports/analytics/monthly-closing error:', error);
+    res.status(500).json({ error: error.message || 'Monthly closing batch failed' });
+  }
+});
+
+// 7. GET /api/reports/analytics/audit
+router.get('/analytics/audit', requireAuth, async (req, res) => {
+  try {
+    const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    const accessibleProjectIds = isSuper ? null : await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+
+    const whereClause = {};
+    if (!isSuper) {
+      whereClause[Op.or] = [
+        { projectId: { [Op.in]: accessibleProjectIds } },
+        { generatedBy: req.user.id }
+      ];
+    }
+
+    const audits = await ReportAudit.findAll({
+      where: whereClause,
+      include: [
+        { model: Project, as: 'project', attributes: ['id', 'name'] },
+        { model: User, as: 'generator', attributes: ['id', 'name', 'email'] }
+      ],
+      order: [['createdAt', 'DESC']],
+      limit: 50
+    });
+
+    res.json(audits);
+  } catch (error) {
+    console.error('GET /api/reports/analytics/audit error:', error);
+    res.status(500).json({ error: error.message || 'Failed to fetch audit log' });
+  }
+});
+
+// ─── MASTER TRAINING OUTCOME REPORT (21 Columns) ──────────────────────────────
+const intelligenceService = require('../utils/projectIntelligenceService');
+
+router.get('/master-outcome', requireAuth, async (req, res) => {
+  try {
+    const { projectId = 'all', subProjectId = 'all' } = req.query;
+    let projectIds;
+    if (req.user.role === 'Client') {
+      const clientService = require('../utils/clientService');
+      projectIds = await clientService.getAccessibleClientProjectIds(req.user, projectId, subProjectId);
+    } else if (req.user.role === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      projectIds = await tdService.getAccessibleTDProjectIds(req.user, projectId, subProjectId);
+    } else {
+      projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+    }
+
+    const outcomeData = await intelligenceService.getMasterTrainingOutcomeData(projectIds);
+    res.json(outcomeData);
+  } catch (error) {
+    console.error('GET /api/reports/master-outcome error:', error);
+    const status = error.status || (error.message && (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to generate master training outcome report' });
+  }
+});
+
 // GET /api/reports/:sessionId - Fetch detailed report for a specific session
 router.get('/:sessionId', requireAuth, async (req, res) => {
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.sessionId);
+    if (!isUuid) {
+      return res.status(404).json({ error: 'Session report not found.' });
+    }
+
     const session = await Session.findByPk(req.params.sessionId, {
       include: [
         {
@@ -479,6 +840,24 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
 
     if (!session) {
       return res.status(404).json({ error: 'Session report not found.' });
+    }
+
+    // Strict Scope check for non-Superadmin
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
+      if (!session.Quiz?.projectId || !clientProjectIds.includes(session.Quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view this session report.' });
+      }
+    } else if (!['Admin', 'Super Admin'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const isHost = session.hostId === req.user.id;
+      const isProjectAuthorized = session.Quiz?.projectId && accessibleProjectIds.includes(session.Quiz.projectId);
+      if (!isHost && !isProjectAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view this session report.' });
+      }
     }
 
     const totalQuestions = session.Quiz && session.Quiz.questions ? session.Quiz.questions.length : 0;
@@ -530,6 +909,11 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
 // DELETE /api/reports/:id - Delete a session report with cascaded data removal
 router.delete('/:id', requireAuth, async (req, res) => {
   try {
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id);
+    if (!isUuid) {
+      return res.status(404).json({ error: 'Report not found.' });
+    }
+
     const userRole = req.user.role;
     const userId = req.user.id;
     const userProjectId = req.user.projectId;
@@ -588,3 +972,4 @@ router.delete('/:id', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+

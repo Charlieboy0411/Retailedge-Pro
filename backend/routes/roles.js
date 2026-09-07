@@ -1,13 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const Role = require('../models/Role');
 const User = require('../models/User');
 
 const SYSTEM_ROLES = ['Super Admin', 'Admin', 'Program Manager', 'Client', 'Trainer', 'Supervisor', 'Learner', 'Marketing Manager', 'MD', 'COO', 'VP Operations'];
 
 // GET /api/roles
-router.get('/', requireAuth, async (req, res) => {
+router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
   try {
     const roles = await Role.findAll({
       include: [

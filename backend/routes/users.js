@@ -9,8 +9,27 @@ const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 router.use(requireAuth);
 
+// GET /api/users/my-team - List direct reports for the requesting Supervisor / Manager
+router.get('/my-team', async (req, res) => {
+  try {
+    const subordinates = await User.findAll({
+      where: { managerId: req.user.id },
+      include: [
+        { model: Role, attributes: ['id', 'role_name'] },
+        { model: Project, attributes: ['id', 'name'] }
+      ],
+      attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location', 'status', 'createdAt'],
+      order: [['name', 'ASC']]
+    });
+    res.json(subordinates);
+  } catch (error) {
+    console.error('GET /api/users/my-team error:', error);
+    res.status(500).json({ error: 'Failed to fetch team members', details: error.message });
+  }
+});
+
 // GET /api/users - List all users
-router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'Client', 'MD', 'COO', 'VP Operations', 'T&D Manager', 'Marketing Manager']), async (req, res) => {
+router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const { search, role, project, status, designation, location, skills } = req.query;
     
@@ -40,34 +59,52 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer
     
     include.push({ model: User, as: 'manager', attributes: ['id', 'name'] });
 
-    const users = await User.findAll({ where, include });
+    const users = await User.findAll({
+      where,
+      include,
+      order: [['name', 'ASC']]
+    });
+
     res.json(users);
   } catch (error) {
-    res.status(500).json({ error: 'Server error fetching users' });
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST /api/users/queries - Create a support query or report a bug
+// GET /api/users/profile - Fetch current user profile
+router.get('/profile', async (req, res) => {
+  try {
+    const user = await User.findByPk(req.user.id, {
+      attributes: { exclude: ['password'] },
+      include: [Role, Project, { model: User, as: 'manager', attributes: ['id', 'name'] }]
+    });
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/users/queries - Submit a user query / helpdesk ticket
 router.post('/queries', async (req, res) => {
   try {
-    const { subject, description, dashboard } = req.body;
-    if (!subject || !description || !dashboard) {
-      return res.status(400).json({ error: 'Subject, description, and dashboard are required.' });
+    const { subject, description, priority, category, targetDashboard } = req.body;
+    if (!subject || !description) {
+      return res.status(400).json({ error: 'Subject and description are required' });
     }
-    const newQuery = await UserQuery.create({
+    const query = await UserQuery.create({
       userId: req.user.id,
       subject,
       description,
-      dashboard,
-      status: 'Open'
+      priority: priority || 'Medium',
+      category: category || 'General',
+      targetDashboard: targetDashboard || 'General'
     });
     
-    // Fetch user details for client notifications
-    const queryWithUser = await UserQuery.findByPk(newQuery.id, {
+    const queryWithUser = await UserQuery.findByPk(query.id, {
       include: [{ model: User, attributes: ['id', 'name', 'email', 'employee_id'] }]
     });
-
-    // Notify admins via socket
+    
     const io = req.app.get('io');
     if (io) {
       io.emit('new_query_submitted', queryWithUser);
@@ -113,7 +150,7 @@ router.patch('/queries/:id/resolve', requireRole(['Admin', 'Super Admin']), asyn
 });
 
 // GET /api/users/:id - Get specific user
-router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'Client', 'MD', 'COO', 'VP Operations', 'T&D Manager', 'Marketing Manager']), async (req, res) => {
+router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
       include: [Role, Project, { model: User, as: 'manager' }]
@@ -230,7 +267,7 @@ router.delete('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), 
 });
 
 // GET /api/users/hierarchy/:id - Fetch organizational hierarchy for a user
-router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']), async (req, res) => {
   try {
     const rootUser = await User.findByPk(req.params.id, {
       attributes: ['id', 'name', 'profile_photo'],

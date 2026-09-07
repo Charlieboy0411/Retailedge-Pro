@@ -2,7 +2,11 @@ import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import { AuthContext } from '../context/AuthContext';
-import { Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, Check, Clock } from 'lucide-react';
+import { 
+  Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, 
+  Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, 
+  Check, Clock, Sparkles, Shield, Radio, CheckCircle2, AlertCircle
+} from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
 
@@ -37,14 +41,16 @@ export default function HostControlRoom() {
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
+  const [qrError, setQrError] = useState(false);
+  const [qrLoading, setQrLoading] = useState(true);
   const [liveAnswers, setLiveAnswers] = useState([]);
-  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin); // public tunnel or LAN IP
-  const [joinMode, setJoinMode] = useState('lan');    // 'public' | 'lan'
+  const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin);
+  const [joinMode, setJoinMode] = useState('lan');
   const [lanBaseUrl, setLanBaseUrl] = useState('');
   const [useLanQr, setUseLanQr] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
 
-  // Participant connection metrics (PRD trainer dashboard)
+  // Participant connection metrics
   const [metrics, setMetrics] = useState({ total: 0, waiting: 0, active: 0, disconnected: 0, rejoined: 0 });
 
   // Timer States
@@ -55,10 +61,10 @@ export default function HostControlRoom() {
   const [showControlsSidebar, setShowControlsSidebar] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const containerRef   = useRef(null);
-  const sessionStarted  = useRef(false); // guard: only call host_start_quiz once per mount
-  const roomCodeRef     = useRef('');    // stores roomCode for reconnect handler (avoids stale closure)
+  const sessionStarted  = useRef(false);
+  const roomCodeRef     = useRef('');
 
-  // Fetch public tunnel URL (or LAN fallback) — poll every 5s until tunnel is up
+  // Fetch public tunnel URL (or LAN fallback)
   useEffect(() => {
     if (!isLocalHost) {
       setJoinBaseUrl(window.location.origin);
@@ -69,323 +75,269 @@ export default function HostControlRoom() {
     const fetchJoinUrl = () => {
       axios.get('/api/join-url')
         .then(res => {
-          if (res.data && res.data.url) {
+          if (res.data?.url) {
             setJoinBaseUrl(res.data.url);
-            setJoinMode(res.data.mode || 'lan');
-          }
-        })
-        .catch(() => {
-          // Fallback: use current window hostname
-          setJoinBaseUrl(`${window.location.protocol}//${window.location.hostname}:${window.location.port}`);
-          setJoinMode('lan');
-        });
-
-      axios.get('/api/host-ip')
-        .then(res => {
-          if (res.data && res.data.ip) {
-            const port = window.location.port || '5000';
-            setLanBaseUrl(`http://${res.data.ip}:${port}`);
+            setJoinMode(res.data.mode || 'public');
           }
         })
         .catch(() => {});
     };
-    fetchJoinUrl();
-    // Poll every 5 seconds — the tunnel URL arrives ~2-4s after server start
-    const pollInterval = setInterval(fetchJoinUrl, 5000);
-    return () => clearInterval(pollInterval);
-  }, []);
 
-  useEffect(() => {
-    if (roomCode) {
-      const activeUrl = (useLanQr && lanBaseUrl) ? lanBaseUrl : (joinBaseUrl || window.location.origin);
-      const cleanCode = String(roomCode).replace(/\s+/g, '');
-      if (activeUrl) {
-        QRCode.toDataURL(`${activeUrl}/join?code=${cleanCode}`, {
-          width: 200,
-          margin: 1,
-          color: {
-            dark: '#050816',
-            light: '#ffffff'
+    const fetchHostIp = () => {
+      axios.get('/api/host-ip')
+        .then(res => {
+          if (res.data?.ip) {
+            setLanBaseUrl(`http://${res.data.ip}:5173`);
           }
         })
-          .then(url => setQrDataUrl(url))
-          .catch(err => console.error('Failed to generate QR code', err));
-      }
-    }
-  }, [roomCode, joinBaseUrl, lanBaseUrl, useLanQr]);
+        .catch(() => {});
+    };
 
+    fetchJoinUrl();
+    fetchHostIp();
+
+    const interval = setInterval(fetchJoinUrl, 5000);
+    return () => clearInterval(interval);
+  }, [isLocalHost]);
+
+  // QR 5-second fallback timer
   useEffect(() => {
-    // 1. Fetch Quiz Data
-    axios.get('/api/quizzes', {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-      .then(res => {
-        const target = res.data.find(q => q.id === quizId);
-        if (target) setQuiz(target);
-      });
+    if (qrDataUrl) {
+      setQrError(false);
+      setQrLoading(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!qrDataUrl) {
+        setQrError(true);
+        setQrLoading(false);
+      }
+    }, 5000);
+    return () => clearTimeout(timer);
+  }, [qrDataUrl]);
 
-    // 2. Initialize Socket connection with reconnection + WebSocket transport
+  // Fetch Quiz details and initialize socket
+  useEffect(() => {
+    fetchQuiz();
+
+    const authToken = token || localStorage.getItem('jwt') || localStorage.getItem('token');
     socket = io(window.location.origin, {
+      auth: { token: authToken },
+      query: { token: authToken },
       transports: ['websocket', 'polling'],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
+      reconnectionAttempts: 10,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000,
-      timeout: 20000,
     });
 
-    // ── Named handlers — required so socket.off() removes the exact same function reference ──
-
-    const onConnect = () => {
-      console.log('[HostControlRoom] Socket connected:', socket.id);
-      if (!sessionStarted.current) {
-        sessionStarted.current = true;
-        socket.emit('host_start_quiz', { quizId, hostId: user.id });
-      } else if (roomCodeRef.current) {
-        // Reconnect path — use ref to avoid stale closure over React state
-        console.log('[HostControlRoom] Reconnected. Rejoining room:', roomCodeRef.current);
-        socket.emit('host_rejoin_room', { roomCode: roomCodeRef.current });
+    socket.on('connect', () => {
+      const code = roomCodeRef.current;
+      if (code) {
+        socket.emit('host_rejoin_room', { roomCode: code, quizId: quizId });
       }
-    };
+    });
 
-    const onSessionCreated = (data) => {
-      roomCodeRef.current = data.roomCode; // keep ref in sync so reconnect knows the room
-      setRoomCode(data.roomCode);
-      setSessionId(data.sessionId);
-      if (data.recovered) {
-        setStatus(data.status);
-        if (data.currentQuestionIndex !== undefined) {
-          setCurrentQuestionIndex(data.currentQuestionIndex);
-        }
-        if (data.participants) {
+    // Canonical session creation event (with legacy fallback)
+    const handleSessionCreated = (data) => {
+      if (data && data.roomCode) {
+        setRoomCode(data.roomCode);
+        roomCodeRef.current = data.roomCode;
+        setSessionId(data.sessionId);
+        if (data.participants && data.participants.length > 0) {
           setParticipants(data.participants);
         }
+        if (data.metrics) setMetrics(data.metrics);
+        generateQr(data.roomCode);
       }
     };
+    socket.on('session_created', handleSessionCreated);
 
-    const onParticipantJoined = (participant) => {
+    socket.on('participant_metrics', (data) => {
+      setMetrics(data);
+    });
+
+    socket.on('participant_joined', (data) => {
       setParticipants(prev => {
-        const exists = prev.find(p => p.id === participant.id);
+        const exists = prev.find(p => p.id === data.id);
         if (exists) {
-          return prev.map(p => p.id === participant.id ? { ...p, disconnected: false } : p);
+          return prev.map(p => p.id === data.id ? { ...p, ...data, disconnected: false } : p);
         }
-        return [...prev, participant];
+        return [...prev, { ...data, disconnected: false }];
+      });
+    });
+
+    socket.on('participant_disconnected', (data) => {
+      setParticipants(prev =>
+        prev.map(p => (p.id === data.participantId || p.socketId === data.socketId)
+          ? { ...p, disconnected: true }
+          : p
+        )
+      );
+    });
+
+    socket.on('participant_reconnected', (data) => {
+      setParticipants(prev =>
+        prev.map(p => p.id === data.participantId
+          ? { ...p, socketId: data.socketId, disconnected: false }
+          : p
+        )
+      );
+    });
+
+    // Canonical new question event
+    const handleNewQuestion = (data) => {
+      setStatus('active');
+      setCurrentQuestionIndex(data.questionIndex);
+      setTimeLeft(data.duration || data.time_limit || 20);
+      setQuestionDuration(data.duration || data.time_limit || 20);
+      setAnswerRevealed(false);
+      setShowQuestionLeaderboard(false);
+      setLiveAnswers([]);
+    };
+    socket.on('new_question', handleNewQuestion);
+
+    socket.on('timer_tick', (data) => {
+      setTimeLeft(data.remaining);
+    });
+
+    socket.on('timer_expired', () => {
+      setTimeLeft(0);
+    });
+
+    // Canonical answer received event (deduplicated by participantId: 1 participant = 1 vote)
+    const handleAnswer = (data) => {
+      if (!data || !data.participantId) return;
+      setLiveAnswers(prev => {
+        const idx = prev.findIndex(a => a.participantId === data.participantId);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = data;
+          return updated;
+        }
+        return [...prev, data];
       });
     };
+    socket.on('answer_received', handleAnswer);
 
-    const onAnswerReceived = (data) => {
-      setLiveAnswers(prev => [...prev, data]);
-    };
-
-    const onLeaderboardUpdate = (data) => {
-      setLeaderboard(data);
-    };
-
-    const onEmojiReceived = (data) => {
-      if (data && data.emoji) {
-        const id       = Date.now() + Math.random().toString();
-        const x        = Math.random() * 80 + 10;
-        const duration = Math.random() * 2 + 2;
-        const scale    = Math.random() * 0.5 + 0.8;
-        setFloatingEmojis(prev => [...prev, { id, emoji: data.emoji, x, duration, scale }]);
-        setTimeout(() => {
-          setFloatingEmojis(prev => prev.filter(e => e.id !== id));
-        }, duration * 1000);
+    socket.on('answer_revealed', (data) => {
+      setAnswerRevealed(true);
+      if (data?.leaderboard && data.leaderboard.length > 0) {
+        setLeaderboard(data.leaderboard);
       }
+    });
+
+    socket.on('leaderboard_update', (data) => {
+      setLeaderboard(data.leaderboard || data || []);
+    });
+
+    socket.on('quiz_ended', (data) => {
+      setStatus('ended');
+      setShowQuestionLeaderboard(true);
+      setLeaderboard(data?.leaderboard || []);
+    });
+
+    // Canonical reaction event
+    const handleReaction = (data) => {
+      const id = Date.now() + Math.random();
+      const x = Math.floor(Math.random() * 80) + 10;
+      const duration = Math.floor(Math.random() * 2) + 2.5;
+      const scale = (Math.random() * 0.4 + 0.8).toFixed(2);
+      
+      setFloatingEmojis(prev => [...prev, { id, emoji: data.emoji, x, duration, scale }]);
+      setTimeout(() => {
+        setFloatingEmojis(prev => prev.filter(e => e.id !== id));
+      }, duration * 1000 + 200);
     };
-
-    const onParticipantMetrics = (data) => {
-      setMetrics(data);
-    };
-
-    const onParticipantDisconnected = ({ participantId }) => {
-      setParticipants(prev => prev.map(p => p.id === participantId ? { ...p, disconnected: true } : p));
-    };
-
-    // Server-authoritative timer — host display is driven by server ticks, no local setInterval
-    const onTimerTick    = ({ remaining }) => setTimeLeft(remaining);
-    const onTimerExpired = () => setTimeLeft(0);
-
-    socket.on('connect',                onConnect);
-    socket.on('session_created',        onSessionCreated);
-    socket.on('participant_joined',     onParticipantJoined);
-    socket.on('answer_received',        onAnswerReceived);
-    socket.on('leaderboard_update',     onLeaderboardUpdate);
-    socket.on('emoji_received',         onEmojiReceived);
-    socket.on('participant_metrics',    onParticipantMetrics);
-    socket.on('participant_disconnected', onParticipantDisconnected);
-    socket.on('timer_tick',             onTimerTick);
-    socket.on('timer_expired',          onTimerExpired);
+    socket.on('emoji_received', handleReaction);
 
     return () => {
-      // Remove named handlers — prevents duplicate listeners if effect re-runs
-      socket.off('connect',                onConnect);
-      socket.off('session_created',        onSessionCreated);
-      socket.off('participant_joined',     onParticipantJoined);
-      socket.off('answer_received',        onAnswerReceived);
-      socket.off('leaderboard_update',     onLeaderboardUpdate);
-      socket.off('emoji_received',         onEmojiReceived);
-      socket.off('participant_metrics',    onParticipantMetrics);
-      socket.off('participant_disconnected', onParticipantDisconnected);
-      socket.off('timer_tick',             onTimerTick);
-      socket.off('timer_expired',          onTimerExpired);
-      socket.disconnect();
+      if (socket) socket.disconnect();
     };
-  }, [quizId, user.id, token]);
+  }, [quizId]);
 
-  // Initialize timer display when question changes.
-  // Actual countdown is driven by server timer_tick events — no local setInterval.
+  // Regenerate QR code if roomCode, joinBaseUrl, useLanQr, or lanBaseUrl changes
   useEffect(() => {
-    if (status === 'active' && currentQuestionIndex >= 0 && quiz?.questions) {
-      const currentQuestion = quiz.questions[currentQuestionIndex];
-      const limit = currentQuestion?.time_limit || 20;
-      setTimeLeft(limit);         // Initial value; server will update via timer_tick
-      setQuestionDuration(limit); // Used for the SVG progress ring
+    if (roomCode) {
+      generateQr(roomCode);
     }
-  }, [currentQuestionIndex, status, quiz]);
+  }, [roomCode, joinBaseUrl, useLanQr, lanBaseUrl]);
 
-  // Fullscreen event listener
-  useEffect(() => {
-    const handleFullscreenChange = () => {
-      setIsFullscreen(!!document.fullscreenElement);
-    };
-    document.addEventListener('fullscreenchange', handleFullscreenChange);
-    return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-  }, []);
-
-  // Keyboard Navigation Controls
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      
-      if (e.key === 'ArrowRight' || e.key === 'Space') {
-        e.preventDefault();
-        handleLogicalNext();
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        handleLogicalPrev();
-      }
-    };
-    
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [quiz, currentQuestionIndex, status, answerRevealed, showQuestionLeaderboard, roomCode, sessionId]);
-
-  const getOptions = (question) => {
-    if (!question || !question.options) return [];
-    if (Array.isArray(question.options)) return question.options;
-    if (typeof question.options === 'string') {
-      try {
-        return JSON.parse(question.options);
-      } catch (e) {
-        console.error('Failed to parse options', e);
-        return [];
-      }
+  const generateQr = async (code) => {
+    if (!code) return;
+    try {
+      setQrError(false);
+      setQrLoading(true);
+      const effectiveBase = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+      const joinUrl = `${effectiveBase}/join?code=${code}`;
+      const dataUrl = await QRCode.toDataURL(joinUrl, {
+        margin: 2,
+        width: 220,
+        color: {
+          dark: '#0F172A',
+          light: '#FFFFFF'
+        }
+      });
+      setQrDataUrl(dataUrl);
+      setQrLoading(false);
+    } catch (err) {
+      console.error('QR generation error:', err);
+      setQrError(true);
+      setQrLoading(false);
     }
-    return [];
   };
+
+  const fetchQuiz = async () => {
+    try {
+      const authToken = token || localStorage.getItem('jwt') || localStorage.getItem('token');
+      const response = await axios.get(`/api/quizzes/${quizId}`, {
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      setQuiz(response.data);
+      if (!sessionStarted.current) {
+        sessionStarted.current = true;
+        socket.emit('host_start_quiz', {
+          quizId: quizId,
+          hostId: user?.id,
+          hostName: user?.name || 'Authorized Trainer',
+          token: authToken
+        });
+      }
+    } catch (error) {
+      console.error('Failed to fetch quiz', error);
+      navigate('/dashboard');
+    }
+  };
+
+  const activeQuestion = quiz && currentQuestionIndex >= 0 ? quiz.questions[currentQuestionIndex] : null;
 
   const handleNextQuestion = () => {
     if (!quiz || !quiz.questions) return;
-    const nextIndex = currentQuestionIndex + 1;
-    
-    setAnswerRevealed(false);
-    setShowQuestionLeaderboard(false);
-    setLiveAnswers([]);
-
-    if (nextIndex >= quiz.questions.length) {
-      setStatus('ended');
-      socket.emit('host_show_leaderboard', { roomCode, sessionId });
-      socket.emit('host_end_session', { roomCode });
-      return;
-    }
-
-    setCurrentQuestionIndex(nextIndex);
-    setStatus('active');
-    
-    const nextQuestion = quiz.questions[nextIndex];
-    socket.emit('host_next_question', { 
-      roomCode, 
-      sessionId, 
-      question: nextQuestion, 
-      questionIndex: nextIndex, 
-      totalQuestions: quiz.questions.length 
-    });
-  };
-
-  const handlePrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      const prevIndex = currentQuestionIndex - 1;
-      setAnswerRevealed(false);
-      setShowQuestionLeaderboard(false);
-      setLiveAnswers([]);
-      setCurrentQuestionIndex(prevIndex);
-      setStatus('active');
-      const prevQuestion = quiz.questions[prevIndex];
-      socket.emit('host_next_question', { 
-        roomCode, 
-        sessionId, 
-        question: prevQuestion, 
-        questionIndex: prevIndex, 
-        totalQuestions: quiz.questions.length 
+    const nextIdx = currentQuestionIndex + 1;
+    if (nextIdx < quiz.questions.length) {
+      socket.emit('host_next_question', {
+        roomCode,
+        sessionId,
+        question: quiz.questions[nextIdx],
+        questionIndex: nextIdx,
+        totalQuestions: quiz.questions.length
       });
-    } else if (currentQuestionIndex === 0) {
-      // Go back to waiting screen
-      setAnswerRevealed(false);
-      setShowQuestionLeaderboard(false);
-      setLiveAnswers([]);
-      setCurrentQuestionIndex(-1);
-      setStatus('waiting');
-      socket.emit('host_reset_lobby', { roomCode });
+    } else {
+      socket.emit('host_end_session', { roomCode });
     }
   };
 
-  const handleJumpToQuestion = (idx) => {
-    if (!quiz || !quiz.questions) return;
-    setAnswerRevealed(false);
-    setShowQuestionLeaderboard(false);
-    setLiveAnswers([]);
-    setCurrentQuestionIndex(idx);
-    setStatus('active');
-    const question = quiz.questions[idx];
-    socket.emit('host_next_question', { 
-      roomCode, 
-      sessionId, 
-      question, 
-      questionIndex: idx, 
-      totalQuestions: quiz.questions.length 
-    });
-  };
-
-  const handleShowLeaderboard = () => {
-    socket.emit('host_show_leaderboard', { roomCode, sessionId });
-    setShowQuestionLeaderboard(true);
-  };
-
-  const revealAnswer = () => {
-    setAnswerRevealed(true);
-    socket.emit('host_reveal_answer', { roomCode, questionId: activeQuestion?.id });
-  };
-
-  // Keyboard & unified Next Flow handler
   const handleLogicalNext = () => {
-    if (!quiz || !quiz.questions) return;
-    
     if (status === 'waiting') {
       handleNextQuestion();
-    } else if (status === 'active') {
-      const q = quiz.questions[currentQuestionIndex];
-      const hasCorrectAnswer = q && q.correct_answer && q.type !== 'poll' && q.type !== 'word_cloud' && q.type !== 'rating';
-      
-      if (!answerRevealed && hasCorrectAnswer) {
+      return;
+    }
+    if (status === 'active') {
+      if (!answerRevealed) {
         revealAnswer();
       } else if (!showQuestionLeaderboard) {
         handleShowLeaderboard();
       } else {
         handleNextQuestion();
       }
-    } else if (status === 'ended') {
-      navigate('/dashboard');
     }
   };
 
@@ -394,1219 +346,452 @@ export default function HostControlRoom() {
       setShowQuestionLeaderboard(false);
     } else if (answerRevealed) {
       setAnswerRevealed(false);
-    } else {
-      handlePrevQuestion();
+    } else if (currentQuestionIndex > 0) {
+      handleJumpToQuestion(currentQuestionIndex - 1);
     }
+  };
+
+  const handleJumpToQuestion = (idx) => {
+    if (!quiz || !quiz.questions) return;
+    socket.emit('host_next_question', {
+      roomCode,
+      sessionId,
+      question: quiz.questions[idx],
+      questionIndex: idx,
+      totalQuestions: quiz.questions.length
+    });
+  };
+
+  const revealAnswer = () => {
+    socket.emit('host_reveal_answer', {
+      roomCode,
+      questionId: activeQuestion?.id,
+      questionIndex: currentQuestionIndex
+    });
+  };
+
+  const handleShowLeaderboard = () => {
+    setShowQuestionLeaderboard(true);
+    socket.emit('host_show_leaderboard', {
+      roomCode,
+      sessionId,
+      questionIndex: currentQuestionIndex
+    });
   };
 
   const toggleFullscreen = () => {
-    if (!containerRef.current) return;
     if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen().then(() => {
-        setIsFullscreen(true);
-      }).catch(err => console.error('Error enabling fullscreen', err));
+      if (containerRef.current?.requestFullscreen) {
+        containerRef.current.requestFullscreen();
+      }
+      setIsFullscreen(true);
     } else {
-      document.exitFullscreen().then(() => {
-        setIsFullscreen(false);
-      });
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+      setIsFullscreen(false);
     }
   };
 
-  // Option calculations
-  const getOptionVotes = (opt) => {
-    let count = 0;
-    liveAnswers.forEach(ans => {
-      const answerValue = ans.answer;
-      if (typeof answerValue === 'string') {
-        if (answerValue.startsWith('[') && answerValue.endsWith(']')) {
-          try {
-            const parsed = JSON.parse(answerValue);
-            if (Array.isArray(parsed) && parsed.includes(opt)) {
-              count++;
-            }
-          } catch(e) {
-            if (answerValue === opt) count++;
-          }
-        } else {
-          const splitAns = answerValue.split(',').map(s => s.trim());
-          if (splitAns.includes(opt)) {
-            count++;
-          }
-        }
-      } else if (answerValue === opt) {
-        count++;
+  const getOptions = (question) => {
+    if (!question) return [];
+    if (['mcq', 'poll', 'multi_select'].includes(question.type)) {
+      if (Array.isArray(question.options)) return question.options;
+      if (typeof question.options === 'string') {
+        try { return JSON.parse(question.options); } catch { return []; }
       }
-    });
-    return count;
+    }
+    if (question.type === 'true_false') {
+      return ['True', 'False'];
+    }
+    return [];
   };
 
   const isCorrectOpt = (opt) => {
-    if (!quiz || currentQuestionIndex < 0 || currentQuestionIndex >= quiz.questions.length) return false;
-    const question = quiz.questions[currentQuestionIndex];
-    const correct = question.correct_answer;
-    if (!correct || question.type === 'poll') return false;
-    try {
-      const parsed = JSON.parse(correct);
-      if (Array.isArray(parsed)) return parsed.includes(opt);
-    } catch (err) {}
-    return correct.split(',').map(s => s.trim()).includes(opt);
-  };
-
-  const getFormattedRoomCode = (code) => {
-    if (!code) return '---';
-    const clean = code.replace('#', '');
-    if (clean.length === 6) {
-      return `${clean.substring(0, 3)} ${clean.substring(3)}`;
+    if (!activeQuestion) return false;
+    if (activeQuestion.type === 'poll') return true;
+    if (Array.isArray(activeQuestion.correct_answer)) {
+      return activeQuestion.correct_answer.includes(opt);
     }
-    return clean;
+    return activeQuestion.correct_answer === opt;
   };
 
-  const formatTime = (seconds) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s < 10 ? '0' + s : s}`;
+  const getOptionVotes = (opt) => {
+    return liveAnswers.filter(a => {
+      if (Array.isArray(a.answer)) return a.answer.includes(opt);
+      return a.answer === opt;
+    }).length;
   };
 
-  if (!quiz) return <div style={{ padding: '40px', textAlign: 'center', color: '#F5F7FA' }}>Loading Quiz Data...</div>;
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = Math.floor(secs % 60);
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
 
-  const formattedRoomCode = getFormattedRoomCode(roomCode);
-  const activeQuestion = quiz.questions && quiz.questions[currentQuestionIndex];
-  
-  // Circumference calculation for Pulse Ring timer
-  const radius = 35;
-  const stroke = 4;
-  const normalizedRadius = radius - stroke * 2;
-  const circumference = normalizedRadius * 2 * Math.PI;
-  const strokeDashoffset = questionDuration > 0 ? circumference - (timeLeft / questionDuration) * circumference : circumference;
-
-  // Generate confetti elements for final slide
-  const colorsList = ['#3DB9FF', '#7B61FF', '#00D68F', '#FF9F43', 'var(--bg-glass)', '#a855f7'];
-  const confettiList = Array.from({ length: 65 }).map((_, i) => {
-    const left = Math.random() * 100 + '%';
-    const delay = Math.random() * 5 + 's';
-    const duration = (Math.random() * 3 + 2.5) + 's';
-    const color = colorsList[Math.floor(Math.random() * colorsList.length)];
-    const size = (Math.random() * 8 + 6) + 'px';
-    const rotation = Math.random() * 360 + 'deg';
+  if (!quiz) {
     return (
-      <div key={i} className="confetti" style={{
-        left,
-        animationDelay: delay,
-        animationDuration: duration,
-        backgroundColor: color,
-        width: size,
-        height: size,
-        transform: `rotate(${rotation})`,
-      }} />
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B1220', color: '#FFFFFF' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '3px solid #2563EB', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#93C5FD' }}>Initializing Host Command Center...</h2>
+        </div>
+      </div>
     );
-  });
+  }
+
+  const formattedRoomCode = roomCode ? roomCode.replace(/(\d{3})(\d{3})/, '$1 $2') : 'Preparing...';
 
   return (
-    <div ref={containerRef} className="host-presenter-container">
-      <div className="command-grid-overlay"></div>
-      <div className="command-glow-center"></div>
+    <div ref={containerRef} style={{ height: '100vh', width: '100vw', display: 'flex', background: '#0B1220', color: '#FFFFFF', overflow: 'hidden', position: 'relative', fontFamily: 'Manrope, Inter, sans-serif' }}>
       
-      {/* Custom Styles Injection */}
-      <style>{`
-        @keyframes floatUp {
-          0% {
-            transform: translateY(0) rotate(0deg) translateX(0);
-            opacity: 0;
-          }
-          10% {
-            opacity: 1;
-          }
-          90% {
-            opacity: 1;
-          }
-          100% {
-            transform: translateY(-110vh) rotate(25deg) translateX(30px);
-            opacity: 0;
-          }
-        }
-
-        .host-presenter-container {
-          font-family: 'Outfit', 'Inter', var(--font-body), sans-serif;
-          height: 100vh;
-          display: flex;
-          background-color: #0A1128;
-          color: var(--text-primary);
-          overflow: hidden;
-          width: 100vw;
-          position: relative;
-        }
-
-        .command-grid-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-image: 
-            linear-gradient(rgba(255, 152, 0, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(255, 152, 0, 0.03) 1px, transparent 1px);
-          background-size: 30px 30px;
-          pointer-events: none;
-          z-index: 1;
-        }
-
-        .command-glow-center {
-          position: absolute;
-          top: 50%;
-          left: 50%;
-          transform: translate(-50%, -50%);
-          width: 600px;
-          height: 600px;
-          background: radial-gradient(circle, rgba(255, 152, 0, 0.05) 0%, transparent 70%);
-          pointer-events: none;
-          z-index: 1;
-        }
-
-        .left-sidebar {
-          width: 320px;
-          background-color: #0F1A36;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 48px 24px;
-          border-right: 2px solid rgba(255, 152, 0, 0.2);
-          box-sizing: border-box;
-          height: 100%;
-          justify-content: flex-start;
-          flex-shrink: 0;
-          z-index: 5;
-          box-shadow: 5px 0 25px rgba(0,0,0,0.3);
-        }
-
-        .main-content {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          background: transparent;
-          padding: 48px 64px 0 64px;
-          box-sizing: border-box;
-          height: 100%;
-          overflow: hidden;
-          position: relative;
-          z-index: 5;
-        }
-
-        .btn-circle {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          border: 1px solid rgba(255, 152, 0, 0.3);
-          background: #0F1A36;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-          color: #FF9800;
-        }
-
-        .btn-circle:hover {
-          background: rgba(255, 152, 0, 0.1);
-          color: #FF5722;
-          border-color: #FF5722;
-          transform: scale(1.05);
-          box-shadow: 0 0 12px rgba(255, 152, 0, 0.3);
-        }
-
-        .bottom-toolbar {
-          position: absolute;
-          bottom: 28px;
-          left: 50%;
-          transform: translateX(-50%);
-          background-color: #0F1A36;
-          border-radius: 18px;
-          padding: 10px 24px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-          z-index: 1000;
-          transition: all 0.3s ease;
-          border: 2px solid rgba(255, 152, 0, 0.3);
-        }
-
-        .toolbar-btn {
-          background: transparent;
-          border: none;
-          color: #cbd5e1;
-          padding: 8px 14px;
-          border-radius: 10px;
-          font-size: 0.9rem;
-          font-weight: 600;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          transition: all 0.2s ease;
-        }
-
-        .toolbar-btn:hover {
-          color: #FF9800;
-          background-color: rgba(255, 152, 0, 0.1);
-        }
-
-        .toolbar-btn:disabled {
-          opacity: 0.25;
-          cursor: not-allowed;
-        }
-
-        .toolbar-btn.stop {
-          background-color: #EF4444;
-          color: #ffffff;
-          width: 38px;
-          height: 38px;
-          padding: 0;
-          border-radius: 10px;
-          justify-content: center;
-          box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
-        }
-
-        .toolbar-btn.stop:hover {
-          background-color: #dc2626;
-          box-shadow: 0 4px 20px rgba(239, 68, 68, 0.6);
-        }
-
-        .toolbar-select {
-          background-color: #0A1128;
-          border: 1px solid rgba(255, 152, 0, 0.3);
-          color: #cbd5e1;
-          padding: 8px 14px;
-          border-radius: 10px;
-          outline: none;
-          font-size: 0.9rem;
-          cursor: pointer;
-          font-family: inherit;
-          transition: all 0.2s ease;
-        }
-
-        .toolbar-select:hover {
-          border-color: #FF9800;
-        }
-
-        .toolbar-select option {
-          background-color: #0F1A36;
-          color: #cbd5e1;
-        }
-
-        .qr-card-edgepro {
-          background: #0A1128;
-          padding: 24px;
-          border-radius: 24px;
-          border: 2px dashed #FF9800;
-          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-          margin-bottom: 40px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 16px;
-          width: 100%;
-        }
-
-        .qr-inner-frame {
-          background: var(--bg-tertiary);
-          padding: 12px;
-          border-radius: 16px;
-          border: 1px solid rgba(255, 152, 0, 0.1);
-        }
-
-        .sales-rep-card {
-          padding: 14px 28px;
-          background: #0F1A36;
-          border: 1.5px solid rgba(255, 152, 0, 0.2);
-          border-radius: 20px;
-          color: var(--text-primary);
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          font-size: 1.15rem;
-          font-weight: 600;
-          transition: all 0.3s ease;
-          animation: float 4s ease-in-out infinite;
-        }
-        
-        .sales-rep-card:hover {
-          border-color: #FF9800;
-          transform: translateY(-2px);
-          box-shadow: 0 6px 16px rgba(255, 152, 0, 0.25);
-        }
-
-        .status-dot-active {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: #8BCF00;
-          box-shadow: 0 0 8px #8BCF00;
-          animation: pulse 1.5s infinite;
-        }
-
-        .status-dot-disconnected {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background: #EF4444;
-          box-shadow: 0 0 8px #EF4444;
-        }
-
-        @keyframes pulse {
-          0% { transform: scale(0.9); opacity: 0.8; }
-          50% { transform: scale(1.1); opacity: 1; }
-          100% { transform: scale(0.9); opacity: 0.8; }
-        }
-
-        .stopwatch-badge {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          background: #0F1A36;
-          border: 2px solid #FF9800;
-          padding: 12px 24px;
-          border-radius: 24px;
-          color: #FF9800;
-          font-family: 'Courier New', Courier, monospace;
-          font-size: 1.6rem;
-          font-weight: bold;
-          flex-shrink: 0;
-          box-shadow: 0 0 15px rgba(255, 152, 0, 0.2);
-        }
-
-        .retail-shelf-container {
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-          width: 100%;
-          padding: 24px 10px;
-          box-sizing: border-box;
-          position: relative;
-        }
-
-        .retail-shelf-container::after {
-          content: "";
-          position: absolute;
-          bottom: 0;
-          left: 10px;
-          right: 10px;
-          height: 8px;
-          background: linear-gradient(90deg, transparent, rgba(255, 152, 0, 0.5), transparent);
-          border-radius: 4px;
-          box-shadow: 0 4px 10px rgba(255, 152, 0, 0.3);
-        }
-
-        .retail-shelf-item {
-          display: flex;
-          align-items: center;
-          gap: 20px;
-          font-size: 1.35rem;
-          color: var(--text-primary);
-          background: #0F1A36;
-          border: 1.5px solid rgba(255, 152, 0, 0.2);
-          padding: 18px 28px;
-          border-radius: 20px;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-          cursor: default;
-          transition: all 0.3s ease;
-          position: relative;
-        }
-
-        .retail-shelf-item:hover {
-          border-color: #FF9800;
-          box-shadow: 0 6px 20px rgba(255, 152, 0, 0.15);
-        }
-
-        .price-tag-badge {
-          background: #FF9800;
-          color: #0A1128;
-          font-weight: 800;
-          padding: 4px 12px;
-          border-radius: 6px;
-          font-size: 1.1rem;
-          position: relative;
-          display: inline-block;
-          clip-path: polygon(0% 0%, 85% 0%, 100% 50%, 85% 100%, 0% 100%);
-          padding-right: 20px;
-        }
-
-        .price-tag-badge::after {
-          content: "";
-          position: absolute;
-          right: 6px;
-          top: 50%;
-          transform: translateY(-50%);
-          width: 6px;
-          height: 6px;
-          background: #0A1128;
-          border-radius: 50%;
-        }
-
-        .kpi-progress-container {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-          width: 100%;
-          background: #0F1A36;
-          padding: 24px;
-          border-radius: 24px;
-          border: 2px solid rgba(255, 152, 0, 0.2);
-          box-shadow: 0 8px 32px rgba(0,0,0,0.3);
-        }
-
-        .kpi-progress-bg {
-          flex: 1;
-          height: 16px;
-          background-color: #0A1128;
-          border-radius: 8px;
-          overflow: hidden;
-          border: 1px solid rgba(255, 152, 0, 0.15);
-        }
-
-        .kpi-progress-fill {
-          height: 100%;
-          border-radius: 8px;
-          transition: width 0.8s cubic-bezier(0.1, 0.8, 0.2, 1);
-        }
-
-        .kpi-fill-correct {
-          background: linear-gradient(90deg, #8BCF00, #4CAF50);
-          box-shadow: 0 0 10px rgba(139, 207, 0, 0.4);
-        }
-
-        .kpi-fill-incorrect {
-          background: linear-gradient(90deg, #FF9800, #FF5722);
-          box-shadow: 0 0 10px rgba(255, 152, 0, 0.4);
-        }
-
-        .sales-board-entry {
-          padding: 18px 28px;
-          border-radius: 16px;
-          font-size: 1.35rem;
-          font-weight: 700;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          transition: all 0.3s ease;
-          box-sizing: border-box;
-          width: 100%;
-        }
-
-        .sales-board-top {
-          background: linear-gradient(135deg, #FF9800 0%, #FF5722 100%);
-          border: 2px solid rgba(255, 152, 0, 0.3);
-          color: #ffffff;
-          box-shadow: 0 8px 24px rgba(255, 152, 0, 0.4);
-        }
-
-        .sales-board-regular {
-          background: #0F1A36;
-          border: 1.5px solid rgba(255, 152, 0, 0.2);
-          color: var(--text-primary);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-
-        .sales-board-regular:hover {
-          border-color: #FF9800;
-          transform: translateX(4px);
-        }
-
-        @keyframes confetti-fall {
-          0% {
-            transform: translateY(-10vh) rotate(0deg);
-          }
-          100% {
-            transform: translateY(105vh) rotate(360deg);
-          }
-        }
-
-        .confetti {
-          position: absolute;
-          top: -10px;
-          z-index: 50;
-          animation: confetti-fall 4s linear infinite;
-          border-radius: 50%;
-        }
-
-        @keyframes float {
-          0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-10px); }
-        }
-
-        .floating-trophy {
-          animation: float 3s ease-in-out infinite;
-        }
-      `}</style>
-
-      {/* Confetti overlay for final congratulations */}
-      {status === 'ended' && (
-        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 50 }}>
-          {confettiList}
-        </div>
-      )}
-
-      {/* ─── LEFT SIDEBAR ─── */}
-      <div className="left-sidebar">
-        {/* QR Code Container */}
-        <div className="qr-card-edgepro">
-          <div className="qr-inner-frame">
-            {qrDataUrl ? (
-              <img 
-                src={qrDataUrl} 
-                alt="Scan to Join"
-                style={{
-                  width: '170px',
-                  height: '170px',
-                  display: 'block'
-                }}
-              />
-            ) : (
-              <div style={{ width: '170px', height: '170px', background: 'var(--text-primary)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF9800' }}>
-                Generating QR...
-              </div>
-            )}
-          </div>
-          <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600, letterSpacing: '0.5px', textAlign: 'center' }}>
-            Scan with phone camera
-          </span>
-          {/* Mode indicator */}
-          <div 
-            onClick={() => {
-              if (isLocalHost) setUseLanQr(prev => !prev);
-            }} 
-            style={{ cursor: isLocalHost ? 'pointer' : 'default', display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'center', marginTop: '-6px' }}
-            title={isLocalHost ? "Click to toggle QR between Local LAN and Public Tunnel" : "Live Public Production Server"}
-          >
-            {!isLocalHost ? (
-              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                🌐 Public Server Mode
-              </span>
-            ) : (useLanQr && lanBaseUrl) ? (
-              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                📡 QR: LAN Mode (Click to toggle)
-              </span>
-            ) : joinMode === 'public' ? (
-              <span style={{ fontSize: '0.72rem', color: '#8BCF00', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(139,207,0,0.12)', border: '1px solid rgba(139,207,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                🌐 QR: Public Mode (Click to toggle)
-              </span>
-            ) : (
-              <span style={{ fontSize: '0.72rem', color: '#FF9800', fontWeight: 700, textAlign: 'center',
-                background: 'rgba(255,152,0,0.1)', border: '1px solid rgba(255,152,0,0.3)',
-                borderRadius: '20px', padding: '3px 10px'
-              }}>
-                📡 QR: LAN Mode (Click to toggle)
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Access Instructions */}
-        <div style={{ textAlign: 'center', marginTop: 'auto', marginBottom: '16px' }}>
-          <p style={{ margin: 0, fontSize: '0.85rem', color: '#FF9800', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.5px' }}>
-            Join the Live Quiz
-          </p>
-          <p style={{ margin: '6px 0 0 0', fontSize: '0.82rem', color: 'rgba(255,255,255,0.7)', fontWeight: 500, wordBreak: 'break-all', lineHeight: 1.4 }}>
-            {((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl) 
-              ? `${((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join` 
-              : '...'}
-          </p>
-          <p style={{ margin: '10px 0 0 0', fontSize: '2.4rem', color: '#FF9800', fontWeight: 900, letterSpacing: '2px' }}>
-            #{formattedRoomCode}
-          </p>
-        </div>
-
-        {/* ── Real-time Participant Metrics Bar ── */}
-        {sessionId && (
-          <div style={{
-            width: '100%',
-            background: 'rgba(10, 17, 40, 0.5)',
-            borderRadius: '18px',
-            border: '1.5px solid rgba(255,152,0,0.25)',
-            padding: '14px 12px',
-            marginBottom: '16px',
-            backdropFilter: 'blur(10px)'
-          }}>
-            <div style={{ fontSize: '0.65rem', fontWeight: 700, color: '#FF9800', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: '10px', textAlign: 'center' }}>
-              Live Participants
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              {[
-                { label: 'Joined',       value: metrics.total,       color: '#3DB9FF' },
-                { label: 'Active',        value: metrics.active,      color: '#8BCF00' },
-                { label: 'Disconnected',  value: metrics.disconnected, color: '#EF4444' },
-                { label: 'Rejoined',      value: metrics.rejoined,    color: '#FF9800' },
-              ].map(({ label, value, color }) => (
-                <div key={label} style={{
-                  background: 'rgba(15, 26, 54, 0.5)',
-                  borderRadius: '12px',
-                  padding: '10px 8px',
-                  textAlign: 'center',
-                  border: `1px solid ${color}33`,
-                }}>
-                  <div style={{ fontSize: '1.3rem', fontWeight: 900, color }}>{value}</div>
-                  <div style={{ fontSize: '0.65rem', color: '#94A3B8', marginTop: '2px', fontWeight: 600 }}>{label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ─── MAIN CONTENT AREA ─── */}
-      <div className="main-content">
-        
-        {/* Header Bar */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '45px', width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <button className="btn-circle" onClick={() => navigate('/dashboard')} title="Exit Presenter Room">
-              <ChevronLeft size={24} />
-            </button>
-            <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {status === 'waiting' && '🏆 Live Session'}
-              {status === 'active' && !showQuestionLeaderboard && `🏆 Live quiz (${currentQuestionIndex + 1}/${quiz.questions.length})`}
-              {(showQuestionLeaderboard || status === 'ended') && '🏆 Leaderboard'}
+      {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
+      <aside style={{
+        width: '320px', background: '#0F172A', borderRight: '1px solid #1E293B',
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        padding: '36px 24px', flexShrink: 0, zIndex: 10, justifyContent: 'space-between'
+      }}>
+        {/* Brand & QR Container */}
+        <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '24px' }}>
+            <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.1rem', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
+              RETAILEDGE
+            </span>
+            <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 900, fontSize: '1.1rem', color: '#2563EB' }}>
+              PRO
             </span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#FF9800', fontSize: '1.3rem', fontWeight: 700 }}>
-            <span>{participants.length}</span>
-            <Users size={22} />
+          {/* QR Code White Card */}
+          <div style={{
+            background: '#FFFFFF', padding: '16px', borderRadius: '16px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)', display: 'flex',
+            flexDirection: 'column', alignItems: 'center', marginBottom: '16px'
+          }}>
+            {qrDataUrl ? (
+              <img src={qrDataUrl} alt="QR Code to Join" style={{ width: '180px', height: '180px', display: 'block' }} />
+            ) : qrError ? (
+              <div style={{ width: '180px', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#EF4444', textAlign: 'center', padding: '10px' }}>
+                <AlertCircle size={32} style={{ marginBottom: '8px' }} />
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '8px' }}>Unable to generate QR code</span>
+                <button
+                  onClick={() => generateQr(roomCodeRef.current || roomCode)}
+                  style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Retry
+                </button>
+              </div>
+            ) : (
+              <div style={{ width: '180px', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748B', gap: '8px' }}>
+                <div style={{ width: '24px', height: '24px', borderRadius: '50%', border: '2px solid #2563EB', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>Generating QR...</span>
+              </div>
+            )}
+          </div>
+
+          <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>
+            Scan with smartphone camera to join
+          </div>
+
+          {/* Room PIN Display */}
+          <div style={{ background: '#162033', border: '1px solid #1E293B', borderRadius: '12px', padding: '12px 20px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>
+              Session PIN
+            </div>
+            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#2563EB', letterSpacing: '3px', fontFamily: 'monospace' }}>
+              {formattedRoomCode}
+            </div>
           </div>
         </div>
 
-        {/* Body content based on quiz status */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', overflowY: 'auto', paddingBottom: '120px', boxSizing: 'border-box' }}>
+        {/* Live Metrics Counter */}
+        <div style={{ width: '100%', background: '#162033', borderRadius: '12px', border: '1px solid #1E293B', padding: '14px' }}>
+          <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px', textAlign: 'center' }}>
+            Live Participant Roster
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <div style={{ background: '#0F172A', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #1E293B' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#06B6D4' }}>{Math.max(metrics.total || 0, participants.length)}</div>
+              <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 600 }}>Total Joined</div>
+            </div>
+            <div style={{ background: '#0F172A', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #1E293B' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10B981' }}>{Math.max(metrics.active || 0, participants.filter(p => !p.disconnected).length)}</div>
+              <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 600 }}>Active Now</div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      {/* ─── MAIN PRESENTATION CANVAS ─── */}
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '36px 48px', overflow: 'hidden', position: 'relative' }}>
+        
+        {/* Top Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <button 
+              onClick={() => navigate('/dashboard')}
+              style={{
+                width: '40px', height: '40px', borderRadius: '50%', background: '#162033',
+                border: '1px solid #1E293B', color: '#FFFFFF', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer'
+              }}
+              title="Exit Presenter Room"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#FFFFFF', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {status === 'waiting' && 'Live Arena Lobby'}
+              {status === 'active' && !showQuestionLeaderboard && `Question ${currentQuestionIndex + 1} of ${quiz.questions.length}`}
+              {(showQuestionLeaderboard || status === 'ended') && 'Session Leaderboard'}
+            </h2>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#162033', border: '1px solid #1E293B', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700, color: '#10B981' }}>
+              <Users size={16} />
+              <span>{participants.length} Learners</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Dynamic Presentation Body */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', paddingBottom: '90px' }}>
           
-          {/* A. WAITING STATE */}
+          {/* A. WAITING LOBBY */}
           {status === 'waiting' && (
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', height: '100%' }}>
-              <h1 style={{ 
-                fontSize: '3.2rem', 
-                fontWeight: 900, 
-                background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)', 
-                WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
-                margin: '0 0 32px 0', 
-                textAlign: 'left' 
-              }}>
-                Join the Session!
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
+              <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(37, 99, 235, 0.12)', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                <Radio size={32} />
+              </div>
+              <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
+                Waiting for Participants to Connect
               </h1>
-              
-              {/* Joined participants grid */}
-              <div style={{ 
-                flex: 1,
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: '16px 12px',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '100%',
-                maxHeight: '60vh',
-                overflowY: 'auto',
-                padding: '20px 0'
-              }}>
+              <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '520px', marginBottom: '36px' }}>
+                Learners can scan the QR code on the left or visit <strong style={{ color: '#06B6D4' }}>/join</strong> and enter PIN <strong style={{ color: '#2563EB' }}>{formattedRoomCode}</strong>
+              </p>
+
+              {/* Connected Participant Chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
                 {participants.map((p, i) => (
-                  <div key={p.id || i} className="sales-rep-card" style={{ opacity: p.disconnected ? 0.5 : 1, borderColor: p.disconnected ? 'rgba(239, 68, 68, 0.3)' : undefined }}>
-                    <span style={{ marginRight: '8px', fontSize: '1.25rem' }}>{p.avatar || getSmileyForName(p.name)}</span>
-                    <div className={p.disconnected ? "status-dot-disconnected" : "status-dot-active"}></div>
-                    {p.name}
+                  <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#162033', border: '1px solid #1E293B', padding: '8px 16px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, color: '#FFFFFF' }}>
+                    <span>{p.avatar || getSmileyForName(p.name)}</span>
+                    <span>{p.name}</span>
                   </div>
                 ))}
                 {participants.length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#FF9800', fontSize: '1.5rem', width: '100%', marginTop: '64px' }}>
-                    <div style={{ fontSize: '4rem', marginBottom: '16px', animation: 'float 3s ease-in-out infinite' }}>⏳</div>
-                    Waiting for players to connect...
+                  <div style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.95rem' }}>
+                    No learners joined yet...
                   </div>
                 )}
               </div>
             </div>
           )}
 
-          {/* B. ACTIVE QUESTION STATE */}
+          {/* B. ACTIVE QUESTION CANVAS */}
           {status === 'active' && !showQuestionLeaderboard && activeQuestion && (
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
               
-              {/* Question Row with stopwatch-badge */}
-              <div className="glass-card" style={{ 
-                background: '#0F1A36', 
-                border: '2px solid rgba(255, 152, 0, 0.3)', 
-                padding: '28px', 
-                borderRadius: '24px', 
-                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-                marginBottom: '32px',
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'space-between',
-                gap: '24px' 
-              }}>
-                <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3, flex: 1 }}>
+              {/* Question Header Card */}
+              <div style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '16px', padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
+                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: 0, lineHeight: 1.3, flex: 1 }}>
                   {activeQuestion.text}
                 </h1>
                 {activeQuestion.time_limit && !answerRevealed && (
-                  <div className="stopwatch-badge" style={{ color: timeLeft <= 5 ? '#EF4444' : '#FF9800', borderColor: timeLeft <= 5 ? '#EF4444' : '#FF9800' }}>
-                    <Clock size={28} />
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: '8px',
+                    background: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                    border: `1.5px solid ${timeLeft <= 5 ? '#EF4444' : '#F59E0B'}`,
+                    color: timeLeft <= 5 ? '#EF4444' : '#F59E0B',
+                    padding: '8px 16px', borderRadius: '12px', fontSize: '1.3rem', fontWeight: 800
+                  }}>
+                    <Clock size={20} />
                     <span>{timeLeft}s</span>
                   </div>
                 )}
               </div>
 
-              {/* Media Preview if attached */}
-              {activeQuestion.media_url && (
-                <div style={{ marginBottom: '32px', display: 'flex', justifyContent: 'flex-start' }}>
-                  {/\.(mp3|wav|ogg|aac|m4a)$/i.test(activeQuestion.media_url) ? (
-                    <audio controls src={activeQuestion.media_url} style={{ width: '60%' }} />
-                  ) : (
-                    <img 
-                      src={activeQuestion.media_url} 
-                      alt="Question attachment" 
-                      style={{ maxWidth: '50%', maxHeight: '200px', borderRadius: '12px', objectFit: 'contain', border: '1px solid rgba(255, 152, 0, 0.2)' }} 
-                    />
-                  )}
-                </div>
-              )}
+              {/* Options Listing / Response Distribution */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                {getOptions(activeQuestion).map((opt, i) => {
+                  const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+                  const letter = letters[i] || '?';
+                  const isCorrect = isCorrectOpt(opt);
+                  const votes = getOptionVotes(opt);
+                  const percentage = liveAnswers.length > 0 ? Math.round((votes / liveAnswers.length) * 100) : 0;
 
-              {/* Options Listing */}
-              {['mcq', 'multi_select', 'true_false', 'poll'].includes(activeQuestion.type) && (
-                <>
-                  {!answerRevealed ? (
-                    /* Retail Shelf Option Cards */
-                    <div className="retail-shelf-container">
-                      {getOptions(activeQuestion).map((opt, i) => {
-                        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
-                        const letter = letters[i] || '?';
-                        return (
-                          <div key={i} className="retail-shelf-item">
-                            <span className="price-tag-badge">{letter}</span>
-                            <span style={{ fontWeight: 600 }}>{opt}</span>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    /* Displaying Results with KPI indicators */
-                    <div className="kpi-progress-container">
-                      {getOptions(activeQuestion).map((opt, i) => {
-                        const votes = getOptionVotes(opt);
-                        const percentage = liveAnswers.length > 0 ? Math.round((votes / liveAnswers.length) * 100) : 0;
-                        const isCorrect = isCorrectOpt(opt);
-                        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
-                        const letter = letters[i] || '?';
-                        
-                        return (
-                          <div key={i} style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: '12px', 
-                            width: '100%',
-                            background: 'var(--text-primary)',
-                            padding: '16px 24px',
-                            borderRadius: '16px',
-                            border: isCorrect ? '2px solid #8BCF00' : '1px solid rgba(255, 152, 0, 0.2)',
-                            boxShadow: isCorrect ? '0 0 15px rgba(139, 207, 0, 0.15)' : 'none'
+                  return (
+                    <div
+                      key={i}
+                      style={{
+                        background: '#111827',
+                        border: `1.5px solid ${answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#1E293B'}`,
+                        borderRadius: '12px', padding: '16px 20px',
+                        display: 'flex', flexDirection: 'column', gap: '10px',
+                        boxShadow: answerRevealed && isCorrect ? '0 0 20px rgba(16, 185, 129, 0.2)' : 'none'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF' }}>
+                          <span style={{
+                            width: '28px', height: '28px', borderRadius: '6px',
+                            background: answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#2563EB',
+                            color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: '0.85rem', fontWeight: 800
                           }}>
-                            {/* Option text and optional check badge */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.3rem', fontWeight: 700, color: 'var(--bg-primary)' }}>
-                              <span className="price-tag-badge" style={{ background: isCorrect ? '#8BCF00' : '#FF9800' }}>{letter}</span>
-                              <span>{opt}</span>
-                              {isCorrect && (
-                                <div style={{
-                                  width: '24px',
-                                  height: '24px',
-                                  borderRadius: '50%',
-                                  backgroundColor: 'rgba(139, 207, 0, 0.1)',
-                                  border: '2px solid #8BCF00',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: '#8BCF00',
-                                  fontSize: '0.9rem',
-                                  fontWeight: 'bold',
-                                  flexShrink: 0
-                                }}>
-                                  ✓
-                                </div>
-                              )}
-                            </div>
-                            
-                            {/* Option Progress Bar */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-                              <div className="kpi-progress-bg">
-                                <div 
-                                  className={`kpi-progress-fill ${isCorrect ? 'kpi-fill-correct' : 'kpi-fill-incorrect'}`} 
-                                  style={{ width: `${percentage}%` }}
-                                />
-                              </div>
-                              <span style={{ 
-                                fontSize: '1.2rem', 
-                                fontWeight: 'bold', 
-                                color: isCorrect ? '#8BCF00' : '#FF9800', 
-                                minWidth: '100px', 
-                                textAlign: 'right' 
-                              }}>
-                                {percentage}% ({votes} {votes === 1 ? 'vote' : 'votes'})
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Free Text / Word Cloud List */}
-              {['open_text', 'word_cloud'].includes(activeQuestion.type) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', width: '100%', padding: '10px' }}>
-                  {liveAnswers.map((ans, idx) => (
-                    <div key={idx} style={{ 
-                      padding: '20px 24px', 
-                      background: 'var(--text-primary)', 
-                      border: '1.5px solid rgba(255, 152, 0, 0.25)', 
-                      borderRadius: '16px', 
-                      textAlign: 'left', 
-                      fontSize: '1.35rem', 
-                      fontWeight: 600, 
-                      color: 'var(--bg-primary)', 
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' 
-                    }}>
-                      "{ans.answer}"
-                    </div>
-                  ))}
-                  {liveAnswers.length === 0 && (
-                    <p style={{ color: '#FF9800', fontStyle: 'italic', fontSize: '1.2rem' }}>Waiting for response stream...</p>
-                  )}
-                </div>
-              )}
-
-              {/* Rating Display */}
-              {activeQuestion.type === 'rating' && (
-                <div style={{ 
-                  textAlign: 'center', 
-                  background: 'var(--text-primary)', 
-                  padding: '40px', 
-                  borderRadius: '24px', 
-                  border: '2px solid rgba(255, 152, 0, 0.3)', 
-                  maxWidth: '400px', 
-                  margin: '40px auto 0 auto', 
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.3)' 
-                }}>
-                  {(() => {
-                    let sum = 0;
-                    let count = 0;
-                    liveAnswers.forEach(ans => {
-                      const val = parseFloat(ans.answer);
-                      if (!isNaN(val)) {
-                        sum += val;
-                        count++;
-                      }
-                    });
-                    const avg = count > 0 ? (sum / count).toFixed(1) : '0.0';
-                    return (
-                      <>
-                        <h2 style={{ fontSize: '5rem', margin: '0 0 12px 0', color: 'var(--bg-primary)', fontWeight: 800 }}>{avg}</h2>
-                        <div style={{ fontSize: '3rem', color: '#FF9800', marginBottom: '16px', letterSpacing: '4px' }}>
-                          {'★'.repeat(Math.round(parseFloat(avg))).padEnd(5, '☆')}
+                            {letter}
+                          </span>
+                          <span>{opt}</span>
+                          {answerRevealed && isCorrect && (
+                            <CheckCircle2 size={18} color="#10B981" />
+                          )}
                         </div>
-                        <p style={{ color: 'rgba(255, 255, 255, 0.7)', margin: 0, fontWeight: 600, fontSize: '1.1rem' }}>{liveAnswers.length} responses</p>
-                      </>
-                    );
-                  })()}
-                </div>
-              )}
+                        {answerRevealed && (
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: isCorrect ? '#10B981' : '#94A3B8' }}>
+                            {percentage}% ({votes} {votes === 1 ? 'vote' : 'votes'})
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Live Distribution Progress Bar */}
+                      {answerRevealed && (
+                        <div style={{ width: '100%', height: '8px', background: '#0B1220', borderRadius: '4px', overflow: 'hidden' }}>
+                          <div 
+                            style={{
+                              width: `${percentage}%`, height: '100%',
+                              background: isCorrect ? '#10B981' : '#3B82F6',
+                              borderRadius: '4px', transition: 'width 0.6s ease'
+                            }} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
 
             </div>
           )}
 
-          {/* C. INTERIM OR FINAL LEADERBOARD STATE */}
+          {/* C. LEADERBOARD / PODIUM */}
           {(showQuestionLeaderboard || status === 'ended') && (
-            <div style={{ display: 'flex', flexDirection: 'column', width: '100%', alignItems: 'center' }}>
-              
-              {/* Floating Trophy Header */}
-              <div className="trophy-container">
-                <span className="floating-trophy" style={{ fontSize: '7rem', display: 'block', lineHeight: 1 }}>🏆</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
+                <Trophy size={32} />
               </div>
-
-              {/* Leaderboard Title */}
-              <h1 style={{ 
-                fontSize: '2.8rem', 
-                fontWeight: 900, 
-                background: 'linear-gradient(135deg, #FF9800 0%, #FF5722 100%)', 
-                WebkitBackgroundClip: 'text', 
-                WebkitTextFillColor: 'transparent',
-                marginBottom: '40px', 
-                textAlign: 'center' 
-              }}>
-                {status === 'ended' && leaderboard.length > 0
-                  ? `Congratulations, ${leaderboard[0].name}!`
-                  : `Leaderboard (${currentQuestionIndex + 1}/${quiz.questions.length})`}
+              <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '32px', textAlign: 'center' }}>
+                {status === 'ended' ? 'Final Session Champions' : 'Interim Leaderboard Standings'}
               </h1>
 
-              {/* Leaderboard Entries */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', width: '100%', maxWidth: '750px', margin: '0 auto', boxSizing: 'border-box' }}>
-                {leaderboard.slice(0, 5).map((p, i) => {
-                  const isFirst = i === 0;
-                  const responses = p.Responses || p.responses || [];
-                  const correctCount = responses.filter(r => r.points_awarded > 0).length;
-                  const totalTimeMs = responses.reduce((sum, r) => sum + (r.response_time || 0), 0);
-                  const avgTimeSec = responses.length > 0 ? Math.round(totalTimeMs / responses.length / 1000) : 0;
-                  
-                  const showMetrics = status === 'ended';
+              {/* Top 3 Podium Cards */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: '16px', width: '100%', marginBottom: '28px', alignItems: 'flex-end' }}>
+                {/* Rank 2: Silver */}
+                {leaderboard[1] && (
+                  <div style={{ background: '#111827', border: '2px solid #94A3B8', borderRadius: '14px', padding: '20px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>🥈</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Rank 2</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF', margin: '6px 0 2px' }}>{leaderboard[1].name}</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#93C5FD' }}>{leaderboard[1].score} pts</div>
+                  </div>
+                )}
 
-                  return (
-                    <div key={p.id} className={`sales-board-entry ${isFirst ? 'sales-board-top' : 'sales-board-regular'}`}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                        <span style={{ 
-                          color: isFirst ? 'var(--bg-glass)' : '#FF9800', 
-                          fontWeight: 900
-                        }}>
-                          #{i+1}
-                        </span>
-                        <span>{p.name}</span>
-                        {isFirst && <span style={{ fontSize: '1.25rem' }}>👑</span>}
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '24px', fontSize: '1.2rem', fontWeight: 700 }}>
-                        {showMetrics ? (
-                          <>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: isFirst ? 'var(--bg-glass)' : '#8BCF00' }}>
-                              ✓ {correctCount}/{quiz.questions.length}
-                            </span>
-                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', opacity: 0.9 }}>
-                              ⏱ {formatTime(avgTimeSec)}
-                            </span>
-                          </>
-                        ) : (
-                          <span style={{ color: isFirst ? 'var(--bg-glass)' : '#FF9800' }}>{p.score} pts</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Rank 1: Gold */}
+                {leaderboard[0] && (
+                  <div style={{ background: '#162033', border: '2.5px solid #F59E0B', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 10px 30px rgba(245, 158, 11, 0.2)' }}>
+                    <div style={{ fontSize: '2rem', marginBottom: '4px' }}>👑</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#F59E0B', textTransform: 'uppercase' }}>Champion · Rank 1</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#FFFFFF', margin: '8px 0 2px' }}>{leaderboard[0].name}</div>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#F59E0B' }}>{leaderboard[0].score} pts</div>
+                  </div>
+                )}
 
-                {leaderboard.length === 0 && (
-                  <p style={{ color: 'rgba(255, 255, 255, 0.6)', fontStyle: 'italic', fontSize: '1.2rem', textAlign: 'center', marginTop: '24px' }}>
-                    No scores recorded.
-                  </p>
+                {/* Rank 3: Bronze */}
+                {leaderboard[2] && (
+                  <div style={{ background: '#111827', border: '2px solid #D97706', borderRadius: '14px', padding: '20px 16px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>🥉</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#D97706', textTransform: 'uppercase' }}>Rank 3</div>
+                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF', margin: '6px 0 2px' }}>{leaderboard[2].name}</div>
+                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#93C5FD' }}>{leaderboard[2].score} pts</div>
+                  </div>
                 )}
               </div>
+
+              {/* Ranks 4+ Table */}
+              <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {leaderboard.slice(3, 10).map((p, i) => (
+                  <div key={p.id || i} style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '10px', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#64748B', width: '24px' }}>#{i + 4}</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF' }}>{p.name}</span>
+                    </div>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#93C5FD' }}>{p.score} pts</span>
+                  </div>
+                ))}
+              </div>
+
             </div>
           )}
 
         </div>
 
-        {/* ─── FLOATING BOTTOM TOOLBAR (PRESENTER ONLY) ─── */}
-        <div className="bottom-toolbar">
-          
-          {/* End presenting red button */}
+        {/* ─── FLOATING BOTTOM CONTROLS TOOLBAR ─── */}
+        <div style={{
+          position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
+          background: '#111827', border: '1px solid #1E293B', borderRadius: '16px',
+          padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '12px',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', zIndex: 100
+        }}>
           <button 
-            className="toolbar-btn stop" 
             onClick={() => {
-              if (window.confirm("Are you sure you want to stop presenting and end the session?")) {
+              if (window.confirm("End the live quiz session?")) {
                 socket.emit('host_end_session', { roomCode });
                 navigate('/dashboard');
               }
             }} 
-            title="Stop Presenting"
+            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#EF4444', border: 'none', color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            title="Stop Session"
           >
-            <Square size={16} fill='#ffffff' stroke="none" />
+            <Square size={14} fill="#FFFFFF" />
           </button>
 
-          <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 152, 0, 0.2)' }} />
+          <div style={{ width: '1px', height: '20px', background: '#1E293B' }} />
 
-          {/* Prev Button */}
           <button 
-            className="toolbar-btn" 
             onClick={handleLogicalPrev} 
             disabled={status === 'waiting'}
-            title="Go Back"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: '#162033', border: '1px solid #1E293B', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', opacity: status === 'waiting' ? 0.3 : 1 }}
           >
-            <ArrowLeft size={16} /> Prev
+            <ArrowLeft size={14} /> Prev
           </button>
 
-          {/* Trophy Leaderboard Toggle Button */}
           <button 
-            className="toolbar-btn" 
-            onClick={() => {
-              if (status === 'active') {
-                if (showQuestionLeaderboard) {
-                  setShowQuestionLeaderboard(false);
-                } else {
-                  handleShowLeaderboard();
-                }
-              }
-            }}
-            disabled={status === 'waiting' || status === 'ended'}
-            style={{ color: showQuestionLeaderboard ? '#8BCF00' : 'var(--bg-glass)' }}
-            title="Toggle Leaderboard"
-          >
-            <Award size={16} />
-          </button>
-
-          {/* Next Button */}
-          <button 
-            className="toolbar-btn" 
             onClick={handleLogicalNext}
-            title="Next Step"
-          >
-            Next <ArrowRight size={16} />
-          </button>
-
-          <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 152, 0, 0.2)' }} />
-
-          {/* Quiz Question Jumper Select */}
-          <select 
-            value={currentQuestionIndex} 
-            onChange={(e) => {
-              const idx = parseInt(e.target.value);
-              if (idx === -1) {
-                setAnswerRevealed(false);
-                setShowQuestionLeaderboard(false);
-                setLiveAnswers([]);
-                setCurrentQuestionIndex(-1);
-                setStatus('waiting');
-                socket.emit('host_reset_lobby', { roomCode });
-              } else {
-                handleJumpToQuestion(idx);
-              }
+            disabled={!roomCode}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '8px',
+              background: !roomCode ? '#334155' : '#2563EB',
+              border: 'none', color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 700,
+              cursor: !roomCode ? 'not-allowed' : 'pointer',
+              opacity: !roomCode ? 0.6 : 1,
+              boxShadow: !roomCode ? 'none' : '0 2px 10px rgba(37, 99, 235, 0.4)'
             }}
-            className="toolbar-select"
-            title="Select Question"
+            title={!roomCode ? "Preparing Live Arena..." : status === 'waiting' ? "Start Session" : "Next Action"}
           >
-            <option value={-1}>Waiting Screen</option>
-            {quiz.questions.map((q, idx) => (
-              <option key={q.id} value={idx}>
-                {idx + 1}. {q.text.substring(0, 20)}{q.text.length > 20 ? '...' : ''}
-              </option>
-            ))}
-          </select>
-
-          <div style={{ width: '1px', height: '24px', backgroundColor: 'rgba(255, 152, 0, 0.2)' }} />
-
-          {/* Settings button */}
-          <button className="toolbar-btn" title="Settings" onClick={() => alert("Quiz session settings panel is not available in present mode.")}>
-            <Settings size={16} />
+            <span>{!roomCode ? 'Preparing Live Arena...' : status === 'waiting' ? 'Start Session' : !answerRevealed ? 'Reveal Answer' : !showQuestionLeaderboard ? 'Leaderboard' : 'Next Question'}</span>
+            <ArrowRight size={14} />
           </button>
 
-          {/* Fullscreen button */}
-          <button className="toolbar-btn" onClick={toggleFullscreen} title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}>
+          <div style={{ width: '1px', height: '20px', background: '#1E293B' }} />
+
+          <button 
+            onClick={toggleFullscreen}
+            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#162033', border: '1px solid #1E293B', color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            title="Toggle Fullscreen"
+          >
             <Maximize2 size={16} />
           </button>
-
-          {/* Sidebar Toggle Button */}
-          <button 
-            className="toolbar-btn" 
-            onClick={() => setShowControlsSidebar(prev => !prev)}
-            style={{ color: showControlsSidebar ? '#FF9800' : 'var(--bg-glass)' }}
-            title="Toggle Right Controls"
-          >
-            {showControlsSidebar ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
         </div>
 
-      </div>
-
-      {/* ─── TOGGLEABLE RIGHT CONTROLS PANEL ─── */}
-      {showControlsSidebar && (
-        <div style={{ 
-          width: '320px', 
-          background: '#0F1A36', 
-          borderLeft: '2px solid rgba(255, 152, 0, 0.2)', 
-          display: 'flex', 
-          flexDirection: 'column',
-          height: '100%',
-          flexShrink: 0,
-          zIndex: 50,
-          boxSizing: 'border-box'
-        }}>
-          {/* Header */}
-          <div style={{ padding: '24px', borderBottom: '1px solid rgba(255, 152, 0, 0.15)' }}>
-            <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.2rem', fontWeight: 800 }}>Present Controls</h3>
-            <p style={{ margin: '4px 0 0 0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem' }}>Manual presentation operations</p>
-          </div>
-
-          {/* Action Buttons */}
-          <div style={{ padding: '24px', borderBottom: '1px solid rgba(255, 152, 0, 0.15)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {status === 'active' && !answerRevealed && (
-              <button 
-                className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#FF9800', borderColor: '#FF9800', color: 'var(--text-primary)' }} 
-                onClick={revealAnswer}
-              >
-                Reveal Answer
-              </button>
-            )}
-            
-            {status === 'active' && !showQuestionLeaderboard && (
-              <button 
-                className="btn btn-primary" 
-                style={{ width: '100%', justifyContent: 'center', background: '#8BCF00', borderColor: '#8BCF00', color: '#0A1128' }} 
-                onClick={handleShowLeaderboard}
-              >
-                Show Leaderboard
-              </button>
-            )}
-
-            <button 
-              className="btn btn-secondary" 
-              style={{ width: '100%', justifyContent: 'center', background: 'transparent', border: '1.5px solid rgba(255, 152, 0, 0.3)', color: '#FF9800' }} 
-              onClick={() => {
-                if (window.confirm("Are you sure you want to reset the entire quiz session?")) {
-                  setStatus('waiting');
-                  setCurrentQuestionIndex(-1);
-                  setAnswerRevealed(false);
-                  setShowQuestionLeaderboard(false);
-                  setLiveAnswers([]);
-                }
-              }}
-            >
-              Reset Session
-            </button>
-          </div>
-
-          {/* Participant Directory */}
-          <div style={{ flex: 1, padding: '24px', overflowY: 'auto' }}>
-            <h3 style={{ margin: '0 0 16px 0', color: 'rgba(255, 255, 255, 0.6)', fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 700 }}>
-              Connected ({participants.length})
-            </h3>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {participants.map((p, i) => (
-                <div key={i} style={{ padding: '10px 14px', background: 'rgba(10, 17, 40, 0.4)', borderRadius: '8px', border: '1px solid rgba(255, 152, 0, 0.15)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '0.9rem', fontWeight: 500 }}>
-                  <div className="status-dot-active"></div>
-                  {p.name}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-      {/* Floating Emojis Layer */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', zIndex: 9999, overflow: 'hidden' }}>
-        {floatingEmojis.map(e => (
-          <span
-            key={e.id}
-            style={{
-              position: 'absolute',
-              bottom: '-50px',
-              left: `${e.x}%`,
-              fontSize: '2.5rem',
-              animation: `floatUp ${e.duration}s cubic-bezier(0.08, 0.8, 0.2, 1) forwards`,
-              transform: `scale(${e.scale})`,
-            }}
-          >
-            {e.emoji}
-          </span>
-        ))}
-      </div>
+      </main>
     </div>
   );
 }

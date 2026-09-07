@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <!-- Circular text paths -->
+    <path id="sealTopPath" d="M 25 100 A 75 75 0 0 1 175 100" fill="none" />
+    <path id="sealBottomPath" d="M 175 100 A 75 75 0 0 1 25 100" fill="none" />
+    <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#D97706" />
+      <stop offset="50%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#B45309" />
+    </linearGradient>
+  </defs>
+
+  <!-- Outer serrated / beaded ring -->
+  <circle cx="100" cy="100" r="94" fill="none" stroke="url(#goldGradient)" stroke-width="2" stroke-dasharray="3, 3" />
+  <circle cx="100" cy="100" r="88" fill="none" stroke="#0B1220" stroke-width="2.5" />
+  <circle cx="100" cy="100" r="84" fill="none" stroke="url(#goldGradient)" stroke-width="1.5" />
+
+  <!-- Background Tint -->
+  <circle cx="100" cy="100" r="82" fill="#FFFFFF" fill-opacity="0.9" />
+
+  <!-- Top Curved Text: IDONNEOUS MARKETING SERVICES -->
+  <text font-family="'Inter', 'Arial', sans-serif" font-size="8.5" font-weight="900" fill="#0B1220" letter-spacing="1.8">
+    <textPath href="#sealTopPath" startOffset="50%" text-anchor="middle">
+      ★ IDONNEOUS MARKETING SERVICES ★
+    </textPath>
+  </text>
+
+  <!-- Bottom Curved Text: OFFICIAL CORPORATE SEAL -->
+  <text font-family="'Inter', 'Arial', sans-serif" font-size="8" font-weight="800" fill="#D97706" letter-spacing="2">
+    <textPath href="#sealBottomPath" startOffset="50%" text-anchor="middle">
+      • CERTIFIED CREDENTIAL •
+    </textPath>
+  </text>
+
+  <!-- Inner Rings -->
+  <circle cx="100" cy="100" r="54" fill="none" stroke="#0B1220" stroke-width="2" />
+  <circle cx="100" cy="100" r="50" fill="none" stroke="url(#goldGradient)" stroke-width="1" />
+
+  <!-- Center Monogram / Star -->
+  <g transform="translate(100, 100)">
+    <!-- Star Motif -->
+    <path d="M 0 -22 L 6 -6 L 22 0 L 6 6 L 0 22 L -6 6 L -22 0 L -6 -6 Z" fill="url(#goldGradient)" />
+    <!-- Center Shield / Monogram -->
+    <circle cx="0" cy="0" r="10" fill="#0B1220" />
+    <text x="0" y="3.5" font-family="'Inter', sans-serif" font-size="9" font-weight="900" fill="#FFFFFF" text-anchor="middle">IMS</text>
+    <text x="0" y="30" font-family="'Inter', sans-serif" font-size="6.5" font-weight="800" fill="#0B1220" text-anchor="middle" letter-spacing="1">SEAL OF EXCELLENCE</text>
+  </g>
+</svg>

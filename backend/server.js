@@ -31,7 +31,9 @@ const io = new Server(server, {
 app.set('io', io);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use('/uploads', express.static(path.join(__dirname, 'public', 'uploads')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 // ─── Serve built React frontend ───────────────────────────────────────────────
 const DIST_PATH = path.join(__dirname, '..', 'frontend', 'dist');
@@ -57,6 +59,9 @@ const escalationRoutes  = require('./routes/escalations');
 const superadminRoutes  = require('./routes/superadmin');
 const roleRoutes        = require('./routes/roles');
 const clientRoutes      = require('./routes/clients');
+const supervisorRoutes  = require('./routes/supervisor');
+const clientPortalRoutes = require('./routes/client');
+const tdRoutes          = require('./routes/td');
 
 app.use('/api/auth',         authRoutes);
 app.use('/api/quizzes',      quizRoutes);
@@ -69,6 +74,9 @@ app.use('/api/escalations',  escalationRoutes);
 app.use('/api/superadmin',   superadminRoutes);
 app.use('/api/roles',        roleRoutes);
 app.use('/api/clients',      clientRoutes);
+app.use('/api/supervisor',   supervisorRoutes);
+app.use('/api/client',       clientPortalRoutes);
+app.use('/api/td',           tdRoutes);
 
 app.get('/health', async (req, res) => {
   try {

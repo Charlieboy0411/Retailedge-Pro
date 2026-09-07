@@ -582,7 +582,7 @@ export default function QuizBuilder() {
             <Eye size={16} color='var(--text-secondary)' /> Preview Quiz
           </button>
           
-          <div style={{ display: 'flex', background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+          <div style={{ display: 'flex', background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)', borderRadius: '10px', overflow: 'hidden', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
             <button 
               className="btn btn-primary" 
               onClick={handleSaveQuiz}
@@ -618,14 +618,14 @@ export default function QuizBuilder() {
             >
               <div style={{ 
                 width: '32px', height: '32px', borderRadius: '50%', 
-                background: activeStep === 'details' ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', 
-                border: `2px solid ${activeStep === 'details' ? '#F36F21' : '#E2E8F0'}`,
+                background: activeStep === 'details' ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)', 
+                border: `2px solid ${activeStep === 'details' ? '#2563EB' : '#E2E8F0'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                color: activeStep === 'details' ? '#F36F21' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
+                color: activeStep === 'details' ? '#2563EB' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
               }}>
                 1
               </div>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'details' ? '#F36F21' : '#94A3B8', marginTop: '6px' }}>Details</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'details' ? '#2563EB' : '#94A3B8', marginTop: '6px' }}>Details</span>
             </div>
 
             {/* Step 2 indicator */}
@@ -635,14 +635,14 @@ export default function QuizBuilder() {
             >
               <div style={{ 
                 width: '32px', height: '32px', borderRadius: '50%', 
-                background: activeStep === 'questions' ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', 
-                border: `2px solid ${activeStep === 'questions' ? '#F36F21' : '#E2E8F0'}`,
+                background: activeStep === 'questions' ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)', 
+                border: `2px solid ${activeStep === 'questions' ? '#2563EB' : '#E2E8F0'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                color: activeStep === 'questions' ? '#F36F21' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
+                color: activeStep === 'questions' ? '#2563EB' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
               }}>
                 2
               </div>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'questions' ? '#F36F21' : '#94A3B8', marginTop: '6px' }}>Questions</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'questions' ? '#2563EB' : '#94A3B8', marginTop: '6px' }}>Questions</span>
             </div>
 
             {/* Step 3 indicator */}
@@ -652,14 +652,14 @@ export default function QuizBuilder() {
             >
               <div style={{ 
                 width: '32px', height: '32px', borderRadius: '50%', 
-                background: activeStep === 'settings' ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', 
-                border: `2px solid ${activeStep === 'settings' ? '#F36F21' : '#E2E8F0'}`,
+                background: activeStep === 'settings' ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)', 
+                border: `2px solid ${activeStep === 'settings' ? '#2563EB' : '#E2E8F0'}`,
                 display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                color: activeStep === 'settings' ? '#F36F21' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
+                color: activeStep === 'settings' ? '#2563EB' : '#94A3B8', fontWeight: 700, fontSize: '0.85rem' 
               }}>
                 3
               </div>
-              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'settings' ? '#F36F21' : '#94A3B8', marginTop: '6px' }}>Settings</span>
+              <span style={{ fontSize: '0.72rem', fontWeight: 700, color: activeStep === 'settings' ? '#2563EB' : '#94A3B8', marginTop: '6px' }}>Settings</span>
             </div>
 
           </div>
@@ -770,7 +770,7 @@ export default function QuizBuilder() {
                   <label style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Questions List ({questions.length})</label>
                   <button 
                     onClick={() => setIsAiModalOpen(true)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#F36F21', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: '#2563EB', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}
                   >
                     <Sparkles size={12} /> AI Generator
                   </button>
@@ -787,8 +787,8 @@ export default function QuizBuilder() {
                         style={{
                           padding: '10px 12px', 
                           borderRadius: '10px',
-                          background: isSelected ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)',
-                          border: `1.5px solid ${isSelected ? '#F36F21' : '#E2E8F0'}`,
+                          background: isSelected ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)',
+                          border: `1.5px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`,
                           cursor: 'pointer',
                           display: 'flex',
                           justifyContent: 'space-between',
@@ -801,7 +801,7 @@ export default function QuizBuilder() {
                             width: '6px', height: '6px', borderRadius: '50%', 
                             background: status === 'completed' ? '#22C55E' : status === 'missing_answer' ? '#EF4444' : '#F59E0B'
                           }} />
-                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: isSelected ? '#F36F21' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          <span style={{ fontSize: '0.82rem', fontWeight: 600, color: isSelected ? '#2563EB' : 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             Q{i + 1}. {q.text || 'Empty Question'}
                           </span>
                         </div>
@@ -821,7 +821,7 @@ export default function QuizBuilder() {
 
                 <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                   <button onClick={handlePrevStep} style={{ flex: 1, padding: '10px', borderRadius: '8px', background: 'var(--bg-tertiary)', border: '1px solid #E2E8F0', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>Back</button>
-                  <button onClick={handleNextStep} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: '#F36F21', border: 'none', color: 'white', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>Advanced Settings</button>
+                  <button onClick={handleNextStep} style={{ flex: 2, padding: '10px', borderRadius: '8px', background: '#2563EB', border: 'none', color: 'white', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>Advanced Settings</button>
                 </div>
               </div>
             )}
@@ -876,9 +876,9 @@ export default function QuizBuilder() {
                   width: '100%',
                   padding: '10px 12px',
                   borderRadius: '8px',
-                  border: '1.5px solid #F36F21',
-                  background: 'rgba(243, 111, 33, 0.15)',
-                  color: '#F36F21',
+                  border: '1.5px solid #2563EB',
+                  background: 'rgba(37, 99, 235, 0.15)',
+                  color: '#2563EB',
                   fontWeight: 700,
                   fontSize: '0.88rem',
                   cursor: 'pointer',
@@ -1037,7 +1037,7 @@ export default function QuizBuilder() {
                   
                   {/* Category Type Indicator */}
                   <span style={{
-                    fontSize: '0.75rem', fontWeight: 700, color: '#F36F21', background: 'rgba(243,111,33,0.08)',
+                    fontSize: '0.75rem', fontWeight: 700, color: '#2563EB', background: 'rgba(243,111,33,0.08)',
                     padding: '4px 10px', borderRadius: '20px'
                   }}>
                     {getQuestionTypeLabel(activeQuestion.type)}
@@ -1123,7 +1123,7 @@ export default function QuizBuilder() {
                     fontSize: '1.08rem', fontWeight: 600, color: 'var(--text-primary)', minHeight: '80px', resize: 'none', outline: 'none',
                     background: 'var(--bg-glass)'
                   }}
-                  onFocus={e => e.currentTarget.style.borderColor = '#F36F21'}
+                  onFocus={e => e.currentTarget.style.borderColor = '#2563EB'}
                   onBlur={e => e.currentTarget.style.borderColor = '#E2E8F0'}
                 />
               </div>
@@ -1158,10 +1158,10 @@ export default function QuizBuilder() {
                           {/* Option Prefix Letter */}
                           <div style={{ 
                             width: '28px', height: '28px', borderRadius: '50%', 
-                            background: isCorrect ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-tertiary)', 
-                            border: `1.5px solid ${isCorrect ? '#F36F21' : '#E2E8F0'}`,
+                            background: isCorrect ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-tertiary)', 
+                            border: `1.5px solid ${isCorrect ? '#2563EB' : '#E2E8F0'}`,
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            color: isCorrect ? '#F36F21' : 'var(--text-secondary)', fontWeight: 800, fontSize: '0.8rem'
+                            color: isCorrect ? '#2563EB' : 'var(--text-secondary)', fontWeight: 800, fontSize: '0.8rem'
                           }}>
                             {letter}
                           </div>
@@ -1173,7 +1173,7 @@ export default function QuizBuilder() {
                             placeholder={`Enter option ${i + 1}`}
                             style={{ 
                               flex: 1, padding: '10px 14px', borderRadius: '8px', 
-                              border: `1px solid ${isCorrect ? '#F36F21' : '#E2E8F0'}`, 
+                              border: `1px solid ${isCorrect ? '#2563EB' : '#E2E8F0'}`, 
                               background: 'var(--bg-glass)', color: 'var(--text-primary)', fontSize: '0.88rem' 
                             }}
                           />
@@ -1229,7 +1229,7 @@ export default function QuizBuilder() {
                     {activeQuestion.options.length < 8 && (
                       <button 
                         onClick={addOption}
-                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 700, color: '#F36F21', background: 'none', border: 'none', cursor: 'pointer', marginTop: '6px' }}
+                        style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', fontWeight: 700, color: '#2563EB', background: 'none', border: 'none', cursor: 'pointer', marginTop: '6px' }}
                       >
                         <Plus size={14} /> Add Option
                       </button>
@@ -1250,9 +1250,9 @@ export default function QuizBuilder() {
                             key={opt}
                             onClick={() => updateActiveQuestion('correct_answer', opt)}
                             style={{
-                              padding: '16px', borderRadius: '12px', border: `2px solid ${isCorrect ? '#F36F21' : '#E2E8F0'}`,
-                              background: isCorrect ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', cursor: 'pointer', textAlign: 'center',
-                              fontWeight: 700, color: isCorrect ? '#F36F21' : 'var(--text-secondary)', transition: 'all 0.15s'
+                              padding: '16px', borderRadius: '12px', border: `2px solid ${isCorrect ? '#2563EB' : '#E2E8F0'}`,
+                              background: isCorrect ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)', cursor: 'pointer', textAlign: 'center',
+                              fontWeight: 700, color: isCorrect ? '#2563EB' : 'var(--text-secondary)', transition: 'all 0.15s'
                             }}
                           >
                             {opt}
@@ -1310,7 +1310,7 @@ export default function QuizBuilder() {
                 alignItems: 'center', justifyContent: 'center', flexDirection: 'column', color: '#94A3B8', cursor: 'pointer',
                 transition: 'border-color 0.2s', minHeight: '300px'
               }}
-              onMouseOver={e => e.currentTarget.style.borderColor = '#F36F21'}
+              onMouseOver={e => e.currentTarget.style.borderColor = '#2563EB'}
               onMouseOut={e => e.currentTarget.style.borderColor = '#E2E8F0'}
             >
               <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--bg-glass)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px', border: '1px solid #E2E8F0' }}>
@@ -1330,7 +1330,7 @@ export default function QuizBuilder() {
                 cursor: 'pointer', background: 'var(--bg-glass)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: '8px', flexShrink: 0
               }}
-              onMouseOver={e => e.currentTarget.style.borderColor = '#F36F21'}
+              onMouseOver={e => e.currentTarget.style.borderColor = '#2563EB'}
               onMouseOut={e => e.currentTarget.style.borderColor = '#E2E8F0'}
             >
               <Plus size={16} />
@@ -1347,7 +1347,7 @@ export default function QuizBuilder() {
           {/* Quiz Overview statistics */}
           <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px' }}>
             <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px 0', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <List size={16} color="#F36F21" /> Quiz Overview
+              <List size={16} color="#2563EB" /> Quiz Overview
             </h3>
             
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', fontSize: '0.82rem' }}>
@@ -1422,7 +1422,7 @@ export default function QuizBuilder() {
           {/* Quick Tips */}
           <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '20px' }}>
             <h4 style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 10px 0', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <AlertCircle size={14} color="#F36F21" /> Tips for Better Quizzes
+              <AlertCircle size={14} color="#2563EB" /> Tips for Better Quizzes
             </h4>
             <ul style={{ paddingLeft: '14px', margin: 0, fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               <li>Keep questions clear and concise</li>
@@ -1564,7 +1564,7 @@ export default function QuizBuilder() {
               )}
 
               {/* Templates download links */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#F36F21', fontWeight: 600 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', color: '#2563EB', fontWeight: 600 }}>
                 <a href="#csv-template" onClick={handleDownloadCsvTemplate}>📥 Download CSV Template</a>
                 <a href="#json-template" onClick={handleDownloadJsonTemplate}>📥 Download JSON Template</a>
               </div>
@@ -1575,7 +1575,7 @@ export default function QuizBuilder() {
                   onClick={handleBulkUploadParse} 
                   disabled={!bulkFile}
                   style={{ 
-                    padding: '10px 18px', borderRadius: '8px', background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', 
+                    padding: '10px 18px', borderRadius: '8px', background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)', 
                     color: 'white', fontWeight: 600, border: 'none', cursor: 'pointer', fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '6px'
                   }}
                 >
@@ -1648,7 +1648,7 @@ export default function QuizBuilder() {
                 {previewProgress === 'welcome' && (
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', maxWidth: '480px', margin: '0 auto' }}>
                     <div style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'rgba(243,111,33,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                      <Play size={24} color="#F36F21" />
+                      <Play size={24} color="#2563EB" />
                     </div>
                     
                     <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '8px' }}>{title || 'Untitled Assessment'}</h2>
@@ -1667,7 +1667,7 @@ export default function QuizBuilder() {
 
                     <button 
                       onClick={handleStartQuizPreview}
-                      style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)', border: 'none', color: 'white', fontWeight: 700, borderRadius: '8px', fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}
+                      style={{ width: '100%', padding: '12px', background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)', border: 'none', color: 'white', fontWeight: 700, borderRadius: '8px', fontSize: '0.88rem', cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}
                     >
                       Start Assessment
                     </button>
@@ -1684,7 +1684,7 @@ export default function QuizBuilder() {
                       
                       {/* Top status */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#F36F21' }}>Question {previewQIndex + 1} of {questions.length}</span>
+                        <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2563EB' }}>Question {previewQIndex + 1} of {questions.length}</span>
                         <span style={{ fontSize: '0.75rem', background: 'rgba(234, 88, 12, 0.15)', padding: '4px 8px', borderRadius: '4px', fontWeight: 600, color: '#EA580C' }}>⏰ {currentQ.time_limit}s Limit</span>
                       </div>
 
@@ -1722,11 +1722,11 @@ export default function QuizBuilder() {
                               }}
                               style={{
                                 display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 18px',
-                                borderRadius: '10px', border: `1.5px solid ${isSelected ? '#F36F21' : '#E2E8F0'}`,
-                                background: isSelected ? 'rgba(243, 111, 33, 0.15)' : 'var(--bg-glass)', cursor: 'pointer', transition: 'all 0.15s'
+                                borderRadius: '10px', border: `1.5px solid ${isSelected ? '#2563EB' : '#E2E8F0'}`,
+                                background: isSelected ? 'rgba(37, 99, 235, 0.15)' : 'var(--bg-glass)', cursor: 'pointer', transition: 'all 0.15s'
                               }}
                             >
-                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: isSelected ? '#F36F21' : 'var(--text-secondary)' }}>{opt}</span>
+                              <span style={{ fontSize: '0.85rem', fontWeight: 600, color: isSelected ? '#2563EB' : 'var(--text-secondary)' }}>{opt}</span>
                             </div>
                           );
                         })}
@@ -1749,7 +1749,7 @@ export default function QuizBuilder() {
                           disabled={selectedVal === undefined || selectedVal === ''}
                           style={{
                             padding: '10px 24px', borderRadius: '8px', 
-                            background: (selectedVal === undefined || selectedVal === '') ? '#E2E8F0' : 'linear-gradient(135deg, #F36F21 0%, #E05A0E 100%)',
+                            background: (selectedVal === undefined || selectedVal === '') ? '#E2E8F0' : 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)',
                             color: 'white', border: 'none', fontWeight: 700, cursor: (selectedVal === undefined || selectedVal === '') ? 'not-allowed' : 'pointer', fontSize: '0.85rem'
                           }}
                         >

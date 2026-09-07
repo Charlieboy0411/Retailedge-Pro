@@ -11,6 +11,7 @@ import { getSocket } from '../utils/socketService';
 import { generate15SlidePPT } from '../utils/pptHelper';
 import { generateExcelReport } from '../utils/excelHelper';
 import { downloadWorkbook, downloadPPT } from '../utils/downloadWorkbook';
+import ReportCenterView from '../components/ReportCenterView';
 
 export default function Reports() {
   const { token, user } = useContext(AuthContext);
@@ -18,6 +19,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState('');
+  const [mainTab, setMainTab] = useState('ANALYTICS_ENGINE'); // 'ANALYTICS_ENGINE' | 'SESSION_LOGS'
   
   const selectedRole = user?.role || 'Admin';
 
@@ -966,6 +968,46 @@ export default function Reports() {
         </div>
       </div>
 
+      {/* ─── PRIMARY ENGINE TAB SWITCHER ─── */}
+      <div style={{
+        display: 'flex', gap: '10px', borderBottom: '1px solid var(--border-color)',
+        marginBottom: '22px', paddingBottom: '12px'
+      }}>
+        <button
+          onClick={() => setMainTab('ANALYTICS_ENGINE')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 22px', borderRadius: '10px',
+            border: mainTab === 'ANALYTICS_ENGINE' ? '2px solid #2563EB' : '1px solid var(--border-color)',
+            background: mainTab === 'ANALYTICS_ENGINE' ? 'rgba(37, 99, 235, 0.12)' : 'var(--bg-glass)',
+            color: mainTab === 'ANALYTICS_ENGINE' ? '#2563EB' : 'var(--text-secondary)',
+            fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', transition: 'all 0.15s'
+          }}
+        >
+          <Sparkles size={16} />
+          Intelligent Reports & Analytics Engine
+        </button>
+
+        <button
+          onClick={() => setMainTab('SESSION_LOGS')}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '8px',
+            padding: '10px 22px', borderRadius: '10px',
+            border: mainTab === 'SESSION_LOGS' ? '2px solid #F36F21' : '1px solid var(--border-color)',
+            background: mainTab === 'SESSION_LOGS' ? 'rgba(243, 111, 33, 0.12)' : 'var(--bg-glass)',
+            color: mainTab === 'SESSION_LOGS' ? '#F36F21' : 'var(--text-secondary)',
+            fontWeight: 800, fontSize: '0.84rem', cursor: 'pointer', transition: 'all 0.15s'
+          }}
+        >
+          <BarChart2 size={16} />
+          Live Session Logs & Leaderboards
+        </button>
+      </div>
+
+      {mainTab === 'ANALYTICS_ENGINE' ? (
+        <ReportCenterView token={token} user={user} />
+      ) : (
+        <>
       {/* ─── FILTERS & CONTROLS ROW ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-glass)', padding: '12px 18px', borderRadius: '12px', border: '1px solid #E2E8F0', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
         
@@ -2125,6 +2167,8 @@ export default function Reports() {
 
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>

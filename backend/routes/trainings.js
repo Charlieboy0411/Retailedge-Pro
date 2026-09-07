@@ -168,9 +168,11 @@ router.get('/', requireAuth, async (req, res) => {
 
     let whereClause = {};
 
-    // Trainees (Employees) only see trainings for their assigned project (or global trainings),
-    // OR any training/meeting they have progress records for (meaning they were invited to it).
-    if (!['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(userRole)) {
+    if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const projectIds = await clientService.getAccessibleClientProjectIds(req.user, req.query.projectId || 'all', 'all');
+      whereClause.projectId = { [Op.in]: projectIds };
+    } else if (!['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(userRole)) {
       const orConditions = [];
 
       if (userProjectId) {
@@ -203,8 +205,24 @@ router.get('/', requireAuth, async (req, res) => {
       }
 
       whereClause = { [Op.or]: orConditions };
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, req.query.projectId || 'all', 'all');
+      whereClause.projectId = { [Op.in]: accessibleProjectIds };
+    } else if (userRole === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const { projectId } = req.query;
+      if (projectId) {
+        if (!accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
+        }
+        whereClause.projectId = projectId;
+      } else {
+        whereClause.projectId = { [Op.in]: accessibleProjectIds };
+      }
     } else {
-      // For Admins/Trainers/PMs, support filter by project if query is passed
+      // For Admins/PMs, support filter by project if query is passed
       const { projectId } = req.query;
       if (projectId) {
         if (String(projectId).includes(',')) {
@@ -249,6 +267,24 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
 
     if (!title || !finalUrl) {
       return res.status(400).json({ error: 'Title and URL/File are required' });
+    }
+
+    if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      if (req.user.role === 'T&D Manager') {
+        const tdService = require('../utils/tdService');
+        const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+        if (!accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to add trainings for this project.' });
+        }
+      } else {
+        const intelligenceService = require('../utils/projectIntelligenceService');
+        const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+        if (!accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to add trainings for this project.' });
+        }
+      }
+    } else if (!projectId && req.user.role === 'T&D Manager') {
+      return res.status(400).json({ error: 'Project is required for T&D Manager training material creation.' });
     }
 
     let formattedUrl = finalUrl.trim();
@@ -424,12 +460,79 @@ router.post('/:id/progress', requireAuth, async (req, res) => {
   }
 });
 
+// PUT /api/trainings/:id - Update training material
+router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), upload.single('file'), async (req, res) => {
+  try {
+    const training = await Training.findByPk(req.params.id);
+    if (!training) {
+      return res.status(404).json({ error: 'Training not found' });
+    }
+
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!training.projectId || !accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to edit training materials outside your capability portfolio.' });
+      }
+      if (req.body.projectId && !accessibleProjectIds.includes(req.body.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You cannot assign training materials to a foreign project.' });
+      }
+    } else if (userRole === 'Trainer' && training.projectId) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to edit training materials for this project.' });
+      }
+    }
+
+    const { title, description, type, url, duration, projectId, scheduledAt } = req.body;
+    let finalUrl = url;
+    if (req.file) {
+      finalUrl = `/uploads/${req.file.filename}`;
+    }
+
+    if (title !== undefined) training.title = title;
+    if (description !== undefined) training.description = description;
+    if (type !== undefined) training.type = type;
+    if (finalUrl !== undefined) {
+      let formattedUrl = finalUrl.trim();
+      if (formattedUrl && !req.file && !/^https?:\/\//i.test(formattedUrl) && !formattedUrl.startsWith('/uploads/')) {
+        formattedUrl = 'https://' + formattedUrl;
+      }
+      training.url = formattedUrl;
+    }
+    if (duration !== undefined) training.duration = duration;
+    if (projectId !== undefined) training.projectId = projectId || null;
+    if (scheduledAt !== undefined) training.scheduledAt = scheduledAt || null;
+
+    await training.save();
+    res.json(training);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update training', details: error.message });
+  }
+});
+
 // DELETE /api/trainings/:id - Delete a training material
 router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) {
       return res.status(404).json({ error: 'Training not found' });
+    }
+
+    if (req.user.role === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!training.projectId || !accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete training materials outside your capability portfolio.' });
+      }
+    } else if (req.user.role === 'Trainer' && training.projectId) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete this training material.' });
+      }
     }
 
     await training.destroy();
@@ -446,6 +549,22 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
 
     if (!title || !url || !scheduledAt) {
       return res.status(400).json({ error: 'Title, URL, and Date/Time are required' });
+    }
+
+    if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      if (req.user.role === 'T&D Manager') {
+        const tdService = require('../utils/tdService');
+        const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+        if (!accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to schedule meetings for this project.' });
+        }
+      } else {
+        const intelligenceService = require('../utils/projectIntelligenceService');
+        const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+        if (!accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to schedule meetings for this project.' });
+        }
+      }
     }
 
     let formattedUrl = url.trim();
@@ -535,4 +654,309 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
   }
 });
 
+// ─── JITSI ATTENDANCE & INTERVAL TELEMETRY ENDPOINTS ─────────────────────────
+const JitsiAttendance = require('../models/JitsiAttendance');
+const JitsiInterval = require('../models/JitsiInterval');
+
+// POST /api/trainings/:id/jitsi-event - Handle join/leave/heartbeat events
+router.post('/:id/jitsi-event', async (req, res) => {
+  try {
+    const trainingId = req.params.id;
+    const {
+      event, // 'join' | 'leave' | 'heartbeat'
+      participantName,
+      employeeId,
+      userId,
+      jitsiParticipantId,
+      scheduledDurationMinutes = 60
+    } = req.body;
+
+    const training = await Training.findByPk(trainingId);
+    if (!training) {
+      return res.status(404).json({ error: 'Training not found' });
+    }
+
+    // Non-authoritative Observer Mode for Supervisor & Client:
+    // Observer presence must NEVER create, alter, or inflate participant attendance records
+    if (userId || ['Supervisor', 'Client'].includes(req.body.role)) {
+      const User = require('../models/User');
+      const Role = require('../models/Role');
+      let userRole = req.body.role;
+      if (!userRole && userId) {
+        const u = await User.findByPk(userId, { include: [Role] });
+        userRole = u?.Role?.role_name;
+      }
+      if (['Supervisor', 'Client'].includes(userRole)) {
+        return res.json({
+          message: `${userRole} observer presence recorded (non-authoritative; zero attendance mutation)`,
+          observer: true,
+          attendancePercentage: 0
+        });
+      }
+    }
+
+    let attendance = await JitsiAttendance.findOne({
+      where: {
+        trainingId,
+        [require('sequelize').Op.or]: [
+          ...(userId ? [{ userId }] : []),
+          ...(employeeId ? [{ employeeId }] : []),
+          { participantName: participantName || 'Guest' }
+        ]
+      }
+    });
+
+    const now = new Date();
+
+    if (event === 'join') {
+      if (!attendance) {
+        attendance = await JitsiAttendance.create({
+          trainingId,
+          projectId: training.projectId,
+          userId: userId || null,
+          participantName: participantName || 'Guest Attendee',
+          employeeId: employeeId || null,
+          jitsiParticipantId: jitsiParticipantId || null,
+          scheduledDurationMinutes,
+          totalAttendedMinutes: 0,
+          attendancePercentage: 0,
+          rejoinCount: 0,
+          status: 'Online',
+          firstJoinedAt: now,
+          lastHeartbeatAt: now
+        });
+      } else {
+        // Rejoin event
+        const rejoins = (attendance.rejoinCount || 0) + 1;
+        await attendance.update({
+          status: 'Online',
+          rejoinCount: rejoins,
+          lastHeartbeatAt: now,
+          ...(jitsiParticipantId ? { jitsiParticipantId } : {})
+        });
+      }
+
+      // Create new open interval
+      await JitsiInterval.create({
+        jitsiAttendanceId: attendance.id,
+        joinedAt: now
+      });
+
+    } else if (event === 'leave') {
+      if (attendance) {
+        // Find latest open interval without leftAt
+        const openInterval = await JitsiInterval.findOne({
+          where: { jitsiAttendanceId: attendance.id, leftAt: null },
+          order: [['joinedAt', 'DESC']]
+        });
+
+        if (openInterval) {
+          const durationSec = Math.max(0, Math.round((now - new Date(openInterval.joinedAt)) / 1000));
+          await openInterval.update({
+            leftAt: now,
+            durationSeconds: durationSec
+          });
+        }
+
+        // Consolidate all intervals
+        const allIntervals = await JitsiInterval.findAll({
+          where: { jitsiAttendanceId: attendance.id }
+        });
+
+        const totalSeconds = allIntervals.reduce((sum, intv) => {
+          if (intv.durationSeconds) return sum + intv.durationSeconds;
+          if (intv.leftAt) return sum + Math.max(0, Math.round((new Date(intv.leftAt) - new Date(intv.joinedAt)) / 1000));
+          return sum;
+        }, 0);
+
+        const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
+        const targetDuration = attendance.scheduledDurationMinutes || scheduledDurationMinutes || 60;
+        const attendancePct = Math.min(100, Math.round((totalMinutes / targetDuration) * 100));
+
+        await attendance.update({
+          totalAttendedMinutes: totalMinutes,
+          attendancePercentage: attendancePct,
+          status: attendancePct >= 75 ? 'Completed' : 'Left Early',
+          lastLeftAt: now,
+          lastHeartbeatAt: now
+        });
+      }
+    } else if (event === 'heartbeat') {
+      if (attendance) {
+        // Update open interval duration
+        const openInterval = await JitsiInterval.findOne({
+          where: { jitsiAttendanceId: attendance.id, leftAt: null },
+          order: [['joinedAt', 'DESC']]
+        });
+
+        if (openInterval) {
+          const currentSec = Math.max(0, Math.round((now - new Date(openInterval.joinedAt)) / 1000));
+          await openInterval.update({ durationSeconds: currentSec });
+        }
+
+        // Consolidate up-to-date duration
+        const allIntervals = await JitsiInterval.findAll({
+          where: { jitsiAttendanceId: attendance.id }
+        });
+        const totalSeconds = allIntervals.reduce((sum, intv) => sum + (intv.durationSeconds || 0), 0);
+        const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
+        const targetDuration = attendance.scheduledDurationMinutes || 60;
+        const attendancePct = Math.min(100, Math.round((totalMinutes / targetDuration) * 100));
+
+        await attendance.update({
+          totalAttendedMinutes: totalMinutes,
+          attendancePercentage: attendancePct,
+          status: 'Online',
+          lastHeartbeatAt: now
+        });
+      }
+    }
+
+    const io = req.app.get('io');
+    if (io) {
+      io.emit('jitsi_attendance_updated', { trainingId });
+    }
+
+    res.json({ success: true, attendance });
+  } catch (error) {
+    console.error('Jitsi event handler error:', error);
+    res.status(500).json({ error: 'Failed to process Jitsi event', details: error.message });
+  }
+});
+
+// GET /api/trainings/:id/live-attendance - Live online participants in active meeting
+router.get('/:id/live-attendance', requireAuth, async (req, res) => {
+  try {
+    const trainingId = req.params.id;
+    const training = await Training.findByPk(trainingId);
+    if (!training) {
+      return res.status(404).json({ error: 'Training not found' });
+    }
+
+    // Strict Data Isolation check: verify PM has access to training's project
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    if (!['Admin', 'Super Admin'].includes(userRole) && training.projectId) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission for this training session.' });
+      }
+    }
+
+    const records = await JitsiAttendance.findAll({
+      where: { trainingId },
+      include: [{ model: JitsiInterval, as: 'intervals' }],
+      order: [['updatedAt', 'DESC']]
+    });
+
+    const now = new Date();
+    const liveThresholdMs = 90 * 1000; // 90 seconds threshold
+
+    const liveParticipants = await Promise.all(records.map(async (r) => {
+      let isOnline = r.status === 'Online' && (r.lastHeartbeatAt && (now - new Date(r.lastHeartbeatAt) < liveThresholdMs));
+      
+      // Auto-cleanup stale intervals if browser crashed or network dropped
+      if (!isOnline && r.status === 'Online') {
+        const openInterval = await JitsiInterval.findOne({
+          where: { jitsiAttendanceId: r.id, leftAt: null },
+          order: [['joinedAt', 'DESC']]
+        });
+        if (openInterval) {
+          const closeTime = r.lastHeartbeatAt || now;
+          const durSec = Math.max(0, Math.round((new Date(closeTime) - new Date(openInterval.joinedAt)) / 1000));
+          await openInterval.update({ leftAt: closeTime, durationSeconds: durSec });
+
+          const allIntervals = await JitsiInterval.findAll({ where: { jitsiAttendanceId: r.id } });
+          const totalSeconds = allIntervals.reduce((sum, intv) => sum + (intv.durationSeconds || 0), 0);
+          const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
+          const scheduledMins = r.scheduledDurationMinutes || 60;
+          const attPct = Math.min(100, Math.round((totalMinutes / scheduledMins) * 100));
+
+          await r.update({
+            totalAttendedMinutes: totalMinutes,
+            attendancePercentage: attPct,
+            status: 'Offline',
+            lastLeftAt: closeTime
+          });
+        }
+      }
+
+      const mins = Math.round(r.totalAttendedMinutes || 0);
+      const durationStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+
+      return {
+        id: r.id,
+        participant: r.participantName,
+        employeeId: r.employeeId || 'N/A',
+        status: isOnline ? 'Online' : (r.status || 'Offline'),
+        joinTime: r.firstJoinedAt ? new Date(r.firstJoinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'N/A',
+        currentDuration: durationStr,
+        durationMinutes: mins,
+        scheduledDurationMinutes: r.scheduledDurationMinutes || 60,
+        rejoinCount: r.rejoinCount || 0,
+        attendancePercentage: Math.round(r.attendancePercentage || 0)
+      };
+    }));
+
+    res.json(liveParticipants);
+  } catch (error) {
+    console.error('GET live-attendance error:', error);
+    res.status(500).json({ error: 'Failed to fetch live attendance', details: error.message });
+  }
+});
+
+// POST /api/trainings/:id/end-meeting - Trainer ends meeting, closing all open intervals
+router.post('/:id/end-meeting', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+  try {
+    const trainingId = req.params.id;
+    const training = await Training.findByPk(trainingId);
+    if (!training) {
+      return res.status(404).json({ error: 'Training session not found.' });
+    }
+
+    if (req.user.role === 'Trainer' && training.projectId) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to end this meeting.' });
+      }
+    }
+
+    const now = new Date();
+
+    const attendances = await JitsiAttendance.findAll({ where: { trainingId } });
+    for (const att of attendances) {
+      const openInterval = await JitsiInterval.findOne({
+        where: { jitsiAttendanceId: att.id, leftAt: null }
+      });
+      if (openInterval) {
+        const durationSec = Math.max(0, Math.round((now - new Date(openInterval.joinedAt)) / 1000));
+        await openInterval.update({ leftAt: now, durationSeconds: durationSec });
+      }
+
+      const allIntervals = await JitsiInterval.findAll({ where: { jitsiAttendanceId: att.id } });
+      const totalSeconds = allIntervals.reduce((sum, intv) => sum + (intv.durationSeconds || 0), 0);
+      const totalMinutes = Math.round((totalSeconds / 60) * 10) / 10;
+      const scheduledMins = att.scheduledDurationMinutes || 60;
+      const attPct = Math.min(100, Math.round((totalMinutes / scheduledMins) * 100));
+
+      await att.update({
+        totalAttendedMinutes: totalMinutes,
+        attendancePercentage: attPct,
+        status: attPct >= 75 ? 'Completed' : 'Left Early',
+        lastLeftAt: now
+      });
+    }
+
+    const io = req.app.get('io');
+    if (io) io.emit('jitsi_attendance_updated', { trainingId });
+
+    res.json({ success: true, message: 'Meeting ended and attendance finalized.' });
+  } catch (error) {
+    console.error('POST /:id/end-meeting error:', error);
+    res.status(500).json({ error: 'Failed to end meeting', details: error.message });
+  }
+});
+
 module.exports = router;
+

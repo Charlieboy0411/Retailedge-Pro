@@ -1,6 +1,11 @@
 import React, { useContext, useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
-import { LayoutDashboard, PenTool, BarChart3, Settings, LogOut, Bell, Search, Users, FolderOpen, BookOpen, Award, Radio, MapPin, ClipboardList, Trophy, ShoppingBag, Network, AlertTriangle, Calendar, Shield, Briefcase, FileText, RefreshCw, Archive } from 'lucide-react';
+import { 
+  LayoutDashboard, PenTool, BarChart3, Settings, LogOut, Bell, Search, 
+  Users, FolderOpen, BookOpen, Award, Radio, MapPin, ClipboardList, 
+  Trophy, Network, AlertTriangle, Calendar, Shield, Briefcase, FileText, 
+  RefreshCw, Archive, Sparkles, ChevronDown, CheckCircle2
+} from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 import axios from 'axios';
 
@@ -48,6 +53,8 @@ export default function Layout() {
   const [querySuccess, setQuerySuccess] = useState(false);
   const [queryError, setQueryError] = useState('');
 
+  const [searchParams] = useSearchParams();
+
   const handleQuerySubmit = async (e) => {
     e.preventDefault();
     if (!querySubject.trim() || !queryDesc.trim() || !queryDashboard.trim()) {
@@ -78,15 +85,17 @@ export default function Layout() {
       setQuerySubmitting(false);
     }
   };
-  const [searchParams] = useSearchParams();
 
   useEffect(() => {
     if (token) {
-      axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } })
+      const endpoint = ['Trainer', 'Employee', 'Supervisor'].includes(user?.role)
+        ? '/api/projects/my-projects'
+        : '/api/projects';
+      axios.get(endpoint, { headers: { Authorization: `Bearer ${token}` } })
         .then(res => setProjectsList(res.data || []))
         .catch(err => console.error('Layout project fetch error:', err));
     }
-  }, [token]);
+  }, [token, user?.role]);
 
   const isMotherProjectAccess = ['MD', 'COO', 'VP Operations'].includes(user?.role);
   const myProjectId = user?.projectId;
@@ -107,97 +116,98 @@ export default function Layout() {
     navigate('/');
   };
 
-  const isAdmin    = ['Admin', 'Super Admin'].includes(user?.role);
-  const isPM       = user?.role === 'Program Manager';
-  const isClient   = user?.role === 'Client';
-  const isTrainer  = user?.role === 'Trainer';
+  const isAdmin     = ['Admin', 'Super Admin'].includes(user?.role);
+  const isPM        = user?.role === 'Program Manager';
+  const isClient    = user?.role === 'Client';
+  const isTrainer   = user?.role === 'Trainer';
   const isTDManager = user?.role === 'T&D Manager';
-  const showPMDashboard = !isAdmin && !isTrainer && !isTDManager;
-
+  const isEmployee  = user?.role === 'Employee';
+  const isPMExecutiveRole = ['Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(user?.role);
+  const isSupervisor = user?.role === 'Supervisor';
+  const showPMDashboard = isPMExecutiveRole;
 
   return (
     <div className="app-container">
-      {/* Sidebar */}
+      {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
       <nav className="sidebar">
-        {/* Brand */}
-        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', padding: '20px 16px', borderBottom: '1px solid var(--border-sidebar)' }}>
-          <div style={{ width: '100%', background: 'var(--bg-glass)', padding: '10px 14px', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', height: '54px' }}>
-            <img src="/logo.png" alt="Idonneous Logo" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+        {/* Brand Area */}
+        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '20px 18px', borderBottom: '1px solid #1E293B', background: '#0B1220' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
+            <div style={{
+              width: '36px', height: '36px', borderRadius: '8px',
+              background: 'linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.4)', flexShrink: 0
+            }}>
+              <Sparkles size={20} color="#FFFFFF" />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
+                  RETAILEDGE
+                </span>
+                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 900, fontSize: '1.05rem', color: '#2563EB', letterSpacing: '0.02em' }}>
+                  PRO
+                </span>
+              </div>
+              <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 500, letterSpacing: '0.04em' }}>
+                by Idonneous Marketing
+              </span>
+            </div>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1px', marginTop: '4px' }}>
-            <span className="brand-name" style={{
-              fontFamily: 'Poppins, sans-serif',
-              fontWeight: 800,
-              fontSize: '0.95rem',
-              background: 'var(--bg-glass)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}>RetailEdge Pro</span>
-            <span style={{ fontSize: '0.6rem', color: '#F59E0B', fontWeight: 600, letterSpacing: '1.2px', textTransform: 'uppercase' }}>Training Arena</span>
-          </div>
+          
+          {/* Subtle Cyan Indicator Line */}
+          <div style={{ width: '100%', height: '2px', background: 'linear-gradient(90deg, #06B6D4 0%, #2563EB 60%, transparent 100%)', marginTop: '14px', borderRadius: '1px' }} />
         </div>
 
-        {/* Nav Links */}
+        {/* Navigation Items */}
         <div className="nav-section">
-          {/* PM / Client: dedicated dashboard */}
+          {/* PM / Executive / Client dedicated entry */}
           {showPMDashboard ? (
             <>
-              <Link to="/pm-dashboard?projectId=all" className={`nav-link ${isActive('/pm-dashboard') && (!searchParams.get('projectId') || searchParams.get('projectId') === 'all') ? 'active' : ''}`}>
-                <ClipboardList size={20} />
-                {isClient ? 'Client Dashboard' : isPM ? 'PM Dashboard' : `${user?.role || 'Client'} Dashboard`}
+              <div className="nav-section-label">Overview</div>
+              <Link 
+                to="/pm-dashboard?projectId=all" 
+                className={`nav-link ${isActive('/pm-dashboard') && (!searchParams.get('projectId') || searchParams.get('projectId') === 'all') ? 'active' : ''}`}
+              >
+                <ClipboardList size={18} />
+                <span>{isClient ? 'Client Command Center' : isPM ? 'Program Manager Dashboard' : `${user?.role || 'Executive'} Dashboard`}</span>
               </Link>
               
-              {/* Project Tree for Executive Roles */}
+              {/* Project Hierarchy Tree for Executive Roles */}
               {isMotherProjectAccess && (
-                <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '16px', marginTop: '4px', marginBottom: '8px', gap: '2px' }}>
-                  {/* Mother Project Link */}
+                <div style={{ display: 'flex', flexDirection: 'column', paddingLeft: '14px', marginTop: '4px', marginBottom: '8px', gap: '2px' }}>
                   {motherProject && (
                     <Link
                       to={`/pm-dashboard?projectId=${myProjectId}`}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '6px 12px',
-                        fontSize: '0.8rem',
-                        borderRadius: '6px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === myProjectId ? 'var(--primary)' : 'var(--text-secondary)',
-                        background: searchParams.get('projectId') === myProjectId ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                        color: searchParams.get('projectId') === myProjectId ? '#2563EB' : '#94A3B8',
+                        background: searchParams.get('projectId') === myProjectId ? 'rgba(37, 99, 235, 0.12)' : 'transparent',
                         fontWeight: searchParams.get('projectId') === myProjectId ? 700 : 500,
-                        transition: 'all 0.15s',
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? 'var(--primary)' : 'transparent'}`,
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? '#2563EB' : 'transparent'}`
                       }}
-                      onMouseOver={e => { if (searchParams.get('projectId') !== myProjectId) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; } }}
-                      onMouseOut={e => { if (searchParams.get('projectId') !== myProjectId) { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; } }}
                     >
                       <FolderOpen size={14} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{motherProject.name}</span>
                     </Link>
                   )}
                   
-                  {/* Sub-projects list */}
                   {childProjects.map(cp => (
                     <Link
                       key={cp.id}
                       to={`/pm-dashboard?projectId=${cp.id}`}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '6px 12px',
-                        marginLeft: '12px',
-                        fontSize: '0.8rem',
-                        borderRadius: '6px',
+                        display: 'flex', alignItems: 'center', gap: '8px',
+                        padding: '6px 12px', marginLeft: '10px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === cp.id ? 'var(--primary)' : 'var(--text-secondary)',
-                        background: searchParams.get('projectId') === cp.id ? 'rgba(37, 99, 235, 0.08)' : 'transparent',
+                        color: searchParams.get('projectId') === cp.id ? '#2563EB' : '#94A3B8',
+                        background: searchParams.get('projectId') === cp.id ? 'rgba(37, 99, 235, 0.12)' : 'transparent',
                         fontWeight: searchParams.get('projectId') === cp.id ? 700 : 500,
-                        transition: 'all 0.15s',
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? 'var(--primary)' : 'transparent'}`,
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? '#2563EB' : 'transparent'}`
                       }}
-                      onMouseOver={e => { if (searchParams.get('projectId') !== cp.id) { e.currentTarget.style.color = 'var(--text-primary)'; e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; } }}
-                      onMouseOut={e => { if (searchParams.get('projectId') !== cp.id) { e.currentTarget.style.color = 'var(--text-secondary)'; e.currentTarget.style.background = 'transparent'; } }}
                     >
                       <Network size={14} style={{ flexShrink: 0 }} />
                       <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cp.name}</span>
@@ -207,175 +217,375 @@ export default function Layout() {
               )}
             </>
           ) : (
-            <Link to="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>
-              <LayoutDashboard size={20} />
-              Dashboard
-            </Link>
+            <>
+              <div className="nav-section-label">Core</div>
+              <Link to="/dashboard" className={`nav-link ${isActive('/dashboard') ? 'active' : ''}`}>
+                <LayoutDashboard size={18} />
+                <span>{user?.role === 'Employee' ? 'Employee Dashboard' : (isSupervisor ? 'Supervisor Dashboard' : (isAdmin ? 'Admin Dashboard' : (isTrainer ? 'Trainer Dashboard' : (isClient ? 'Client Cockpit' : (isTDManager ? 'Capability Cockpit' : 'Dashboard')))))}</span>
+              </Link>
+            </>
           )}
 
           {isAdmin ? (
             <>
-              <div style={{ padding: '16px 20px 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Management</div>
+              <div className="nav-section-label">Enterprise Control</div>
               <Link to="/users" className={`nav-link ${isActive('/users') ? 'active' : ''}`}>
-                <Users size={20} />
-                User Management
+                <Users size={18} />
+                <span>User Management</span>
               </Link>
               <Link to="/roles" className={`nav-link ${isActive('/roles') ? 'active' : ''}`}>
-                <Shield size={20} />
-                Role Management
+                <Shield size={18} />
+                <span>Role Governance</span>
               </Link>
               <Link to="/clients" className={`nav-link ${isActive('/clients') ? 'active' : ''}`}>
-                <Briefcase size={20} />
-                Client Management
+                <Briefcase size={18} />
+                <span>Client Portfolio</span>
               </Link>
               <Link to="/projects" className={`nav-link ${isActive('/projects') ? 'active' : ''}`}>
-                <FolderOpen size={20} />
-                Project Management
+                <FolderOpen size={18} />
+                <span>Project Management</span>
               </Link>
 
-              <div style={{ padding: '16px 20px 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Operations</div>
+              <div className="nav-section-label">Learning & Operations</div>
               <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
-                <Calendar size={20} />
-                Training Sessions
+                <Calendar size={18} />
+                <span>Training Programs</span>
               </Link>
               <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
-                <ClipboardList size={20} />
-                Attendance Management
+                <ClipboardList size={18} />
+                <span>Attendance & Roster</span>
               </Link>
               <Link to="/builder" className={`nav-link ${isActive('/builder') ? 'active' : ''}`}>
-                <FileText size={20} />
-                Assessment Center
+                <PenTool size={18} />
+                <span>Assessment Studio</span>
               </Link>
               <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
-                <Award size={20} />
-                Certification Center
+                <Award size={18} />
+                <span>Certification Vault</span>
               </Link>
               <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
-                <BarChart3 size={20} />
-                Reports & Analytics
+                <BarChart3 size={18} />
+                <span>Reports & Analytics</span>
               </Link>
 
-              <div style={{ padding: '16px 20px 8px', fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>System</div>
+              <div className="nav-section-label">System & Security</div>
               <Link to="/offline-sync" className={`nav-link ${isActive('/offline-sync') ? 'active' : ''}`}>
-                <RefreshCw size={20} />
-                Offline Synchronization
+                <RefreshCw size={18} />
+                <span>Device Synchronization</span>
               </Link>
               <Link to="/notifications" className={`nav-link ${isActive('/notifications') ? 'active' : ''}`}>
-                <Bell size={20} />
-                Notifications
+                <Bell size={18} />
+                <span>Notifications Center</span>
               </Link>
               <Link to="/audit-logs" className={`nav-link ${isActive('/audit-logs') ? 'active' : ''}`}>
-                <Archive size={20} />
-                Audit Logs
+                <Archive size={18} />
+                <span>Audit & Security Logs</span>
               </Link>
               <Link to="/settings" className={`nav-link ${isActive('/settings') ? 'active' : ''}`}>
-                <Settings size={20} />
-                Settings
+                <Settings size={18} />
+                <span>System Settings</span>
+              </Link>
+            </>
+          ) : isEmployee ? (
+            <>
+              <div className="nav-section-label">My Learning</div>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training</span>
+              </Link>
+              <Link to="/join" className={`nav-link ${isActive('/join') ? 'active' : ''}`}>
+                <Radio size={18} />
+                <span>My Quizzes</span>
+              </Link>
+
+              <div className="nav-section-label">My Performance</div>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>My Attendance</span>
+              </Link>
+              <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                <Trophy size={18} />
+                <span>My Performance</span>
+              </Link>
+
+              <div className="nav-section-label">My Credentials</div>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>My Certificates</span>
+              </Link>
+            </>
+          ) : isTrainer ? (
+            <>
+              <div className="nav-section-label">Training Delivery</div>
+              <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'active' : ''}`}>
+                <Calendar size={18} />
+                <span>Schedule & Batches</span>
+              </Link>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training Modules</span>
+              </Link>
+              <Link to="/join" className={`nav-link ${isActive('/join') ? 'active' : ''}`}>
+                <Radio size={18} />
+                <span>Live Quiz Arena</span>
+              </Link>
+
+              <div className="nav-section-label">Assessment & Coaching</div>
+              <Link to="/builder" className={`nav-link ${isActive('/builder') ? 'active' : ''}`}>
+                <PenTool size={18} />
+                <span>Assessment Studio</span>
+              </Link>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>Session Attendance</span>
+              </Link>
+              <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                <Trophy size={18} />
+                <span>Participant Results</span>
+              </Link>
+
+              <div className="nav-section-label">Credentials & Compliance</div>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>Certification Eligibility</span>
+              </Link>
+
+              <div className="nav-section-label">Reporting</div>
+              <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                <BarChart3 size={18} />
+                <span>My Training Reports</span>
+              </Link>
+
+              <div className="nav-section-label">System & Utility</div>
+              <Link to="/offline-sync" className={`nav-link ${isActive('/offline-sync') ? 'active' : ''}`}>
+                <RefreshCw size={18} />
+                <span>Device Synchronization</span>
+              </Link>
+              <Link to="/notifications" className={`nav-link ${isActive('/notifications') ? 'active' : ''}`}>
+                <Bell size={18} />
+                <span>Notifications Center</span>
+              </Link>
+            </>
+          ) : isSupervisor ? (
+            <>
+              <div className="nav-section-label">My Team</div>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>Team Attendance</span>
+              </Link>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training Progress</span>
+              </Link>
+              <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                <Trophy size={18} />
+                <span>Team Performance</span>
+              </Link>
+
+              <div className="nav-section-label">Credentials & Compliance</div>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>Team Certifications</span>
+              </Link>
+
+              <div className="nav-section-label">Reporting</div>
+              <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                <BarChart3 size={18} />
+                <span>My Team Reports</span>
+              </Link>
+
+              <div className="nav-section-label">System & Utility</div>
+              <Link to="/notifications" className={`nav-link ${isActive('/notifications') ? 'active' : ''}`}>
+                <Bell size={18} />
+                <span>Notifications Center</span>
+              </Link>
+            </>
+          ) : isClient ? (
+            <>
+              <div className="nav-section-label">Programs</div>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training Modules</span>
+              </Link>
+
+              <div className="nav-section-label">Performance</div>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>Attendance Tracking</span>
+              </Link>
+              <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                <Trophy size={18} />
+                <span>Assessment Results</span>
+              </Link>
+
+              <div className="nav-section-label">Credentials</div>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>Program Certifications</span>
+              </Link>
+
+              <div className="nav-section-label">Reporting</div>
+              <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                <BarChart3 size={18} />
+                <span>Client Reports</span>
+              </Link>
+
+              <div className="nav-section-label">System</div>
+              <Link to="/notifications" className={`nav-link ${isActive('/notifications') ? 'active' : ''}`}>
+                <Bell size={18} />
+                <span>Notifications Center</span>
+              </Link>
+            </>
+          ) : isTDManager ? (
+            <>
+              <div className="nav-section-label">Capability Framework</div>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training Modules</span>
+              </Link>
+              <Link to="/builder" className={`nav-link ${isActive('/builder') ? 'active' : ''}`}>
+                <PenTool size={18} />
+                <span>Assessment Studio</span>
+              </Link>
+              <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'active' : ''}`}>
+                <Calendar size={18} />
+                <span>Schedule & Batches</span>
+              </Link>
+
+              <div className="nav-section-label">Capability Tracking</div>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>Attendance Tracking</span>
+              </Link>
+              <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                <Trophy size={18} />
+                <span>Assessment Results</span>
+              </Link>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>Certification Vault</span>
+              </Link>
+
+              <div className="nav-section-label">Capability Intelligence</div>
+              <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                <BarChart3 size={18} />
+                <span>Training Analytics</span>
+              </Link>
+              <Link to="/notifications" className={`nav-link ${isActive('/notifications') ? 'active' : ''}`}>
+                <Bell size={18} />
+                <span>Notifications Center</span>
               </Link>
             </>
           ) : (
             <>
-              {/* Fallback for non-admin roles */}
+              <div className="nav-section-label">Operations</div>
               <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'active' : ''}`}>
-                <Calendar size={20} />
-                Schedule
+                <Calendar size={18} />
+                <span>Schedule & Batches</span>
               </Link>
               {!showPMDashboard && (
                 <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
-                  <BookOpen size={20} />
-                  Trainings
+                  <BookOpen size={18} />
+                  <span>Training Modules</span>
                 </Link>
               )}
               {!showPMDashboard && (
                 <Link to="/join" className={`nav-link ${isActive('/join') ? 'active' : ''}`}>
-                  <Radio size={20} />
-                  Live Arena
+                  <Radio size={18} />
+                  <span>Live Quiz Arena</span>
                 </Link>
               )}
               {!showPMDashboard && (
                 <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
-                  <MapPin size={20} />
-                  Attendance
+                  <MapPin size={18} />
+                  <span>Attendance</span>
                 </Link>
               )}
               {['Trainer', 'T&D Manager'].includes(user?.role) && (
                 <Link to="/builder" className={`nav-link ${isActive('/builder') ? 'active' : ''}`}>
-                  <PenTool size={20} />
-                  Create Quiz
+                  <PenTool size={18} />
+                  <span>Assessment Studio</span>
+                </Link>
+              )}
+
+              {!showPMDashboard && (
+                <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                  <Award size={18} />
+                  <span>Certificates</span>
+                </Link>
+              )}
+
+              {!showPMDashboard && ['Trainer', 'Client', 'Manager', 'T&D Manager'].includes(user?.role) && (
+                <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                  <BarChart3 size={18} />
+                  <span>Reports & Insights</span>
+                </Link>
+              )}
+
+              {!showPMDashboard && (
+                <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
+                  <Trophy size={18} />
+                  <span>Performance Arena</span>
+                </Link>
+              )}
+
+              {!showPMDashboard && (
+                <Link to="/settings" className={`nav-link ${isActive('/settings') ? 'active' : ''}`}>
+                  <Settings size={18} />
+                  <span>Settings</span>
                 </Link>
               )}
             </>
           )}
-
-          {!showPMDashboard && (
-            <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
-              <Award size={20} />
-              Certificates
-            </Link>
-          )}
-
-          {!showPMDashboard && ['Admin', 'Super Admin', 'Trainer', 'Client', 'Manager', 'T&D Manager'].includes(user?.role) && (
-            <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
-              <BarChart3 size={20} />
-              Reports
-            </Link>
-          )}
-
-
-          {/* Gamification — visible to Trainer, Admin, Supervisor */}
-          {!showPMDashboard && (
-            <Link to="/gamification" className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}>
-              <Trophy size={20} />
-              Arena Stats
-            </Link>
-          )}
-
-          {!showPMDashboard && (
-            <Link to="/settings" className={`nav-link ${isActive('/settings') ? 'active' : ''}`}>
-              <Settings size={20} />
-              Settings
-            </Link>
-          )}
         </div>
 
-        {/* Sidebar Footer Profile */}
-        <div className="sidebar-profile" style={{ position: 'relative' }}>
+        {/* Sidebar Footer User Card */}
+        <div className="sidebar-profile">
           <div style={{ position: 'relative' }}>
-            <div className="profile-avatar" style={{
-              background: 'var(--primary-gradient)',
-              boxShadow: 'var(--shadow-sm)'
-            }}>
+            <div className="profile-avatar">
               {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
             </div>
-            {/* Online Indicator */}
-            <div style={{
-              position: 'absolute', bottom: 0, right: 0, width: '10px', height: '10px',
-              backgroundColor: 'var(--success)', border: '2px solid var(--bg-sidebar-active)',
-              borderRadius: '50%'
-            }} title="Online"></div>
+            {/* Online Status Dot */}
+            <div 
+              style={{
+                position: 'absolute', bottom: -1, right: -1, width: '10px', height: '10px',
+                backgroundColor: '#10B981', border: '2px solid #0F172A',
+                borderRadius: '50%'
+              }} 
+              title="Active Session"
+            />
           </div>
           <div className="profile-info">
-            <div className="profile-name">{user?.name || 'Guest User'}</div>
-            <div className="profile-role" style={{ color: 'var(--text-muted)' }}>{user?.role || 'Viewer'}</div>
+            <div className="profile-name">{user?.name || 'Authorized User'}</div>
+            <div className="profile-role">{user?.role || 'Enterprise User'}</div>
           </div>
-          <button onClick={handleLogout} style={{ color: 'var(--text-sidebar)', background: 'none', border: 'none', cursor: 'pointer', padding: '4px', transition: 'all 0.2s', borderRadius: '4px' }}
-            onMouseOver={e => { e.currentTarget.style.color = 'var(--bg-glass)'; e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; }}
-            onMouseOut={e => { e.currentTarget.style.color = 'var(--text-sidebar)'; e.currentTarget.style.background = 'none'; }}
+          <button 
+            onClick={handleLogout} 
+            style={{ 
+              color: '#94A3B8', background: 'none', border: 'none', 
+              cursor: 'pointer', padding: '6px', borderRadius: '6px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center'
+            }}
+            onMouseOver={e => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = '#1E293B'; }}
+            onMouseOut={e => { e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.background = 'none'; }}
             title="Log Out"
           >
-            <LogOut size={18} />
+            <LogOut size={16} />
           </button>
         </div>
       </nav>
 
-      {/* Main Content */}
+      {/* ─── MAIN CONTENT CANVAS ─── */}
       <main className="main-panel">
+        {/* Top Header */}
         <header className="top-header">
           <div className="header-search">
-            <Search size={18} />
-            <input type="text" placeholder="Search sessions, supervisors, trainings..." />
+            <Search size={16} />
+            <input type="text" placeholder="Search sessions, projects, users, reports..." />
           </div>
+
           <div className="header-actions">
+            {/* Raise Query Action */}
             <button 
               onClick={() => {
                 setQuerySubject('');
@@ -387,19 +597,11 @@ export default function Layout() {
                 setIsQueryModalOpen(true);
               }}
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '6px 12px',
-                borderRadius: '20px',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                color: '#EF4444',
-                background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                height: '32px'
+                display: 'flex', alignItems: 'center', gap: '6px',
+                padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem',
+                fontWeight: 600, color: '#EF4444', background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer',
+                transition: 'all 0.15s'
               }}
               onMouseOver={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'; }}
               onMouseOut={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
@@ -407,103 +609,99 @@ export default function Layout() {
               <AlertTriangle size={14} />
               <span>Raise Query</span>
             </button>
-            <button className="icon-badge-btn">
-              <Bell size={20} />
-              <span className="badge-dot"></span>
+
+            {/* Notification Bell */}
+            <button className="icon-badge-btn" title="Notifications">
+              <Bell size={18} />
+              <span className="badge-dot" />
             </button>
+
+            {/* Enterprise Brand Pill */}
             <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              background: 'rgba(37, 99, 235, 0.08)',
-              border: '1px solid rgba(37, 99, 235, 0.2)',
-              borderRadius: '20px',
-              padding: '6px 14px',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              color: 'var(--primary)'
+              display: 'flex', alignItems: 'center', gap: '8px',
+              background: '#EFF6FF', border: '1px solid rgba(37, 99, 235, 0.15)',
+              borderRadius: '20px', padding: '5px 12px', fontSize: '0.8rem',
+              fontWeight: 700, color: '#2563EB'
             }}>
-              <span style={{ width: '7px', height: '7px', borderRadius: '50%', background: 'var(--primary)', display: 'inline-block', animation: 'pulse-badge 1.5s infinite' }}></span>
-              RetailEdge Pro
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB', display: 'inline-block' }} />
+              RetailEdge Pro Enterprise
             </div>
           </div>
         </header>
 
-        <style>{`
-          @keyframes pulse-badge {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.6; transform: scale(0.85); }
-          }
-        `}</style>
-
+        {/* View Content Outlet */}
         <div className="view-container">
           <Outlet />
         </div>
       </main>
 
-      {/* ─── RAISE QUERY MODAL ─── */}
+      {/* ─── SUPPORT QUERY MODAL ─── */}
       {isQueryModalOpen && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, backdropFilter: 'blur(4px)' }}>
-          <div className="glass-card" style={{ width: '500px', background: 'var(--bg-primary)', padding: '28px', borderRadius: '16px', border: '1px solid var(--border-glass)', boxShadow: '0 20px 50px rgba(0,0,0,0.3)', color: 'var(--text-primary)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '520px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #E2E8F0', paddingBottom: '14px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#EF4444' }}>
                 <AlertTriangle size={20} />
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800 }}>Submit Support Query</h3>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>Submit Support Query</h3>
               </div>
-              <button onClick={() => setIsQueryModalOpen(false)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--text-secondary)' }}>
-                <LogOut size={18} style={{ transform: 'rotate(180deg)' }} />
+              <button onClick={() => setIsQueryModalOpen(false)} style={{ cursor: 'pointer', background: 'none', border: 'none', color: '#64748B' }}>
+                ✕
               </button>
             </div>
 
             {querySuccess ? (
-              <div style={{ padding: '20px 10px', textAlign: 'center' }}>
-                <div style={{ fontSize: '3rem', marginBottom: '12px' }}>✅</div>
-                <h4 style={{ color: 'var(--success)', fontWeight: 800, margin: '0 0 8px 0' }}>Query Submitted!</h4>
-                <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', margin: 0 }}>The Admin team will investigate and highlight this error.</p>
+              <div style={{ padding: '30px 10px', textAlign: 'center' }}>
+                <CheckCircle2 size={48} color="#10B981" style={{ margin: '0 auto 12px auto' }} />
+                <h4 style={{ color: '#10B981', fontWeight: 800, margin: '0 0 8px 0', fontSize: '1.2rem' }}>Query Submitted Successfully!</h4>
+                <p style={{ color: '#64748B', fontSize: '0.88rem', margin: 0 }}>The Operations Support team has received your ticket and will respond shortly.</p>
               </div>
             ) : (
               <form onSubmit={handleQuerySubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 {queryError && (
-                  <div style={{ color: '#EF4444', background: 'rgba(239, 68, 68, 0.08)', padding: '10px 12px', borderRadius: '8px', fontSize: '0.8rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
+                  <div style={{ color: '#EF4444', background: 'rgba(239, 68, 68, 0.08)', padding: '10px 14px', borderRadius: '8px', fontSize: '0.82rem', border: '1px solid rgba(239, 68, 68, 0.2)' }}>
                     {queryError}
                   </div>
                 )}
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Dashboard Context</label>
+                <div className="form-group">
+                  <label className="form-label">Module / Dashboard Context</label>
                   <select 
                     value={queryDashboard} 
                     onChange={e => setQueryDashboard(e.target.value)}
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', outline: 'none' }}
+                    className="form-control"
                   >
                     {['Trainer Dashboard', 'MD Dashboard', 'COO Dashboard', 'VP Operations Dashboard', 'Client Dashboard', 'Program Manager Dashboard', 'Supervisor Dashboard', 'Marketing Manager Dashboard', 'Promoter Portal', 'Quiz Builder', 'Reports Portal', 'Trainings Portal', 'Attendance Portal', 'Settings page', 'Other'].map(opt => (
                       <option key={opt} value={opt}>{opt}</option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Subject *</label>
+                <div className="form-group">
+                  <label className="form-label">Subject *</label>
                   <input 
                     type="text" 
                     value={querySubject} 
                     onChange={e => setQuerySubject(e.target.value)}
                     placeholder="Brief summary of the issue..."
                     required
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', outline: 'none', boxSizing: 'border-box' }}
+                    className="form-control"
                   />
                 </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Description & Error Details *</label>
+                <div className="form-group">
+                  <label className="form-label">Description & Error Details *</label>
                   <textarea 
                     value={queryDesc} 
                     onChange={e => setQueryDesc(e.target.value)}
-                    placeholder="Describe what went wrong, including any error messages..."
+                    placeholder="Describe what happened and include any relevant details..."
                     required
-                    style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1.5px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', outline: 'none', minHeight: '100px', resize: 'vertical', boxSizing: 'border-box' }}
+                    rows={4}
+                    className="form-control"
+                    style={{ resize: 'vertical' }}
                   />
                 </div>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'flex-end', marginTop: '10px' }}>
-                  <button type="button" onClick={() => setIsQueryModalOpen(false)} style={{ padding: '10px 18px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                  <button type="submit" disabled={querySubmitting} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg, #EF4444, #F87171)', color: 'white', fontWeight: 700, cursor: 'pointer', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+                <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end', marginTop: '12px', borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+                  <button type="button" onClick={() => setIsQueryModalOpen(false)} className="btn btn-secondary">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={querySubmitting} className="btn btn-danger">
                     {querySubmitting ? 'Submitting...' : 'Submit Query'}
                   </button>
                 </div>

@@ -19,7 +19,57 @@ const upload = multer({ dest: 'uploads/' });
 
 router.get('/', requireAuth, async (req, res) => {
   try {
+    const userRole = req.user.role;
+    const userProjectId = req.user.projectId;
+    let whereClause = {};
+
+    if (userRole === 'Employee') {
+      if (userProjectId) {
+        whereClause = {
+          [Op.or]: [
+            { projectId: userProjectId },
+            { projectId: null }
+          ]
+        };
+      } else {
+        whereClause = { projectId: null };
+      }
+    } else if (userRole === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      whereClause = {
+        [Op.or]: [
+          { creatorId: req.user.id },
+          ...(projectIds.length > 0 ? [{ projectId: { [Op.in]: projectIds } }] : [])
+        ]
+      };
+    } else if (userRole === 'Supervisor') {
+      if (userProjectId) {
+        whereClause = {
+          [Op.or]: [
+            { projectId: userProjectId },
+            { projectId: null }
+          ]
+        };
+      } else {
+        whereClause = { projectId: null };
+      }
+    } else if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      const projectIds = await clientService.getAccessibleClientProjectIds(req.user, 'all', 'all');
+      whereClause = {
+        projectId: { [Op.in]: projectIds }
+      };
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const projectIds = await tdService.getAccessibleTDProjectIds(req.user, req.query.projectId || 'all', 'all');
+      whereClause = {
+        projectId: { [Op.in]: projectIds }
+      };
+    }
+
     const quizzes = await Quiz.findAll({
+      where: whereClause,
       include: [
         { model: Project },
         { model: Question, as: 'questions' }
@@ -34,9 +84,27 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/quizzes
 // Expects body: { title, description, config, projectId, questions: [{ type, text, options, correct_answer }] }
-router.post('/', requireAuth, async (req, res) => {
+router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
   const { title, description, config, projectId, questions } = req.body;
   try {
+    if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      if (req.user.role === 'T&D Manager') {
+        const tdService = require('../utils/tdService');
+        const projectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+        if (!projectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to create quizzes for this project.' });
+        }
+      } else {
+        const intelligenceService = require('../utils/projectIntelligenceService');
+        const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+        if (!projectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to create quizzes for this project.' });
+        }
+      }
+    } else if (!projectId && req.user.role === 'T&D Manager') {
+      return res.status(400).json({ error: 'Project is required for T&D Manager quiz creation.' });
+    }
+
     // Create the Quiz
     const quiz = await Quiz.create({ 
       title, 
@@ -68,7 +136,7 @@ router.post('/', requireAuth, async (req, res) => {
 
 // POST /api/quizzes/generate
 // Expects multipart form data: prompt (string), file (optional file)
-router.post('/generate', requireAuth, upload.single('file'), async (req, res) => {
+router.post('/generate', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), upload.single('file'), async (req, res) => {
   try {
     const { prompt } = req.body;
     let fileContentText = '';
@@ -507,6 +575,29 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (!quiz) {
       return res.status(404).json({ error: 'Quiz not found' });
     }
+
+    if (req.user.role === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const isCreator = quiz.creatorId === req.user.id;
+      const isAuthorizedProject = quiz.projectId && projectIds.includes(quiz.projectId);
+      if (!isCreator && !isAuthorizedProject) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to access this quiz.' });
+      }
+    } else if (req.user.role === 'Supervisor') {
+      const userProjectId = req.user.projectId;
+      const isAuthorized = !quiz.projectId || (userProjectId && quiz.projectId === userProjectId);
+      if (!isAuthorized) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to access this quiz outside your assigned project.' });
+      }
+    } else if (req.user.role === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const projectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to access this quiz outside your assigned capability portfolio.' });
+      }
+    }
+
     res.json(quiz);
   } catch (err) {
     console.error('Failed to fetch quiz details:', err);
@@ -515,7 +606,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PUT /api/quizzes/:id
-router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin']), async (req, res) => {
+router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
   const { title, description, config, projectId, questions } = req.body;
   try {
     const quiz = await Quiz.findByPk(req.params.id);
@@ -523,13 +614,22 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin'])
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
-    // Check creator or admin/super admin
+    // Check creator or admin/super admin/T&D Manager
     const User = require('../models/User');
     const Role = require('../models/Role');
     const userWithRole = await User.findByPk(req.user.id, { include: [Role] });
-    const userRole = userWithRole?.Role?.role_name;
+    const userRole = userWithRole?.Role?.role_name || req.user.role;
 
-    if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
+    if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const projectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to edit quizzes outside your assigned capability portfolio.' });
+      }
+      if (projectId && !projectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You cannot assign quizzes to a foreign project.' });
+      }
+    } else if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
       return res.status(403).json({ error: 'Unauthorized to edit this quiz' });
     }
 
@@ -570,7 +670,7 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin'])
 });
 
 // DELETE /api/quizzes/:id
-router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin']), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
   console.log('Delete attempt for quiz ID:', req.params.id);
   console.log('User ID from token:', req.user.id);
   console.log('User role from token:', req.user.role);
@@ -582,14 +682,20 @@ router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin
     }
     console.log('Quiz creator ID:', quiz.creatorId);
 
-    // Check creator or admin/super admin
+    // Check creator or admin/super admin/T&D Manager
     const User = require('../models/User');
     const Role = require('../models/Role');
     const userWithRole = await User.findByPk(req.user.id, { include: [Role] });
-    const userRole = userWithRole?.Role?.role_name;
+    const userRole = userWithRole?.Role?.role_name || req.user.role;
     console.log('User role from DB:', userRole);
 
-    if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin', 'Trainer'].includes(userRole)) {
+    if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      const projectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete quizzes outside your assigned capability portfolio.' });
+      }
+    } else if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
       console.log('Block unauthorized delete: creatorId mismatch and not privileged role');
       return res.status(403).json({ error: 'Unauthorized to delete this quiz' });
     }

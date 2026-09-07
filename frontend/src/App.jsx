@@ -28,7 +28,28 @@ import OfflineSync from './pages/OfflineSync';
 import AuditLogs from './pages/AuditLogs';
 import NotificationsCenter from './pages/NotificationsCenter';
 import MonitorDashboard from './pages/MonitorDashboard';
+import PublicCertificateVerification from './pages/PublicCertificateVerification';
+import AccessDenied from './components/AccessDenied';
 import { AuthProvider, AuthContext } from './context/AuthContext';
+
+function RoleGuard({ allowedRoles, children, fallback = "/dashboard", renderDenied = false, message }) {
+  const { user, loading } = React.useContext(AuthContext);
+  if (loading) return null;
+  if (!user) return <Navigate to="/login" replace />;
+  if (allowedRoles && !allowedRoles.includes(user.role)) {
+    if (renderDenied) {
+      return (
+        <AccessDenied 
+          title="Access Denied"
+          message={message || `Your account role (${user.role}) is not authorized to access this module or administrative interface.`} 
+          returnUrl={fallback}
+        />
+      );
+    }
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
 
 function App() {
   return (
@@ -38,40 +59,130 @@ function App() {
           <Route path="/" element={<LandingPage />} />
           <Route path="/login" element={<Login />} />
 
-          {/* Standalone Learner Routes */}
+          {/* Standalone Learner & Verification Routes */}
           <Route path="/join" element={<Join />} />
           <Route path="/guest-join" element={<GuestJoin />} />
           <Route path="/live/:roomCode" element={<LiveQuiz />} />
           <Route path="/offline-quiz/:quizId" element={<OfflineQuiz />} />
+          <Route path="/verify" element={<PublicCertificateVerification />} />
+          <Route path="/verify/:certificateId" element={<PublicCertificateVerification />} />
 
           {/* Protected Routes inside Layout */}
           <Route path="/" element={<Layout />}>
             <Route path="dashboard"    element={<Dashboard />} />
-            <Route path="pm-dashboard" element={<PMDashboard />} />
-            <Route path="builder"      element={<QuizBuilder />} />
-            <Route path="builder/:quizId" element={<QuizBuilder />} />
-            <Route path="users"        element={<UserDirectory />} />
-            <Route path="org-chart"    element={<OrgChart />} />
-            <Route path="projects"     element={<Projects />} />
-            <Route path="reports"      element={<Reports />} />
+            <Route path="pm-dashboard" element={
+              <RoleGuard 
+                allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']} 
+                renderDenied={true}
+                message="Your account is not authorized to access the Program Manager Dashboard"
+              >
+                <PMDashboard />
+              </RoleGuard>
+            } />
+            <Route path="builder"      element={
+              <RoleGuard allowedRoles={['Trainer', 'Admin', 'Super Admin', 'T&D Manager']}>
+                <QuizBuilder />
+              </RoleGuard>
+            } />
+            <Route path="builder/:quizId" element={
+              <RoleGuard allowedRoles={['Trainer', 'Admin', 'Super Admin', 'T&D Manager']}>
+                <QuizBuilder />
+              </RoleGuard>
+            } />
+            <Route path="users"        element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
+                <UserDirectory />
+              </RoleGuard>
+            } />
+            <Route path="org-chart"    element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
+                <OrgChart />
+              </RoleGuard>
+            } />
+            <Route path="projects"     element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations']}>
+                <Projects />
+              </RoleGuard>
+            } />
+            <Route path="reports"      element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Supervisor', 'Marketing Manager']}>
+                <Reports />
+              </RoleGuard>
+            } />
             <Route path="trainings"    element={<Trainings />} />
             <Route path="certificates" element={<Certificates />} />
+            <Route path="certificates/templates" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager']} renderDenied={true}>
+                <Certificates initialTab="templates" />
+              </RoleGuard>
+            } />
+            <Route path="certificates/analytics" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']} renderDenied={true}>
+                <Certificates initialTab="analytics" />
+              </RoleGuard>
+            } />
+            <Route path="certificates/batch-generator" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']} renderDenied={true}>
+                <Certificates initialTab="bulk" />
+              </RoleGuard>
+            } />
+            <Route path="certificates/issuance" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']} renderDenied={true}>
+                <Certificates initialTab="issuance" />
+              </RoleGuard>
+            } />
+            <Route path="signatures-and-seals" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager']} renderDenied={true}>
+                <Certificates initialTab="templates" />
+              </RoleGuard>
+            } />
             <Route path="attendance"   element={<Attendance />} />
             <Route path="gamification" element={<Gamification />} />
             <Route path="portal"       element={<PromotorPortal />} />
-            <Route path="certificates" element={<Certificates />} />
-            <Route path="schedule"     element={<SchedulePage />} />
-            <Route path="clients"      element={<ClientManagement />} />
-            <Route path="roles"        element={<RoleManagement />} />
-            <Route path="offline-sync" element={<OfflineSync />} />
-            <Route path="audit-logs"   element={<AuditLogs />} />
+            <Route path="schedule"     element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']}>
+                <SchedulePage />
+              </RoleGuard>
+            } />
+            <Route path="clients"      element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager']} renderDenied={true}>
+                <ClientManagement />
+              </RoleGuard>
+            } />
+            <Route path="roles"        element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin']} renderDenied={true}>
+                <RoleManagement />
+              </RoleGuard>
+            } />
+            <Route path="offline-sync" element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Trainer']} renderDenied={true}>
+                <OfflineSync />
+              </RoleGuard>
+            } />
+            <Route path="audit-logs"   element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin']} renderDenied={true}>
+                <AuditLogs />
+              </RoleGuard>
+            } />
             <Route path="notifications" element={<NotificationsCenter />} />
-            <Route path="settings"     element={<Settings />} />
-            <Route path="monitor"      element={<MonitorDashboard />} />
+            <Route path="settings"     element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'Trainer']} renderDenied={true}>
+                <Settings />
+              </RoleGuard>
+            } />
+            <Route path="monitor"      element={
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager']} renderDenied={true}>
+                <MonitorDashboard />
+              </RoleGuard>
+            } />
           </Route>
 
           {/* Full screen host view */}
-          <Route path="/host/:quizId" element={<HostControlRoom />} />
+          <Route path="/host/:quizId" element={
+            <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Trainer', 'Program Manager']}>
+              <HostControlRoom />
+            </RoleGuard>
+          } />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

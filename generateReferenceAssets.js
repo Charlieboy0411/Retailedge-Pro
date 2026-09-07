@@ -1,0 +1,136 @@
+const fs = require('fs');
+const path = require('path');
+
+const dirs = [
+  path.join(__dirname, 'frontend/public/assets/signatures'),
+  path.join(__dirname, 'frontend/public/assets/seals'),
+  path.join(__dirname, 'backend/public/assets/signatures'),
+  path.join(__dirname, 'backend/public/assets/seals'),
+  path.join(__dirname, 'backend/public/uploads/signatures_and_seals'),
+  path.join(__dirname, 'frontend/public/uploads/signatures_and_seals'),
+];
+
+dirs.forEach(dir => {
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+});
+
+// 1. Amit Kumar Signature (from reference image)
+const amitKumarSigSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 340 100" width="100%" height="100%">
+  <path d="M 25 75 Q 35 15, 48 20 Q 60 70, 75 75 M 32 48 Q 55 45, 78 48" fill="none" stroke="#1E293B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 85 70 Q 92 48, 100 52 Q 106 72, 114 50 Q 120 70, 128 50 Q 134 72, 142 55" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 148 30 L 152 75 M 142 35 L 158 35" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M 175 20 Q 180 75, 185 80 M 182 48 Q 205 25, 218 35 Q 205 55, 222 75 M 195 55 Q 212 60, 235 75" fill="none" stroke="#1E293B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 238 72 Q 245 52, 252 55 Q 256 72, 264 55 Q 272 72, 280 55 Q 288 72, 296 55 Q 302 72, 310 55" fill="none" stroke="#1E293B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M 170 85 Q 240 82, 325 80" fill="none" stroke="#1E293B" stroke-width="2" stroke-linecap="round"/>
+</svg>`;
+
+// 2. RetailEdge PRO 3D Gold Ribbon Seal Medallion (Exact match from reference image)
+const goldSealMedallionSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 360" width="100%" height="100%">
+  <defs>
+    <!-- Gold Gradients -->
+    <linearGradient id="goldRibbonLeft" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#E5C07B"/>
+      <stop offset="35%" stop-color="#D4AF37"/>
+      <stop offset="70%" stop-color="#AA771C"/>
+      <stop offset="100%" stop-color="#805A15"/>
+    </linearGradient>
+    <linearGradient id="goldRibbonRight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F3E5AB"/>
+      <stop offset="40%" stop-color="#D4AF37"/>
+      <stop offset="80%" stop-color="#996515"/>
+      <stop offset="100%" stop-color="#704808"/>
+    </linearGradient>
+    <radialGradient id="goldBezel" cx="50%" cy="40%" r="50%">
+      <stop offset="0%" stop-color="#FFF4D0"/>
+      <stop offset="45%" stop-color="#D4AF37"/>
+      <stop offset="80%" stop-color="#996515"/>
+      <stop offset="100%" stop-color="#5B3A05"/>
+    </radialGradient>
+    <linearGradient id="goldRim" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="25%" stop-color="#ECC66D"/>
+      <stop offset="50%" stop-color="#D4AF37"/>
+      <stop offset="75%" stop-color="#8C5E13"/>
+      <stop offset="100%" stop-color="#ECC66D"/>
+    </linearGradient>
+    <radialGradient id="centerNavy" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#142C54"/>
+      <stop offset="50%" stop-color="#0B1A38"/>
+      <stop offset="85%" stop-color="#060E20"/>
+      <stop offset="100%" stop-color="#030812"/>
+    </radialGradient>
+    <filter id="medalShadow" x="-20%" y="-10%" width="140%" height="130%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#medalShadow)">
+    <!-- Hanging Gold Ribbons -->
+    <!-- Left Ribbon Tail -->
+    <path d="M 105 200 L 105 320 L 128 295 L 148 320 L 148 200 Z" fill="url(#goldRibbonLeft)" stroke="#7A5210" stroke-width="1.5"/>
+    <!-- Right Ribbon Tail -->
+    <path d="M 152 200 L 152 320 L 172 295 L 195 320 L 195 200 Z" fill="url(#goldRibbonRight)" stroke="#7A5210" stroke-width="1.5"/>
+
+    <!-- Starburst Scalloped Outer Medallion (24 teeth) -->
+    <path d="
+      M 150 15 
+      L 162 21 L 176 19 L 186 28 L 200 30 L 208 42 L 221 48 L 225 61 L 236 71 L 236 85 L 244 97 L 240 110 L 244 124 L 236 136 L 236 150 L 225 160 L 221 173 L 208 179 L 200 191 L 186 193 L 176 202 L 162 200 L 150 206 
+      L 138 200 L 124 202 L 114 193 L 100 191 L 92 179 L 79 173 L 75 160 L 64 150 L 64 136 L 56 124 L 60 110 L 56 97 L 64 85 L 64 71 L 75 61 L 79 48 L 92 42 L 100 30 L 114 28 L 124 19 L 138 21 Z" 
+      fill="url(#goldBezel)" stroke="url(#goldRim)" stroke-width="3" stroke-linejoin="round"/>
+
+    <!-- Inner Gold Ring -->
+    <circle cx="150" cy="110" r="82" fill="url(#goldRim)"/>
+    <circle cx="150" cy="110" r="78" fill="none" stroke="#5B3A05" stroke-width="1.5" stroke-dasharray="3,3"/>
+
+    <!-- Deep Blue Medallion Center -->
+    <circle cx="150" cy="110" r="74" fill="url(#centerNavy)" stroke="#D4AF37" stroke-width="2.5"/>
+
+    <!-- Laurel Wreath Garland & Stars on Inner Perimeter -->
+    <g fill="#D4AF37">
+      <!-- Top Stars -->
+      <polygon points="150,52 152,57 157,57 153,60 155,65 150,62 145,65 147,60 143,57 148,57" transform="scale(0.9) translate(16, 2)"/>
+      <polygon points="135,55 137,59 141,59 138,62 139,66 135,63 131,66 133,62 129,59 133,59" transform="scale(0.8) translate(33, 8)"/>
+      <polygon points="165,55 167,59 171,59 168,62 169,66 165,63 161,66 163,62 159,59 163,59" transform="scale(0.8) translate(36, 8)"/>
+      
+      <!-- Left Laurel Branch -->
+      <path d="M 88 110 C 88 135 105 160 130 168 C 122 162 110 148 108 132 C 106 118 110 102 108 88 C 102 96 95 106 88 110 Z" opacity="0.6"/>
+      <circle cx="94" cy="95" r="3.5"/> <circle cx="90" cy="112" r="3.5"/> <circle cx="94" cy="130" r="3.5"/> <circle cx="104" cy="148" r="3.5"/> <circle cx="120" cy="162" r="3.5"/>
+
+      <!-- Right Laurel Branch -->
+      <path d="M 212 110 C 212 135 195 160 170 168 C 178 162 190 148 192 132 C 194 118 190 102 192 88 C 198 96 205 106 212 110 Z" opacity="0.6"/>
+      <circle cx="206" cy="95" r="3.5"/> <circle cx="210" cy="112" r="3.5"/> <circle cx="206" cy="130" r="3.5"/> <circle cx="196" cy="148" r="3.5"/> <circle cx="180" cy="162" r="3.5"/>
+    </g>
+
+    <!-- Center Typography -->
+    <!-- RETAILEDGE -->
+    <text x="150" y="104" font-family="'Inter', 'Montserrat', 'Arial', sans-serif" font-size="14.5" font-weight="900" fill="#FFFFFF" text-anchor="middle" letter-spacing="2.8">
+      RETAILEDGE
+    </text>
+
+    <!-- PRO (Bright Electric Cyan) -->
+    <text x="150" y="132" font-family="'Inter', 'Montserrat', 'Arial', sans-serif" font-size="24" font-weight="900" fill="#00D2FF" text-anchor="middle" letter-spacing="3.5" style="filter: drop-shadow(0 0 4px rgba(0,210,255,0.6));">
+      PRO
+    </text>
+
+    <!-- Bottom 3 Mini Stars -->
+    <g fill="#D4AF37" transform="translate(0, 10)">
+      <polygon points="150,135 151.5,139 155.5,139 152.5,141.5 153.5,145.5 150,143 146.5,145.5 147.5,141.5 144.5,139 148.5,139"/>
+      <polygon points="138,137 139.2,140.2 142.4,140.2 140,142.2 140.8,145.4 138,143.4 135.2,145.4 136,142.2 133.6,140.2 136.8,140.2"/>
+      <polygon points="162,137 163.2,140.2 166.4,140.2 164,142.2 164.8,145.4 162,143.4 159.2,145.4 160,142.2 157.6,140.2 160.8,140.2"/>
+    </g>
+  </g>
+</svg>`;
+
+// Save files to frontend and backend public asset directories
+const targetFiles = [
+  { p: path.join(__dirname, 'frontend/public/assets/signatures/amit_kumar_signature.svg'), c: amitKumarSigSvg },
+  { p: path.join(__dirname, 'backend/public/assets/signatures/amit_kumar_signature.svg'), c: amitKumarSigSvg },
+  { p: path.join(__dirname, 'frontend/public/assets/seals/retailedge_pro_gold_seal.svg'), c: goldSealMedallionSvg },
+  { p: path.join(__dirname, 'backend/public/assets/seals/retailedge_pro_gold_seal.svg'), c: goldSealMedallionSvg }
+];
+
+targetFiles.forEach(f => {
+  fs.writeFileSync(f.p, f.c);
+  console.log(`Saved asset to: ${f.p}`);
+});
+console.log('✅ Generated Amit Kumar signature and RetailEdge PRO 3D Gold Ribbon Seal successfully.');

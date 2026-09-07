@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { requireAuth } = require('../middleware/authMiddleware');
+const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const User = require('../models/User');
 const Project = require('../models/Project');
 const Training = require('../models/Training');
@@ -13,13 +13,17 @@ const OfflineSyncDevice = require('../models/OfflineSyncDevice');
 const Role = require('../models/Role');
 const { Op } = require('sequelize');
 
+// Apply strict Super Admin / Admin role guard globally to all /api/superadmin routes
+router.use(requireAuth, requireRole(['Super Admin', 'Admin']));
+
+// GET /api/superadmin/audit-logs
+router.get('/audit-logs', async (req, res) => {
+  res.json({ logs: [] });
+});
+
 // GET /api/superadmin/stats
-router.get('/stats', requireAuth, async (req, res) => {
+router.get('/stats', async (req, res) => {
   try {
-    // Basic RBAC check
-    if (!['Super Admin', 'Admin'].includes(req.user.role)) {
-      return res.status(403).json({ error: 'Access denied' });
-    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);

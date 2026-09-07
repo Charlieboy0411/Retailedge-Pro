@@ -289,7 +289,7 @@ export default function SchedulePage() {
             <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <h3 style={{ margin: 0, fontFamily: 'Poppins, sans-serif', fontWeight: 800, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CalendarIcon size={20} color="#F36F21" />
+                  <CalendarIcon size={20} color="#2563EB" />
                   {monthNames[month]} {year}
                 </h3>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -381,13 +381,13 @@ export default function SchedulePage() {
                               fontSize: '0.68rem',
                               padding: '2px 6px',
                               borderRadius: '4px',
-                              background: item.type === 'Meeting' ? 'rgba(243,111,33,0.1)' : 'rgba(0,200,150,0.1)',
-                              color: item.type === 'Meeting' ? '#F36F21' : '#00C896',
+                              background: item.type === 'Meeting' ? 'rgba(37,99,235,0.1)' : 'rgba(16,185,129,0.1)',
+                              color: item.type === 'Meeting' ? '#2563EB' : '#10B981',
                               fontWeight: 700,
                               whiteSpace: 'nowrap',
                               overflow: 'hidden',
                               textOverflow: 'ellipsis',
-                              border: `1px solid ${item.type === 'Meeting' ? 'rgba(243,111,33,0.2)' : 'rgba(0,200,150,0.2)'}`
+                              border: `1px solid ${item.type === 'Meeting' ? 'rgba(37,99,235,0.2)' : 'rgba(16,185,129,0.2)'}`
                             }}
                             title={item.title}
                           >
@@ -443,10 +443,10 @@ export default function SchedulePage() {
                             fontSize: '0.7rem',
                             padding: '2px 8px',
                             borderRadius: '4px',
-                            background: isMeeting ? 'rgba(243,111,33,0.1)' : 'rgba(0,200,150,0.1)',
-                            color: isMeeting ? '#F36F21' : '#00C896',
+                            background: isMeeting ? 'rgba(37,99,235,0.1)' : 'rgba(16,185,129,0.1)',
+                            color: isMeeting ? '#2563EB' : '#10B981',
                             fontWeight: 700,
-                            border: `1px solid ${isMeeting ? 'rgba(243,111,33,0.25)' : 'rgba(0,200,150,0.25)'}`
+                            border: `1px solid ${isMeeting ? 'rgba(37,99,235,0.25)' : 'rgba(16,185,129,0.25)'}`
                           }}>
                             {item.type}
                           </span>
@@ -468,7 +468,7 @@ export default function SchedulePage() {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '6px', borderTop: '1px solid rgba(255,255,255,0.03)', paddingTop: '8px' }}>
                           {isMeeting ? (
                             <span style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
-                              <Clock size={13} color="#F36F21" /> {timeStr}
+                              <Clock size={13} color="#2563EB" /> {timeStr}
                             </span>
                           ) : (
                             <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
@@ -582,7 +582,7 @@ export default function SchedulePage() {
                             </td>
                             <td style={{ padding: '14px 8px', color: 'var(--text-primary)' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                <Clock size={12} color="#F36F21" /> {dateFormatted}
+                                <Clock size={12} color="#2563EB" /> {dateFormatted}
                               </div>
                             </td>
                             <td style={{ padding: '14px 8px' }}>
@@ -590,10 +590,10 @@ export default function SchedulePage() {
                                 fontSize: '0.72rem',
                                 padding: '3px 8px',
                                 borderRadius: '4px',
-                                background: 'rgba(243,111,33,0.08)',
-                                color: '#F36F21',
+                                background: 'rgba(37,99,235,0.08)',
+                                color: '#2563EB',
                                 fontWeight: 700,
-                                border: '1px solid rgba(243,111,33,0.15)'
+                                border: '1px solid rgba(37,99,235,0.15)'
                               }}>
                                 {platformLabel}
                               </span>

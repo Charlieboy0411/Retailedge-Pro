@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import { Navigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -6,7 +6,8 @@ import {
   Globe, Building2, Palette, Users, Shield, BookOpen, Radio, Bell,
   Award, BarChart2, Network, Lock, CreditCard, ClipboardList, Settings2,
   Save, Check, RefreshCw, Upload, Eye, EyeOff, ChevronRight, Zap,
-  Server, Database, Wifi, AlertTriangle, Info, Download, Plus, Trash2
+  Server, Database, Wifi, AlertTriangle, Info, Download, Plus, Trash2,
+  PenTool, Image, FileText, X
 } from 'lucide-react';
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -535,35 +536,895 @@ function NotificationSettings() {
 }
 
 function CertificateSettings() {
-  const [form, setForm] = useState(load('certs', { autoGen: true, emailDelivery: true, pdfDownload: true }));
+  const { token, user } = useContext(AuthContext);
+  const isAdmin = ['Admin', 'Super Admin'].includes(user?.role);
+  const [activeSubTab, setActiveSubTab] = useState('library'); // 'library' | 'automation'
+  const [assets, setAssets] = useState([
+    {
+      id: 'sig-1',
+      type: 'authorized_signatory',
+      name: 'Mohit Tiku',
+      designation: 'Managing Director',
+      organization: 'Idonneous Marketing Services Pvt. Ltd.',
+      assetPath: '/assets/signatures/mohit_tiku_signature.svg',
+      version: 'V1',
+      isDefault: true,
+      status: 'Active',
+      effectiveDate: '2026-01-01'
+    },
+    {
+      id: 'sig-2',
+      type: 'trainer_signature',
+      name: 'Aakash Verma',
+      designation: 'Lead Trainer & Facilitator',
+      organization: 'RetailEdge Pro',
+      assetPath: '/assets/signatures/aakash_verma_signature.svg',
+      version: 'V1',
+      isDefault: true,
+      status: 'Active',
+      effectiveDate: '2026-01-01'
+    },
+    {
+      id: 'seal-1',
+      type: 'company_seal',
+      name: 'Idonneous Official Corporate Seal',
+      designation: 'Official Seal of Certification',
+      organization: 'Idonneous Marketing Services Pvt. Ltd.',
+      assetPath: '/assets/seals/idonneous_official_seal.svg',
+      version: 'V1',
+      isDefault: true,
+      status: 'Active',
+      effectiveDate: '2026-01-01'
+    }
+  ]);
+
+  const [loading, setLoading] = useState(false);
+  const [form, setForm] = useState(load('certs', { 
+    autoGen: true, 
+    emailDelivery: true, 
+    pdfDownload: true, 
+    qrVerify: true,
+    requireTrainerSig: true,
+    requireCompanySeal: true
+  }));
   const [saved, setSaved] = useState(false);
+
+  // Modals state
+  const [previewAsset, setPreviewAsset] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null); // { action, asset, onConfirm }
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [uploadMode, setUploadMode] = useState('upload'); // 'upload' | 'draw' | 'url'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewImage, setPreviewImage] = useState('');
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const canvasRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const [newAsset, setNewAsset] = useState({
+    type: 'authorized_signatory',
+    name: 'Amit Kumar',
+    designation: 'Program Manager',
+    organization: 'Idonneous Marketing Services Pvt. Ltd.',
+    version: 'V1',
+    assetPath: '',
+    isDefault: false
+  });
+
+  const fetchAssets = async () => {
+    try {
+      const res = await axios.get('/api/certificates/signatures-and-seals', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.data && res.data.length > 0) {
+        setAssets(res.data);
+      }
+    } catch (err) {
+      console.warn('Using local default signatures & seal assets:', err.message);
+    }
+  };
+
+  useEffect(() => {
+    fetchAssets();
+  }, [token]);
+
   const toggle = k => v => setForm(f => ({ ...f, [k]: v }));
-  const handleSave = () => { save('certs', form); setSaved(true); setTimeout(() => setSaved(false), 2500); };
+  const handleSaveAutomation = () => { 
+    save('certs', form); 
+    setSaved(true); 
+    setTimeout(() => setSaved(false), 2500); 
+  };
+
+  // Canvas Drawing Pad handlers
+  const startDrawing = (e) => {
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    setIsDrawing(true);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+    e.preventDefault();
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    ctx.strokeStyle = '#081226';
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (!isDrawing) return;
+    setIsDrawing(false);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const dataUrl = canvas.toDataURL('image/png');
+      setPreviewImage(dataUrl);
+      setNewAsset(prev => ({ ...prev, assetPath: dataUrl }));
+    }
+  };
+
+  const clearCanvas = () => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setPreviewImage('');
+      setNewAsset(prev => ({ ...prev, assetPath: '' }));
+    }
+  };
+
+  const handleFileSelect = (file) => {
+    if (!file) return;
+    if (!/\.(png|svg|jpg|jpeg|webp)$/i.test(file.name)) {
+      alert('Please upload a valid image file (PNG, SVG, JPG, WEBP). Transparent PNG or SVG is recommended.');
+      return;
+    }
+    setSelectedFile(file);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      setPreviewImage(event.target.result);
+      setNewAsset(prev => ({ ...prev, assetPath: event.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSetDefault = (asset) => {
+    setConfirmModal({
+      title: `Set Default ${asset.type === 'company_seal' ? 'Company Seal' : 'Signature'}`,
+      message: `Activate "${asset.name}" (${asset.version || 'V1'}) as the new default ${asset.type === 'company_seal' ? 'seal' : 'signature'}?`,
+      note: 'CRITICAL: This update will apply ONLY to newly generated certificates. Previously issued certificates will remain strictly unchanged and retain their historical visual snapshot.',
+      onConfirm: async () => {
+        try {
+          await axios.put(`/api/certificates/signatures-and-seals/${asset.id}/default`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchAssets();
+        } catch (e) {
+          // Local fallback
+          setAssets(prev => prev.map(a => a.type === asset.type ? { ...a, isDefault: a.id === asset.id } : a));
+        }
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  const handleToggleStatus = (asset) => {
+    setConfirmModal({
+      title: `${asset.status === 'Active' ? 'Deactivate' : 'Activate'} Asset`,
+      message: `Are you sure you want to ${asset.status === 'Active' ? 'deactivate' : 'activate'} "${asset.name}"?`,
+      note: 'Previously issued certificates that used this asset will continue to display normally in audits.',
+      onConfirm: async () => {
+        try {
+          await axios.put(`/api/certificates/signatures-and-seals/${asset.id}/status`, {}, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchAssets();
+        } catch (e) {
+          setAssets(prev => prev.map(a => a.id === asset.id ? { ...a, status: a.status === 'Active' ? 'Inactive' : 'Active' } : a));
+        }
+        setConfirmModal(null);
+      }
+    });
+  };
+
+  const handleCreateAsset = async (e) => {
+    e.preventDefault();
+    if (!newAsset.name) {
+      alert('Please enter a Name for this signature or seal.');
+      return;
+    }
+    if (!selectedFile && !newAsset.assetPath) {
+      alert('Please upload an image file, draw a signature, or enter an asset path.');
+      return;
+    }
+
+    try {
+      if (selectedFile) {
+        const formData = new FormData();
+        formData.append('file', selectedFile);
+        formData.append('type', newAsset.type);
+        formData.append('name', newAsset.name);
+        formData.append('designation', newAsset.designation);
+        formData.append('organization', newAsset.organization);
+        formData.append('version', newAsset.version || 'V1');
+        formData.append('isDefault', newAsset.isDefault);
+
+        await axios.post('/api/certificates/signatures-and-seals', formData, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data'
+          }
+        });
+      } else {
+        await axios.post('/api/certificates/signatures-and-seals', newAsset, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+
+      await fetchAssets();
+      setUploadModalOpen(false);
+      setSelectedFile(null);
+      setPreviewImage('');
+      setNewAsset({
+        type: 'authorized_signatory',
+        name: 'Amit Kumar',
+        designation: 'Program Manager',
+        organization: 'Idonneous Marketing Services Pvt. Ltd.',
+        version: 'V1',
+        assetPath: '',
+        isDefault: false
+      });
+    } catch (err) {
+      console.error('Failed to create signature asset:', err);
+      // Local fallback
+      setAssets(prev => [...prev, { 
+        ...newAsset, 
+        id: `asset-${Date.now()}`, 
+        status: 'Active', 
+        effectiveDate: new Date().toISOString().slice(0, 10),
+        assetPath: previewImage || newAsset.assetPath 
+      }]);
+      setUploadModalOpen(false);
+    }
+  };
+
+  const authSignatories = assets.filter(a => a.type === 'authorized_signatory');
+  const trainerSignatures = assets.filter(a => a.type === 'trainer_signature');
+  const companySeals = assets.filter(a => a.type === 'company_seal');
 
   return (
     <div>
-      <SectionHeader icon={<Award size={22} />} title="Certificate Settings" desc="Configure certificate templates, automation, and delivery options." />
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '28px' }}>
-        {[['🏅 Certificate Logo', 'Upload organization logo'], ['✍️ Signature', 'Upload authorized signature'], ['🎨 Background Design', 'Upload certificate background']].map(([label, hint]) => (
-          <div key={label} style={{ border: '2px dashed var(--border-glass)', borderRadius: '12px', padding: '24px 16px', textAlign: 'center', cursor: 'pointer', transition: 'all 0.2s' }}
-            onMouseOver={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-            onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border-glass)'}
-          >
-            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>{label.split(' ')[0]}</div>
-            <div style={{ fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>{label.slice(2)}</div>
-            <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '12px' }}>{hint}</div>
-            <button style={{ padding: '6px 14px', borderRadius: '7px', border: '1.5px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.78rem', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-              <Upload size={12} /> Upload
-            </button>
-          </div>
-        ))}
+      <SectionHeader 
+        icon={<Award size={22} />} 
+        title="Certification, Signatures & Seals" 
+        desc="Manage authorized signatories, trainer signatures, official company seal, and automated credentialing rules." 
+      />
+
+      {/* Sub-Tab Switcher */}
+      <div style={{ display: 'flex', gap: '10px', marginBottom: '24px', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
+        <button
+          onClick={() => setActiveSubTab('library')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'library' ? 'linear-gradient(135deg,#2563EB,#60A5FA)' : 'var(--bg-tertiary)',
+            color: activeSubTab === 'library' ? '#FFFFFF' : 'var(--text-secondary)',
+            transition: 'all 0.2s'
+          }}
+        >
+          ✍️ Signatures & Seals Library
+        </button>
+        <button
+          onClick={() => setActiveSubTab('automation')}
+          style={{
+            padding: '8px 18px',
+            borderRadius: '8px',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            background: activeSubTab === 'automation' ? 'linear-gradient(135deg,#2563EB,#60A5FA)' : 'var(--bg-tertiary)',
+            color: activeSubTab === 'automation' ? '#FFFFFF' : 'var(--text-secondary)',
+            transition: 'all 0.2s'
+          }}
+        >
+          ⚙️ Issuance & Automation Rules
+        </button>
       </div>
-      {[['Auto Certificate Generation', 'autoGen', 'Automatically issue certificates on quiz/course completion'], ['Email Delivery', 'emailDelivery', 'Send certificate via email after issuance'], ['PDF Download', 'pdfDownload', 'Allow users to download certificate as PDF']].map(([label, key, desc]) => (
-        <SettingRow key={key} label={label} desc={desc}>
-          <Toggle value={form[key]} onChange={toggle(key)} id={`cert-${key}`} />
-        </SettingRow>
-      ))}
-      <SaveBtn onClick={handleSave} saved={saved} />
+
+      {activeSubTab === 'library' ? (
+        <div>
+          {/* Header Action */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                Official Credential Assets
+              </h3>
+              <p style={{ margin: '2px 0 0', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                Approved digital assets snapshot into certificate records at the time of issuance.
+              </p>
+            </div>
+            {isAdmin && (
+              <button
+                onClick={() => setUploadModalOpen(true)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
+                  background: 'linear-gradient(135deg,#2563EB,#06B6D4)',
+                  color: 'white',
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37,99,235,0.25)'
+                }}
+              >
+                <Plus size={15} /> Add Signature / Seal
+              </button>
+            )}
+          </div>
+
+          {/* 1. Authorized Signatories Section */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '18px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>👔</span>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>Authorized Company Signatories</h4>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Required on all official corporate certification credentials</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {authSignatories.map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', background: 'var(--bg-tertiary)', border: `1.5px solid ${item.isDefault ? 'var(--primary)' : 'var(--border-glass)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '90px', height: '36px', background: '#FFFFFF', borderRadius: '6px', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px' }}>
+                      <img src={item.assetPath} alt={item.name} style={{ maxHeight: '30px', maxWidth: '80px', objectFit: 'contain' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {item.name}
+                        {item.isDefault && <span style={{ background: 'rgba(37,99,235,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>★ DEFAULT</span>}
+                        <span style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 700 }}>{item.version || 'V1'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {item.designation} · <span style={{ color: 'var(--text-muted)' }}>{item.organization}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => setPreviewAsset(item)}
+                      style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.76rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Eye size={13} /> Preview
+                    </button>
+                    {isAdmin && !item.isDefault && (
+                      <button
+                        onClick={() => handleSetDefault(item)}
+                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--primary)', background: 'rgba(37,99,235,0.08)', color: 'var(--primary)', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Set as Default
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 2. Trainer Signatures Section */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '18px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🎓</span>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>Trainer & Facilitator Signatures</h4>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Rendered alongside lead trainer name when configured in template</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {trainerSignatures.map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: '10px', background: 'var(--bg-tertiary)', border: `1.5px solid ${item.isDefault ? 'var(--primary)' : 'var(--border-glass)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+                    <div style={{ width: '90px', height: '36px', background: '#FFFFFF', borderRadius: '6px', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '2px' }}>
+                      <img src={item.assetPath} alt={item.name} style={{ maxHeight: '30px', maxWidth: '80px', objectFit: 'contain' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {item.name}
+                        {item.isDefault && <span style={{ background: 'rgba(37,99,235,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>★ DEFAULT</span>}
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                        {item.designation} · <span style={{ color: 'var(--text-muted)' }}>{item.organization}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => setPreviewAsset(item)}
+                      style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.76rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Eye size={13} /> Preview
+                    </button>
+                    {isAdmin && !item.isDefault && (
+                      <button
+                        onClick={() => handleSetDefault(item)}
+                        style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--primary)', background: 'rgba(37,99,235,0.08)', color: 'var(--primary)', fontSize: '0.76rem', fontWeight: 700, cursor: 'pointer' }}
+                      >
+                        Set as Default
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 3. Official Company Seal Section */}
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '18px', marginBottom: '20px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🛡️</span>
+                <div>
+                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>Official Idonneous Company Seal</h4>
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>Official circular embossed certification seal of Idonneous Marketing Services Pvt. Ltd.</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {companySeals.map(item => (
+                <div key={item.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderRadius: '10px', background: 'var(--bg-tertiary)', border: `1.5px solid ${item.isDefault ? 'var(--primary)' : 'var(--border-glass)'}` }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                    <div style={{ width: '60px', height: '60px', background: '#FFFFFF', borderRadius: '50%', border: '1px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4px', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                      <img src={item.assetPath} alt={item.name} style={{ width: '50px', height: '50px', objectFit: 'contain' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        {item.name}
+                        <span style={{ background: 'rgba(37,99,235,0.15)', color: 'var(--primary)', padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 800 }}>★ OFFICIAL SEAL</span>
+                        <span style={{ background: 'var(--bg-primary)', color: 'var(--text-muted)', padding: '2px 6px', borderRadius: '6px', fontSize: '0.68rem', fontWeight: 700 }}>{item.version || 'V1'}</span>
+                      </div>
+                      <div style={{ fontSize: '0.76rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                        Issued by <strong style={{ color: 'var(--text-primary)' }}>{item.organization}</strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <button
+                      onClick={() => setPreviewAsset(item)}
+                      style={{ padding: '6px 14px', borderRadius: '6px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontSize: '0.76rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Eye size={13} /> View High-Res
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Automation & Issuance Rules */
+        <div>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '12px', padding: '20px', marginBottom: '24px' }}>
+            <h4 style={{ margin: '0 0 16px', fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              ⚡ Automated Issuance & Dispatch Rules
+            </h4>
+            {[
+              ['Auto Certificate Generation', 'autoGen', 'Automatically issue certificates upon successful course completion & passing quiz score'],
+              ['Email Delivery with PDF', 'emailDelivery', 'Automatically dispatch congratulatory email with attached print-ready PDF certificate'],
+              ['Participant PDF Download', 'pdfDownload', 'Allow participants to download high-resolution vector PDF from their portal'],
+              ['QR Code Live Verification', 'qrVerify', 'Embed public verification QR code pointing to /verify/:certificateId'],
+              ['Trainer Signature Inclusion', 'requireTrainerSig', 'Include designated Lead Trainer signature block on certificates'],
+              ['Official Company Seal Inclusion', 'requireCompanySeal', 'Stamp official circular Idonneous seal on generated credentials']
+            ].map(([label, key, desc]) => (
+              <SettingRow key={key} label={label} desc={desc}>
+                <Toggle value={form[key]} onChange={toggle(key)} id={`cert-${key}`} />
+              </SettingRow>
+            ))}
+          </div>
+
+          <SaveBtn onClick={handleSaveAutomation} saved={saved} />
+        </div>
+      )}
+
+      {/* ─── MODALS ───────────────────────────────────────────────────────────── */}
+
+      {/* 1. Asset High-Res Preview Modal */}
+      {previewAsset && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,18,32,0.7)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '16px', width: '100%', maxWidth: '480px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', textAlign: 'center' }}>
+            <h3 style={{ margin: '0 0 4px', fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {previewAsset.name}
+            </h3>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
+              {previewAsset.designation} · {previewAsset.organization} ({previewAsset.version || 'V1'})
+            </div>
+
+            <div style={{ background: '#FFFFFF', padding: '30px 20px', borderRadius: '12px', border: '1.5px solid #CBD5E1', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '160px', marginBottom: '20px' }}>
+              <img 
+                src={previewAsset.assetPath} 
+                alt={previewAsset.name} 
+                style={{ 
+                  maxHeight: previewAsset.type === 'company_seal' ? '130px' : '90px', 
+                  maxWidth: '100%', 
+                  objectFit: 'contain' 
+                }} 
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setPreviewAsset(null)}
+                style={{ padding: '8px 20px', borderRadius: '8px', border: 'none', background: 'var(--primary)', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Close Preview
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Approval Protection Confirmation Modal */}
+      {confirmModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,18,32,0.75)', backdropFilter: 'blur(5px)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '16px', width: '100%', maxWidth: '500px', padding: '26px', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '14px' }}>
+              <div style={{ width: '42px', height: '42px', borderRadius: '12px', background: 'rgba(234,179,8,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#EAB308', flexShrink: 0 }}>
+                <AlertTriangle size={22} />
+              </div>
+              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                {confirmModal.title}
+              </h3>
+            </div>
+
+            <p style={{ margin: '0 0 12px', fontSize: '0.88rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+              {confirmModal.message}
+            </p>
+
+            <div style={{ padding: '12px 14px', background: 'rgba(37,99,235,0.06)', borderLeft: '3px solid var(--primary)', borderRadius: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '22px' }}>
+              {confirmModal.note}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                onClick={() => setConfirmModal(null)}
+                style={{ padding: '8px 18px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmModal.onConfirm}
+                style={{ padding: '8px 22px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#60A5FA)', color: 'white', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Confirm & Activate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 3. Upload / Create Asset Modal */}
+      {uploadModalOpen && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(11,18,32,0.8)', backdropFilter: 'blur(6px)', zIndex: 1050, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-glass)', borderRadius: '16px', width: '100%', maxWidth: '580px', maxHeight: '90vh', overflowY: 'auto', padding: '28px', boxShadow: '0 25px 50px rgba(0,0,0,0.6)' }}>
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Upload size={20} color="var(--primary)" /> Upload Signature / Seal Asset
+                </h3>
+                <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Add transparent signatures, facilitator signatures, or official corporate seals.
+                </p>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setUploadModalOpen(false)} 
+                style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateAsset}>
+              {/* Asset Type Selector */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '14px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>ASSET TYPE</label>
+                  <select
+                    value={newAsset.type}
+                    onChange={e => {
+                      const t = e.target.value;
+                      setNewAsset(a => ({ 
+                        ...a, 
+                        type: t,
+                        name: t === 'company_seal' ? 'RetailEdge PRO 3D Gold Ribbon Seal' : (t === 'trainer_signature' ? 'Aakash Verma' : 'Amit Kumar'),
+                        designation: t === 'company_seal' ? 'Official Seal of Certification' : (t === 'trainer_signature' ? 'Lead Trainer & Facilitator' : 'Program Manager')
+                      }));
+                    }}
+                    style={inputStyle}
+                  >
+                    <option value="authorized_signatory">Authorized Signatory</option>
+                    <option value="trainer_signature">Trainer Signature</option>
+                    <option value="company_seal">Company Seal</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>VERSION TAG</label>
+                  <input
+                    type="text"
+                    value={newAsset.version}
+                    onChange={e => setNewAsset(a => ({ ...a, version: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="e.g. V1, V2"
+                  />
+                </div>
+              </div>
+
+              {/* Upload Mode Switcher */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>INPUT METHOD</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('upload')}
+                    style={{
+                      padding: '8px', borderRadius: '8px', border: `1.5px solid ${uploadMode === 'upload' ? 'var(--primary)' : 'var(--border-glass)'}`,
+                      background: uploadMode === 'upload' ? 'rgba(37,99,235,0.1)' : 'var(--bg-tertiary)',
+                      color: uploadMode === 'upload' ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    }}
+                  >
+                    <Upload size={14} /> Upload File
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('draw')}
+                    style={{
+                      padding: '8px', borderRadius: '8px', border: `1.5px solid ${uploadMode === 'draw' ? 'var(--primary)' : 'var(--border-glass)'}`,
+                      background: uploadMode === 'draw' ? 'rgba(37,99,235,0.1)' : 'var(--bg-tertiary)',
+                      color: uploadMode === 'draw' ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    }}
+                  >
+                    <PenTool size={14} /> Draw Signature
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUploadMode('url')}
+                    style={{
+                      padding: '8px', borderRadius: '8px', border: `1.5px solid ${uploadMode === 'url' ? 'var(--primary)' : 'var(--border-glass)'}`,
+                      background: uploadMode === 'url' ? 'rgba(37,99,235,0.1)' : 'var(--bg-tertiary)',
+                      color: uploadMode === 'url' ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontWeight: 700, fontSize: '0.8rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+                    }}
+                  >
+                    <Globe size={14} /> Asset Path
+                  </button>
+                </div>
+              </div>
+
+              {/* Mode 1: Drag & Drop File Upload */}
+              {uploadMode === 'upload' && (
+                <div style={{ marginBottom: '18px' }}>
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setDragOver(false);
+                      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+                        handleFileSelect(e.dataTransfer.files[0]);
+                      }
+                    }}
+                    onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                    style={{
+                      border: `2px dashed ${dragOver ? 'var(--primary)' : 'var(--border-glass)'}`,
+                      borderRadius: '12px', padding: '24px 16px', textAlign: 'center', cursor: 'pointer',
+                      background: dragOver ? 'rgba(37,99,235,0.08)' : 'var(--bg-tertiary)', transition: 'all 0.2s'
+                    }}
+                  >
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={(e) => e.target.files && handleFileSelect(e.target.files[0])} 
+                      accept=".png,.svg,.jpg,.jpeg,.webp" 
+                      style={{ display: 'none' }} 
+                    />
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'rgba(37,99,235,0.15)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 10px' }}>
+                      <Upload size={20} />
+                    </div>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '4px' }}>
+                      {selectedFile ? selectedFile.name : 'Drag and drop your signature / seal image'}
+                    </div>
+                    <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                      Supports PNG (with transparency), SVG, JPG, WEBP (Max 10MB)
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Mode 2: Interactive Signature Drawing Pad */}
+              {uploadMode === 'draw' && (
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      Sign inside the box below:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={clearCanvas}
+                      style={{ padding: '3px 10px', borderRadius: '4px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: '0.72rem', cursor: 'pointer' }}
+                    >
+                      Clear Pad
+                    </button>
+                  </div>
+                  <div style={{ background: '#FFFFFF', borderRadius: '10px', border: '1.5px solid #CBD5E1', padding: '6px', textAlign: 'center', cursor: 'crosshair', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.05)' }}>
+                    <canvas
+                      ref={canvasRef}
+                      width={480}
+                      height={130}
+                      onMouseDown={startDrawing}
+                      onMouseMove={draw}
+                      onMouseUp={stopDrawing}
+                      onMouseLeave={stopDrawing}
+                      onTouchStart={startDrawing}
+                      onTouchMove={draw}
+                      onTouchEnd={stopDrawing}
+                      style={{ width: '100%', height: '130px', display: 'block', touchAction: 'none' }}
+                    />
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '4px', textAlign: 'center' }}>
+                    ✍️ Mouse, touchpad, stylus or touchscreen supported. Stroke converts to transparent PNG.
+                  </div>
+                </div>
+              )}
+
+              {/* Mode 3: Asset URL / Server Path */}
+              {uploadMode === 'url' && (
+                <div style={{ marginBottom: '18px' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>ASSET PATH OR URL</label>
+                  <input
+                    type="text"
+                    value={newAsset.assetPath}
+                    onChange={e => {
+                      setNewAsset(a => ({ ...a, assetPath: e.target.value }));
+                      setPreviewImage(e.target.value);
+                    }}
+                    style={inputStyle}
+                    placeholder="/assets/signatures/amit_kumar_signature.svg"
+                  />
+                </div>
+              )}
+
+              {/* Live Preview of Uploaded / Drawn Asset with Transparent Checkerboard */}
+              {previewImage && (
+                <div style={{ marginBottom: '18px', background: 'var(--bg-tertiary)', borderRadius: '10px', padding: '12px', border: '1px solid var(--border-glass)' }}>
+                  <div style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '6px' }}>ASSET PREVIEW</div>
+                  <div style={{
+                    background: '#FFFFFF',
+                    backgroundImage: 'linear-gradient(45deg, #F1F5F9 25%, transparent 25%), linear-gradient(-45deg, #F1F5F9 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #F1F5F9 75%), linear-gradient(-45deg, transparent 75%, #F1F5F9 75%)',
+                    backgroundSize: '16px 16px',
+                    backgroundPosition: '0 0, 0 8px, 8px -8px, -8px 0px',
+                    borderRadius: '8px', padding: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '90px', border: '1px solid #CBD5E1'
+                  }}>
+                    <img 
+                      src={previewImage} 
+                      alt="Preview" 
+                      style={{ maxHeight: newAsset.type === 'company_seal' ? '90px' : '65px', maxWidth: '100%', objectFit: 'contain' }} 
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Metadata Fields */}
+              <div style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>SIGNATORY / SEAL NAME</label>
+                <input
+                  type="text"
+                  value={newAsset.name}
+                  onChange={e => setNewAsset(a => ({ ...a, name: e.target.value }))}
+                  style={inputStyle}
+                  placeholder="e.g. Amit Kumar / RetailEdge PRO Gold Seal"
+                  required
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px', marginBottom: '16px' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>DESIGNATION / TITLE</label>
+                  <input
+                    type="text"
+                    value={newAsset.designation}
+                    onChange={e => setNewAsset(a => ({ ...a, designation: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="e.g. Program Manager"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>ORGANIZATION</label>
+                  <input
+                    type="text"
+                    value={newAsset.organization}
+                    onChange={e => setNewAsset(a => ({ ...a, organization: e.target.value }))}
+                    style={inputStyle}
+                    placeholder="Idonneous Marketing Services Pvt. Ltd."
+                  />
+                </div>
+              </div>
+
+              {/* Set as Active Default */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '22px', padding: '10px 14px', background: 'var(--bg-tertiary)', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                <input 
+                  type="checkbox" 
+                  id="assetDefault" 
+                  checked={newAsset.isDefault} 
+                  onChange={e => setNewAsset(a => ({ ...a, isDefault: e.target.checked }))}
+                  style={{ width: '16px', height: '16px', accentColor: 'var(--primary)', cursor: 'pointer' }}
+                />
+                <label htmlFor="assetDefault" style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-primary)', cursor: 'pointer' }}>
+                  Set as active default for newly generated certificates
+                </label>
+              </div>
+
+              {/* Modal Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', borderTop: '1px solid var(--border-glass)', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUploadModalOpen(false);
+                    setSelectedFile(null);
+                    setPreviewImage('');
+                  }}
+                  style={{ padding: '9px 18px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'transparent', color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{ padding: '9px 24px', borderRadius: '8px', border: 'none', background: 'linear-gradient(135deg,#2563EB,#06B6D4)', color: 'white', fontWeight: 800, fontSize: '0.85rem', cursor: 'pointer', boxShadow: '0 4px 12px rgba(37,99,235,0.3)' }}
+                >
+                  Upload & Save Asset
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -688,6 +1549,8 @@ function SecuritySettings() {
   };
 
   const strength = pwStrength(cpForm.newPw);
+  const { user } = useContext(AuthContext);
+  const isEmployee = user?.role === 'Employee';
 
   // ── Policy / auth settings ───────────────────────────────────────────────
   const [form, setForm] = useState(load('security', {
@@ -708,7 +1571,11 @@ function SecuritySettings() {
 
   return (
     <div>
-      <SectionHeader icon={<Lock size={22} />} title="Security Settings" desc="Change your password and configure platform-wide security policies." />
+      <SectionHeader 
+        icon={<Lock size={22} />} 
+        title={isEmployee ? "Account Security" : "Security Settings"} 
+        desc={isEmployee ? "Update your account password and credentials." : "Change your password and configure platform-wide security policies."} 
+      />
 
       {/* ── CHANGE PASSWORD ──────────────────────────────────────────── */}
       <div style={{ marginBottom: '32px', padding: '24px', background: 'var(--bg-tertiary)', borderRadius: '16px', border: '1.5px solid var(--border-glass)' }}>
@@ -808,26 +1675,10 @@ function SecuritySettings() {
         </form>
       </div>
 
-      {/* ── PASSWORD POLICY ─────────────────────────────────────────── */}
-      <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>🔑 Password Policy</div>
-      <div style={{ padding: '20px', background: 'var(--bg-tertiary)', borderRadius: '14px', border: '1px solid var(--border-glass)', marginBottom: '24px' }}>
-        <div style={{ marginBottom: '16px' }}>
-          <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Minimum Length</label>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
-            <input type="range" min="6" max="20" value={form.minLength} onChange={set('minLength')} style={{ flex: 1, accentColor: 'var(--primary)' }} />
-            <span style={{ fontWeight: 800, fontSize: '1.1rem', color: 'var(--primary)', minWidth: '32px', fontFamily: 'Poppins,sans-serif' }}>{form.minLength}</span>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-          {[['Uppercase Required', 'upperRequired'], ['Lowercase Required', 'lowerRequired'], ['Number Required', 'numberRequired'], ['Special Character Required', 'specialRequired']].map(([label, key]) => (
-            <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-primary)', border: '1px solid var(--border-glass)' }}>
-              <span style={{ fontSize: '0.85rem', fontWeight: 500 }}>{label}</span>
-              <Toggle value={form[key]} onChange={toggle(key)} id={`sec-${key}`} />
-            </div>
-          ))}
-        </div>
-      </div>
-
+      {!isEmployee && (
+        <>
+          {/* ── PASSWORD POLICY ─────────────────────────────────────────── */}
+          <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px' }}>🔑 Password Policy</div>
       <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>🛡️ Authentication</div>
       {[['Two-Factor Authentication (2FA)', 'twoFA', 'Require OTP at login in addition to password'], ['OTP Verification', 'otpVerify', 'Send OTP for sensitive actions'], ['Auto Logout', 'autoLogout', 'Automatically log out inactive users'], ['Restrict Concurrent Login', 'concurrentLogin', 'Prevent simultaneous login from multiple devices']].map(([label, key, desc]) => (
         <SettingRow key={key} label={label} desc={desc}>
@@ -843,6 +1694,8 @@ function SecuritySettings() {
         </div>
       </div>
       <SaveBtn onClick={handleSave} saved={saved} />
+        </>
+      )}
     </div>
   );
 }
@@ -1028,23 +1881,32 @@ const NAV_ITEMS = [
 
 // Sections accessible to non-admin roles
 const LIMITED_SECTIONS = ['notif', 'security', 'quiz', 'training'];
+const EMPLOYEE_SECTIONS = ['security', 'notif'];
 
 export default function Settings() {
   const { user } = useContext(AuthContext);
 
-
   const isAdmin = ['Admin', 'Super Admin'].includes(user?.role);
-  const [active, setActive] = useState('general');
+  const isEmployee = user?.role === 'Employee';
+  const [active, setActive] = useState(isEmployee ? 'security' : 'general');
 
-  const visibleNav = isAdmin ? NAV_ITEMS : NAV_ITEMS.filter(n => LIMITED_SECTIONS.includes(n.id));
+  const visibleNav = isAdmin 
+    ? NAV_ITEMS 
+    : isEmployee
+      ? NAV_ITEMS.filter(n => EMPLOYEE_SECTIONS.includes(n.id)).map(n => n.id === 'security' ? { ...n, label: 'Password & Security' } : n)
+      : NAV_ITEMS.filter(n => LIMITED_SECTIONS.includes(n.id));
 
   useEffect(() => {
-    if (!isAdmin && !LIMITED_SECTIONS.includes(active)) setActive('notif');
-  }, [isAdmin]);
+    if (isEmployee) {
+      if (!EMPLOYEE_SECTIONS.includes(active)) setActive('security');
+    } else if (!isAdmin && !LIMITED_SECTIONS.includes(active)) {
+      setActive('notif');
+    }
+  }, [isAdmin, isEmployee, active]);
 
   const ActiveComp = NAV_ITEMS.find(n => n.id === active)?.component || GeneralSettings;
 
-  if (user && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager'].includes(user?.role)) {
+  if (user && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager', 'Employee'].includes(user?.role)) {
     return <Navigate to="/" replace />;
   }
 
@@ -1056,10 +1918,12 @@ export default function Settings() {
           <span style={{ width: '40px', height: '40px', borderRadius: '12px', background: 'linear-gradient(135deg,#2563EB,#93C5FD)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
             <Settings2 size={20} color="white" />
           </span>
-          Admin Settings
+          {isEmployee ? 'My Preferences & Security' : (isAdmin ? 'Admin Settings' : 'Settings')}
         </h2>
         <p style={{ margin: '6px 0 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          {isAdmin ? 'Full platform configuration · All settings are saved to your session.' : 'Manage your personal preferences and account settings.'}
+          {isEmployee 
+            ? 'Manage your personal account credentials and notification preferences.' 
+            : (isAdmin ? 'Full platform configuration · All settings are saved to your session.' : 'Manage your personal preferences and account settings.')}
         </p>
       </div>
 

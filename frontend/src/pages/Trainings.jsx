@@ -198,6 +198,7 @@ export default function Trainings() {
   };
 
   const lastSyncTimeRef = useRef(Date.now());
+  const jitsiHeartbeatRef = useRef(null);
 
   const handleStartMeeting = async (trainingId, url) => {
     const startTime = Date.now();
@@ -207,10 +208,33 @@ export default function Trainings() {
     setMeetingElapsed(0);
     localStorage.setItem(`meeting_start_${trainingId}`, String(startTime));
 
-    // Open URL in new window/tab immediately (mobile-friendly, supports Google Meet)
+    // Open URL in new window/tab immediately (mobile-friendly, supports Google Meet / Jitsi)
     if (url) {
       window.open(url, '_blank', 'noopener,noreferrer');
     }
+
+    // 1. Dispatch Jitsi Telemetry Join Event
+    const participantPayload = {
+      event: 'join',
+      participantName: user?.name || 'Learner',
+      employeeId: user?.employee_id || 'EMP',
+      userId: user?.id,
+      scheduledDurationMinutes: 60
+    };
+    axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, participantPayload, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(err => console.error('Jitsi join event error:', err));
+
+    // 2. Setup periodic Jitsi Heartbeat every 30 seconds
+    if (jitsiHeartbeatRef.current) clearInterval(jitsiHeartbeatRef.current);
+    jitsiHeartbeatRef.current = setInterval(() => {
+      axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, {
+        ...participantPayload,
+        event: 'heartbeat'
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      }).catch(err => console.error('Jitsi heartbeat error:', err));
+    }, 30000);
 
     const sendProgress = async (lat, lng) => {
       try {
@@ -251,6 +275,23 @@ export default function Trainings() {
     setMeetingStartTime(null);
     setMeetingElapsed(0);
     localStorage.removeItem(`meeting_start_${trainingId}`);
+
+    // Clear heartbeat
+    if (jitsiHeartbeatRef.current) {
+      clearInterval(jitsiHeartbeatRef.current);
+      jitsiHeartbeatRef.current = null;
+    }
+
+    // 3. Dispatch Jitsi Telemetry Leave Event
+    axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, {
+      event: 'leave',
+      participantName: user?.name || 'Learner',
+      employeeId: user?.employee_id || 'EMP',
+      userId: user?.id,
+      scheduledDurationMinutes: 60
+    }, {
+      headers: { Authorization: `Bearer ${token}` }
+    }).catch(err => console.error('Jitsi leave event error:', err));
 
     try {
       await axios.post(`${backendUrl}/api/trainings/${trainingId}/progress`,
