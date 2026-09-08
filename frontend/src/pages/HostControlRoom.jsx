@@ -27,8 +27,9 @@ export default function HostControlRoom() {
   const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const isLocalHost = ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) || window.location.hostname.endsWith('.local');
-
+  const querySessionName = new URLSearchParams(window.location.search).get('sessionName') || '';
+  const [sessionName, setSessionName] = useState(querySessionName);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [quiz, setQuiz] = useState(null);
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -142,6 +143,9 @@ export default function HostControlRoom() {
         setRoomCode(data.roomCode);
         roomCodeRef.current = data.roomCode;
         setSessionId(data.sessionId);
+        if (data.sessionName && !sessionName) {
+          setSessionName(data.sessionName);
+        }
         if (data.participants && data.participants.length > 0) {
           setParticipants(data.participants);
         }
@@ -298,7 +302,8 @@ export default function HostControlRoom() {
           quizId: quizId,
           hostId: user?.id,
           hostName: user?.name || 'Authorized Trainer',
-          token: authToken
+          token: authToken,
+          sessionName: sessionName || null
         });
       }
     } catch (error) {

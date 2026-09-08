@@ -278,8 +278,7 @@ export default function ClientDashboard({
                   onClick={() => handleDateFilterChange(item)}
                   style={{
                     padding: '6px 12px', borderRadius: '6px', border: 'none', fontSize: '0.72rem', fontWeight: 700,
-                    cursor: 'pointer', transition: 'all 0.2s ease', background: isActive ? 'var(--primary)' : 'transparent', color: isActive ? 'white' : 'var(--text-secondary)',
-                    transition: 'all 0.15s'
+                    cursor: 'pointer', transition: 'all 0.2s ease', background: isActive ? 'var(--primary)' : 'transparent', color: isActive ? 'white' : 'var(--text-secondary)'
                   }}
                 >
                   {item}

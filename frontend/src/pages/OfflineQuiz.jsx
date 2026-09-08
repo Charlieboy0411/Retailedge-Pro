@@ -8,15 +8,15 @@ const ZONES = ['North', 'East', 'West', 'South'];
 
 // ─── Design Tokens (standalone — never inherits from app theme) ───────────────
 const C = {
-  bg:          'var(--bg-glass)',      // page background (light grey-blue)
-  card:        'var(--bg-glass)',      // card background (white card)
-  cardAlt:     '#EEF2F7',      // slightly darker light background
-  border:      '#E2E8F0',
-  borderHover: '#CBD5E1',
-  accent:      'var(--primary)',      // royal blue brand (Primary Royal Blue)
-  accentGlow:  'rgba(37,99,235,0.15)',
-  accentBg:    'rgba(37,99,235,0.06)',
-  accentBgSel: 'rgba(37,99,235,0.12)',
+  bg:          '#F8FAFC',      // page background (light clean grey)
+  card:        '#FFFFFF',      // card background (white card)
+  cardAlt:     '#F1F5F9',      // slightly darker light background
+  border:      '#CBD5E1',
+  borderHover: '#94A3B8',
+  accent:      '#F36F21',      // Orange brand
+  accentGlow:  'rgba(243,111,33,0.15)',
+  accentBg:    'rgba(243,111,33,0.06)',
+  accentBgSel: 'rgba(243,111,33,0.12)',
   green:       '#22C55E',      // Success Green
   greenBg:     'rgba(34,197,94,0.08)',
   greenBorder: 'rgba(34,197,94,0.2)',
@@ -24,12 +24,12 @@ const C = {
   redBg:       'rgba(239,68,68,0.08)',
   amber:       '#F59E0B',      // Warning Amber (Gold)
   amberBg:     'rgba(245,158,11,0.08)',
-  textPrimary: 'var(--text-primary)',      // Text Dark
-  textSub:     'var(--text-secondary)',
-  textMuted:   '#94A3B8',
-  inputBg:     'var(--bg-glass)',
-  optionBg:    'var(--bg-glass)',
-  optionBgSel: 'rgba(37,99,235,0.12)',
+  textPrimary: '#0F172A',      // Pure dark slate text
+  textSub:     '#334155',      // Clear subtext
+  textMuted:   '#64748B',
+  inputBg:     '#FFFFFF',
+  optionBg:    '#FFFFFF',
+  optionBgSel: 'rgba(243,111,33,0.12)',
 };
 
 

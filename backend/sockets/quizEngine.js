@@ -146,7 +146,7 @@ function quizEngine(io) {
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Host starts or resumes a live quiz session (CANONICAL)
-    socket.on('host_start_quiz', async ({ quizId, hostId, hostName, token: payloadToken }) => {
+    socket.on('host_start_quiz', async ({ quizId, hostId, hostName, token: payloadToken, sessionName, roomCode: existingRoomCode }) => {
       try {
         if (!quizId) {
           return socket.emit('error', 'Quiz ID is required');
@@ -204,20 +204,28 @@ function quizEngine(io) {
           }
         }
 
-        // Check for existing waiting or active session for this quiz
-        let session = await Session.findOne({
-          where: {
-            quizId,
-            ...(authoritativeHostId ? { hostId: authoritativeHostId } : {}),
-            status: ['waiting', 'active']
-          },
-          order: [['createdAt', 'DESC']]
-        });
-
-        let roomCode;
-        let recovered        = false;
+        let session = null;
+        let roomCode = existingRoomCode;
+        let recovered = false;
         let participantsData = [];
         let currentQuestion  = null;
+
+        // If an explicit roomCode is given (reconnecting/recovering existing session on page refresh)
+        if (roomCode) {
+          session = await Session.findOne({
+            where: { roomCode, status: ['waiting', 'active'] },
+            order: [['createdAt', 'DESC']]
+          });
+        } else {
+          session = await Session.findOne({
+            where: {
+              quizId,
+              ...(authoritativeHostId ? { hostId: authoritativeHostId } : {}),
+              status: ['waiting', 'active']
+            },
+            order: [['createdAt', 'DESC']]
+          });
+        }
 
         if (session) {
           roomCode  = session.roomCode;
@@ -257,17 +265,25 @@ function quizEngine(io) {
             questionIndex: session.current_question_index,
           });
         } else {
-          roomCode = Math.floor(100000 + Math.random() * 900000).toString();
-          session  = await Session.create({
+          // Always generate a unique 6-digit room code for fresh quiz launch
+          let uniqueCodeFound = false;
+          while (!uniqueCodeFound) {
+            roomCode = Math.floor(100000 + Math.random() * 900000).toString();
+            const collision = await Session.findOne({ where: { roomCode, status: ['waiting', 'active'] } });
+            if (!collision) uniqueCodeFound = true;
+          }
+
+          session = await Session.create({
             quizId,
             hostId: authoritativeHostId || null,
             projectId: quiz.projectId || null,
             trainingId: quiz.trainingId || null,
+            session_name: sessionName || null,
             roomCode,
             status:                  'waiting',
             current_question_index: 0,
           });
-          logger.info('QuizEngine', roomCode, session.id, 'Host started new quiz session', { hostId: authoritativeHostId, quizId, projectId: quiz.projectId });
+          logger.info('QuizEngine', roomCode, session.id, 'Host started new quiz session', { hostId: authoritativeHostId, quizId, projectId: quiz.projectId, sessionName: sessionName || 'Default' });
         }
 
         if (!roomSockets[roomCode]) roomSockets[roomCode] = {};
@@ -284,6 +300,7 @@ function quizEngine(io) {
         const sessionPayload = {
           roomCode,
           sessionId:            session.id,
+          sessionName:          session.session_name || sessionName || null,
           recovered,
           status:               session.status,
           currentQuestionIndex: session.current_question_index - 1,
@@ -443,7 +460,7 @@ function quizEngine(io) {
     // ═══════════════════════════════════════════════════════════════════════════
 
     // Participant joins the live quiz session (CANONICAL)
-    const handleParticipantJoin = async ({ roomCode, name, employeeId, mobileNumber, avatar, userId, deviceId }) => {
+    const handleParticipantJoin = async ({ roomCode, name, employeeId, mobileNumber, avatar, userId, deviceId, participantId: incomingParticipantId, isRejoin: explicitRejoin, zone }) => {
       try {
         const cleanCode = (roomCode || '').replace(/\s+/g, '');
 
@@ -473,42 +490,77 @@ function quizEngine(io) {
           }
         }
 
+        // --- 1. SEARCH FOR EXISTING PARTICIPANT IN THIS SESSION (DEDUPLICATION) ---
         let participant = null;
         let isRejoin    = false;
 
-        if (deviceId) {
-          participant = await Participant.findOne({ where: { sessionId: session.id, deviceId } });
+        // A. Match by explicit participantId from client
+        const isUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+        if (incomingParticipantId && isUuid(incomingParticipantId)) {
+          participant = await Participant.findOne({
+            where: { id: incomingParticipantId, sessionId: session.id }
+          });
         }
-        if (!participant && employeeId) {
-          participant = await Participant.findOne({ where: { sessionId: session.id, employeeId } });
-        }
-        if (!participant && mobileNumber) {
-          participant = await Participant.findOne({ where: { sessionId: session.id, mobileNumber } });
-        }
-        if (!participant && userId) {
+        if (!participant && userId && isUuid(userId)) {
           participant = await Participant.findOne({ where: { sessionId: session.id, userId } });
         }
 
+        // B. Match by deviceId (same phone / browser tab)
+        if (!participant && deviceId) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, deviceId }
+          });
+        }
+
+        // C. Match by employeeId if provided
+        if (!participant && employeeId) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, employeeId }
+          });
+        }
+
+        // D. Match by mobileNumber if provided
+        if (!participant && mobileNumber) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, mobileNumber }
+          });
+        }
+
+        // E. Match by logged-in userId
+        if (!participant && userId) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, userId }
+          });
+        }
+
+        // F. Match by name in the same session (prevent duplicate entry for same person)
+        if (!participant && name && name.trim()) {
+          const sessionParticipants = await Participant.findAll({ where: { sessionId: session.id } });
+          participant = sessionParticipants.find(p => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
+        }
+
+        // --- 2. VALIDATE OR ESTABLISH CONNECTION STATUS ---
         if (participant) {
-          const roomMap  = roomSockets[cleanCode] || {};
-          const isOnline = Object.values(roomMap).includes(participant.id);
-          if (isOnline) {
-            const oldSocketId = Object.keys(roomMap).find(key => roomMap[key] === participant.id);
-            if (oldSocketId) {
-              const oldSocket = io.sockets.sockets.get(oldSocketId);
-              if (oldSocket) oldSocket.disconnect(true);
-              delete roomSockets[cleanCode][oldSocketId];
-              delete socketRoom[oldSocketId];
+          // Rejoining existing participant session - cleanly replace socket
+          const roomMap = roomSockets[cleanCode] || {};
+          const oldSocketId = Object.keys(roomMap).find(key => roomMap[key] === participant.id);
+          if (oldSocketId && oldSocketId !== socket.id) {
+            const oldSocket = io.sockets.sockets.get(oldSocketId);
+            if (oldSocket) {
+              try { oldSocket.disconnect(true); } catch(e) {}
             }
+            delete roomSockets[cleanCode][oldSocketId];
+            delete socketRoom[oldSocketId];
           }
 
-          isRejoin                     = true;
-          participant.connectionStatus = 'rejoined';
-          if (avatar)   participant.avatar   = avatar;
-          if (name)     participant.name     = name;
+          isRejoin = true;
+          participant.connectionStatus = session.status === 'active' ? 'active' : 'rejoined';
+          if (avatar) participant.avatar = avatar;
+          if (name) participant.name = name;
           if (deviceId) participant.deviceId = deviceId;
           await participant.save();
         } else {
+          // Fresh unique participant join
           participant = await Participant.create({
             sessionId:        session.id,
             name:             name || 'Learner',
@@ -518,6 +570,7 @@ function quizEngine(io) {
             connectionStatus: session.status === 'active' ? 'active' : 'waiting',
             userId:           userId       || null,
             deviceId:         deviceId     || null,
+            storeName:        zone         || null,
           });
         }
 

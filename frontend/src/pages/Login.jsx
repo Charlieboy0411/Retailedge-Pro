@@ -333,21 +333,22 @@ export default function Login() {
                   type={showPw ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••••••"
+                  placeholder="••••••••"
                   required
                   style={{
-                    width: '100%', padding: '11px 40px 11px 38px', borderRadius: '8px',
+                    width: '100%', padding: '12px 42px 12px 14px', borderRadius: '8px',
                     background: '#0B1220', border: '1.5px solid #1E293B', color: '#FFFFFF',
-                    fontSize: '0.9rem', boxSizing: 'border-box'
+                    fontSize: '0.95rem', outline: 'none', boxSizing: 'border-box'
                   }}
+                  onFocus={e => e.currentTarget.style.borderColor = '#2563EB'}
+                  onBlur={e => e.currentTarget.style.borderColor = '#1E293B'}
                 />
-                <Lock size={16} color="#64748B" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <button
                   type="button"
-                  onClick={() => setShowPw(!showPw)}
-                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer' }}
+                  onClick={() => setShowPw(v => !v)}
+                  style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                 >
-                  {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPw ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>

@@ -5,7 +5,7 @@ import axios from 'axios';
 import { 
   PlayCircle, ChevronRight, BarChart2, Smartphone, Shield, Users, 
   Zap, Award, ArrowRight, X, Menu, Mail, Phone, Calendar, Radio, 
-  BookOpen, CheckCircle2, Sparkles, Lock, Layers, Briefcase, FileSpreadsheet
+  BookOpen, CheckCircle2, Sparkles, Lock, Layers, Briefcase, FileSpreadsheet, Eye, EyeOff
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
@@ -32,6 +32,7 @@ export default function LandingPage() {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
