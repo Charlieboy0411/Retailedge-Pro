@@ -25,6 +25,7 @@ jobs:
 
             cd ~/apps/Retailedge-Pro
 
+            git checkout -- .
             git pull origin main
 
             echo "Installing backend..."
