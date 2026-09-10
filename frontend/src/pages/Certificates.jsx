@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { 
-  Award, BadgeCheck, Clock, CalendarX, ShieldX, ShieldCheck, 
-  TrendingUp, Plus, QrCode, FileText, Download, Share2, 
+import {
+  Award, BadgeCheck, Clock, CalendarX, ShieldX, ShieldCheck,
+  TrendingUp, Plus, QrCode, FileText, Download, Share2,
   Search, Filter, Eye, Mail, RefreshCw, XCircle, MoreVertical,
   CheckCircle2, AlertCircle, Building, User, ChevronRight,
   ExternalLink, Sliders, Layers, Sparkles, Printer, Check, X,
   UploadCloud, PenTool, Image as ImageIcon, Upload, Trash2, Shield
 } from 'lucide-react';
-import { 
-  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend 
+import {
+  AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, BarChart, Bar, CartesianGrid, Legend
 } from 'recharts';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -34,7 +34,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       setActiveTab('ledger');
     }
   }, [isCertAuthority, activeTab]);
-  
+
   // Data states
   const [certificates, setCertificates] = useState([]);
   const [analytics, setAnalytics] = useState(null);
@@ -174,7 +174,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
         height: `${baseHeight}px`,
         zIndex: 20,
         cursor: isDragging ? 'grabbing' : 'grab',
-        filter: isDragging 
+        filter: isDragging
           ? 'drop-shadow(0 12px 24px rgba(37,99,235,0.6)) drop-shadow(0 0 10px rgba(0,210,255,0.8))'
           : 'drop-shadow(0 6px 14px rgba(0,0,0,0.35))',
         transition: isDragging ? 'none' : 'transform 0.15s ease, filter 0.15s ease',
@@ -195,7 +195,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       height: `${baseHeight}px`,
       zIndex: 20,
       cursor: isDragging ? 'grabbing' : 'grab',
-      filter: isDragging 
+      filter: isDragging
         ? 'drop-shadow(0 12px 24px rgba(37,99,235,0.6)) drop-shadow(0 0 10px rgba(0,210,255,0.8))'
         : 'drop-shadow(0 6px 14px rgba(0,0,0,0.35))',
       transition: isDragging ? 'none' : 'transform 0.15s ease, filter 0.15s ease',
@@ -317,9 +317,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
         formData.append('designation', assetDesignation || '');
         formData.append('organization', assetOrg || 'Idonneous Marketing Services Pvt. Ltd.');
         formData.append('isDefault', isAssetDefault ? 'true' : 'false');
-        
+
         const res = await axios.post('/api/certificates/signatures-and-seals', formData, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${activeToken}`,
             'Content-Type': 'multipart/form-data'
           }
@@ -334,7 +334,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
           assetPath: payloadAsset,
           isDefault: isAssetDefault
         }, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${activeToken}`,
             'Content-Type': 'application/json'
           }
@@ -349,7 +349,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
           assetPath: assetUrlInput,
           isDefault: isAssetDefault
         }, {
-          headers: { 
+          headers: {
             Authorization: `Bearer ${activeToken}`,
             'Content-Type': 'application/json'
           }
@@ -432,6 +432,23 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
   const fetchProjectsAndClients = async () => {
     try {
+      if (user?.role === 'Trainer') {
+        const projRes = await axios.get('/api/projects/my-projects', { headers: { Authorization: `Bearer ${token}` } });
+        const projs = Array.isArray(projRes.data) ? projRes.data : [];
+        setProjects(projs);
+        const derivedClients = [];
+        projs.forEach(p => {
+          if (p.Client && !derivedClients.some(c => c.id === p.Client.id)) {
+            derivedClients.push(p.Client);
+          }
+        });
+        setClients(derivedClients);
+        if (projs.length > 0 && !bulkProjectId) {
+          setBulkProjectId(projs[0].id);
+        }
+        return;
+      }
+
       const [projRes, clientRes] = await Promise.all([
         axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } }),
         axios.get('/api/clients', { headers: { Authorization: `Bearer ${token}` } })
@@ -624,7 +641,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '40px' }}>
-      
+
       {/* ─── 1. TOP HEADER & ACTION BAR ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
@@ -632,14 +649,14 @@ export default function Certificates({ initialTab = 'ledger' }) {
             <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
               {isEmployee ? 'My Certificates' : (isSupervisor ? 'Team Certifications' : (isClient ? 'Program Certifications' : 'Certification Center'))}
             </h1>
-            <span style={{ 
-              background: isSupervisor ? 'rgba(16,185,129,0.1)' : (isClient ? 'rgba(6,182,212,0.1)' : 'rgba(37,99,235,0.1)'), 
-              color: isSupervisor ? '#10B981' : (isClient ? '#06B6D4' : '#2563EB'), 
-              border: `1px solid ${isSupervisor ? 'rgba(16,185,129,0.25)' : (isClient ? 'rgba(6,182,212,0.25)' : 'rgba(37,99,235,0.25)')}`, 
-              padding: '4px 10px', 
-              borderRadius: '20px', 
-              fontSize: '0.75rem', 
-              fontWeight: 700 
+            <span style={{
+              background: isSupervisor ? 'rgba(16,185,129,0.1)' : (isClient ? 'rgba(6,182,212,0.1)' : 'rgba(37,99,235,0.1)'),
+              color: isSupervisor ? '#10B981' : (isClient ? '#06B6D4' : '#2563EB'),
+              border: `1px solid ${isSupervisor ? 'rgba(16,185,129,0.25)' : (isClient ? 'rgba(6,182,212,0.25)' : 'rgba(37,99,235,0.25)')}`,
+              padding: '4px 10px',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: 700
             }}>
               {isEmployee ? 'OFFICIAL CREDENTIALS' : (isSupervisor ? 'OPERATIONAL INTELLIGENCE' : (isClient ? 'CLIENT CREDENTIALS' : 'V2.0 ENTERPRISE'))}
             </span>
@@ -657,17 +674,19 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+          {(isCertAuthority || user?.role === 'Trainer') && (
+            <button
+              onClick={() => setIsWizardOpen(true)}
+              className="btn btn-primary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 18px', borderRadius: '10px', fontWeight: 700 }}
+            >
+              <Plus size={16} /> Create Certificate
+            </button>
+          )}
+
           {isCertAuthority && (
             <>
-              <button 
-                onClick={() => setIsWizardOpen(true)}
-                className="btn btn-primary"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 18px', borderRadius: '10px', fontWeight: 700 }}
-              >
-                <Plus size={16} /> Create Certificate
-              </button>
-
-              <button 
+              <button
                 onClick={() => setActiveTab('bulk')}
                 className="btn btn-secondary"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
@@ -675,7 +694,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                 <Layers size={16} /> Generate Certificates
               </button>
 
-              <button 
+              <button
                 onClick={() => setActiveTab('templates')}
                 className="btn btn-secondary"
                 style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
@@ -685,7 +704,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </>
           )}
 
-          <button 
+          <button
             onClick={() => window.open('/verify', '_blank')}
             className="btn btn-secondary"
             style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
@@ -694,7 +713,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
           </button>
 
           {isCertAuthority && (
-            <button 
+            <button
               onClick={handleExportCsv}
               className="btn btn-secondary"
               style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
@@ -708,7 +727,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {/* ─── 2. 7 KPI RIBBON CARDS (Certificate Authority Only) ─── */}
       {isCertAuthority && (
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '14px' }}>
-        
+
         {/* Total Certificates */}
         <div className="stat-card" style={{ padding: '16px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
@@ -832,14 +851,14 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {/* ─── TAB 1: CERTIFICATES LEDGER ─── */}
       {activeTab === 'ledger' && (
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          
+
           {/* Filter Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-            
+
             {/* Search */}
             <div style={{ position: 'relative', width: '320px' }}>
               <Search size={16} color="var(--text-secondary)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
-              <input 
+              <input
                 type="text"
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
@@ -850,7 +869,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
             {/* Dropdown Filters */}
             <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-              
+
               {/* Status Filter */}
               <select
                 value={statusFilter}
@@ -907,7 +926,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   </tr>
                 ) : (
                   certificates.map(cert => {
-                    const statusClass = 
+                    const statusClass =
                       cert.status === 'ISSUED' || cert.status === 'VALID' ? 'badge-success' :
                       cert.status === 'REVOKED' ? 'badge-danger' :
                       cert.status === 'PENDING' ? 'badge-warning' : 'badge-info';
@@ -956,9 +975,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                         </td>
                         <td style={{ textAlign: 'right' }}>
                           <div style={{ display: 'inline-flex', gap: '6px' }}>
-                            
+
                             {/* Preview Modal */}
-                            <button 
+                            <button
                               title="Preview Certificate"
                               onClick={() => setPreviewCert(cert)}
                               style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: 'var(--text-primary)', cursor: 'pointer' }}
@@ -967,7 +986,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                             </button>
 
                             {/* Download PDF */}
-                            <button 
+                            <button
                               title="Download PDF"
                               onClick={() => handleDownloadPDF(cert.id, cert.User?.name)}
                               style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#2563EB', cursor: 'pointer' }}
@@ -976,7 +995,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                             </button>
 
                             {/* Share Modal */}
-                            <button 
+                            <button
                               title="Share & Deliver"
                               onClick={() => setShareCert(cert)}
                               style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#10B981', cursor: 'pointer' }}
@@ -985,7 +1004,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                             </button>
 
                             {/* Public Verify */}
-                            <button 
+                            <button
                               title="Verify Online"
                               onClick={() => window.open(`/verify/${cert.certificate_id}`, '_blank')}
                               style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#06B6D4', cursor: 'pointer' }}
@@ -995,7 +1014,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                             {/* Reissue */}
                             {isCertAuthority && cert.status !== 'REVOKED' && cert.status !== 'REPLACED' && (
-                              <button 
+                              <button
                                 title="Reissue Certificate"
                                 onClick={() => setReissueCert(cert)}
                                 style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#3B82F6', cursor: 'pointer' }}
@@ -1006,7 +1025,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                             {/* Revoke */}
                             {isCertAuthority && cert.status !== 'REVOKED' && (
-                              <button 
+                              <button
                                 title="Revoke Certificate"
                                 onClick={() => setRevokeCert(cert)}
                                 style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#EF4444', cursor: 'pointer' }}
@@ -1017,7 +1036,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                             {/* Audit History */}
                             {isCertAuthority && (
-                            <button 
+                            <button
                               title="Audit History"
                               onClick={() => handleOpenAudit(cert)}
                               style={{ padding: '6px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #CBD5E1', color: '#8B5CF6', cursor: 'pointer' }}
@@ -1042,7 +1061,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {/* ─── TAB 2: TEMPLATES & DESIGNER ─── */}
       {isCertAuthority && activeTab === 'templates' && (
         <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '20px' }}>
-          
+
           {/* Left Properties Panel */}
           <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '14px', maxHeight: '760px', overflowY: 'auto' }}>
             <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1051,8 +1070,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>SELECT DESIGN THEME</label>
-              <select 
-                value={selectedTemplateKey} 
+              <select
+                value={selectedTemplateKey}
                 onChange={e => setSelectedTemplateKey(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 600 }}
               >
@@ -1064,9 +1083,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
             <div>
               <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-secondary)', marginBottom: '5px' }}>CERTIFICATE TITLE</label>
-              <input 
-                type="text" 
-                value={designerTitle} 
+              <input
+                type="text"
+                value={designerTitle}
                 onChange={e => setDesignerTitle(e.target.value)}
                 style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontSize: '0.82rem' }}
               />
@@ -1125,9 +1144,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.66rem', color: '#64748B', fontWeight: 700 }}>Signatory Name</label>
-                      <input 
-                        type="text" 
-                        value={designerSignatory2} 
+                      <input
+                        type="text"
+                        value={designerSignatory2}
                         onChange={e => setDesignerSignatory2(e.target.value)}
                         placeholder="e.g. Amit Kumar"
                         style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '0.75rem', fontWeight: 600 }}
@@ -1135,9 +1154,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.66rem', color: '#64748B', fontWeight: 700 }}>Designation</label>
-                      <input 
-                        type="text" 
-                        value={designerDesignation2} 
+                      <input
+                        type="text"
+                        value={designerDesignation2}
                         onChange={e => setDesignerDesignation2(e.target.value)}
                         placeholder="e.g. Program Manager"
                         style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '0.75rem', fontWeight: 600 }}
@@ -1165,7 +1184,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       ))}
                     </select>
 
-                    <div 
+                    <div
                       title="Active Signature Stroke Preview"
                       style={{
                         width: '70px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1',
@@ -1173,9 +1192,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
                       }}
                     >
-                      <img 
-                        src={activeAuthSigUrl} 
-                        alt="Sig Preview" 
+                      <img
+                        src={activeAuthSigUrl}
+                        alt="Sig Preview"
                         style={{ maxHeight: '26px', maxWidth: '64px', objectFit: 'contain' }}
                         onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
                       />
@@ -1202,9 +1221,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.66rem', color: '#64748B', fontWeight: 700 }}>Trainer Name</label>
-                      <input 
-                        type="text" 
-                        value={designerSignatory1} 
+                      <input
+                        type="text"
+                        value={designerSignatory1}
                         onChange={e => setDesignerSignatory1(e.target.value)}
                         placeholder="e.g. Aakash Verma"
                         style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '0.75rem', fontWeight: 600 }}
@@ -1212,9 +1231,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                     </div>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.66rem', color: '#64748B', fontWeight: 700 }}>Role / Title</label>
-                      <input 
-                        type="text" 
-                        value={designerRole1} 
+                      <input
+                        type="text"
+                        value={designerRole1}
                         onChange={e => setDesignerRole1(e.target.value)}
                         placeholder="e.g. Lead Trainer"
                         style={{ width: '100%', padding: '6px 8px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#0F172A', fontSize: '0.75rem', fontWeight: 600 }}
@@ -1239,7 +1258,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       ))}
                     </select>
 
-                    <div 
+                    <div
                       title="Trainer Signature Preview"
                       style={{
                         width: '70px', height: '30px', borderRadius: '6px', border: '1px solid #CBD5E1',
@@ -1247,9 +1266,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                         display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
                       }}
                     >
-                      <img 
-                        src={activeTrainerSigUrl} 
-                        alt="Trainer Sig" 
+                      <img
+                        src={activeTrainerSigUrl}
+                        alt="Trainer Sig"
                         style={{ maxHeight: '26px', maxWidth: '64px', objectFit: 'contain' }}
                         onError={e => { e.target.src = '/assets/signatures/aakash_verma_signature.svg'; }}
                       />
@@ -1286,16 +1305,16 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       ))}
                     </select>
 
-                    <div 
+                    <div
                       title="Active Seal Preview"
                       style={{
                         width: '38px', height: '38px', borderRadius: '6px', border: '1px solid #CBD5E1',
                         background: '#0B1220', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
                       }}
                     >
-                      <img 
-                        src={activeSealUrl} 
-                        alt="Seal Preview" 
+                      <img
+                        src={activeSealUrl}
+                        alt="Seal Preview"
                         style={{ width: '34px', height: '34px', objectFit: 'contain' }}
                         onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
                       />
@@ -1404,15 +1423,15 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
           {/* Right Live Canvas Preview (Exact match of reference certificate) */}
           <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0B132B' }}>
-            
+
             <div style={{
               width: '100%', maxWidth: '780px', aspectRatio: '1.414 / 1',
               background: '#081226', padding: '10px', borderRadius: '14px', position: 'relative', overflow: 'hidden',
               boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
             }}>
-              
+
               {/* Inner White Canvas with Gold Border */}
-              <div 
+              <div
                 ref={certCanvasRef}
                 style={{
                   width: '100%', height: '100%', background: '#FFFFFF', borderRadius: '10px',
@@ -1420,7 +1439,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
                 }}
               >
-                
+
                 {/* Top-Right Polygon Geometry */}
                 <svg viewBox="0 0 300 300" style={{ position: 'absolute', top: 0, right: 0, width: '260px', height: '260px', pointerEvents: 'none', zIndex: 1 }} fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M 80 0 L 300 0 L 300 220 Z" fill="#0B1A38" opacity="0.95"/>
@@ -1431,7 +1450,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                 {/* 3D Gold Ribbon Medallion Seal Badge with Manual & Interactive Drag Placement */}
                 {showCompanySeal && (
-                  <div 
+                  <div
                     onMouseDown={handleSealMouseDown}
                     onTouchStart={handleSealMouseDown}
                     title="Click & Drag to reposition the official seal anywhere on the certificate"
@@ -1442,9 +1461,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       borderRadius: '8px'
                     }}
                   >
-                    <img 
-                      src={activeSealUrl || "/assets/seals/retailedge_pro_gold_seal.svg"} 
-                      alt="Gold Seal Medallion" 
+                    <img
+                      src={activeSealUrl || "/assets/seals/retailedge_pro_gold_seal.svg"}
+                      alt="Gold Seal Medallion"
                       draggable={false}
                       style={{ width: '100%', height: '100%', objectFit: 'contain', pointerEvents: 'none', userSelect: 'none' }}
                       onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
@@ -1464,7 +1483,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                 {/* Canvas Body Content */}
                 <div style={{ padding: '18px 26px 6px 26px', position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                  
+
                   {/* Top Bar: Brand & Certificate ID */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -1549,13 +1568,13 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                   {/* Lower Section: Signatures & QR Code */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '6px' }}>
-                    
+
                     {/* Authorized Signatory Block */}
                     <div style={{ width: '190px', visibility: showAuthSig ? 'visible' : 'hidden' }}>
                       <div style={{ height: '36px', display: 'flex', alignItems: 'center' }}>
-                        <img 
-                          src={activeAuthSigUrl || "/assets/signatures/amit_kumar_signature.svg"} 
-                          alt="Signature" 
+                        <img
+                          src={activeAuthSigUrl || "/assets/signatures/amit_kumar_signature.svg"}
+                          alt="Signature"
                           style={{ maxHeight: '32px', maxWidth: '135px', objectFit: 'contain' }}
                           onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
                         />
@@ -1609,10 +1628,10 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {/* ─── TAB 3: CERTIFICATION ANALYTICS ─── */}
       {isCertAuthority && activeTab === 'analytics' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          
+
           {/* Charts Row */}
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '20px' }}>
-            
+
             {/* Monthly Trend Chart */}
             <div className="glass-card" style={{ padding: '20px' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px 0' }}>
@@ -1699,7 +1718,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {/* ─── TAB 4: BATCH ELIGIBILITY & BULK GENERATOR ─── */}
       {isCertAuthority && activeTab === 'bulk' && (
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
-          
+
           {/* Header Bar */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
             <div>
@@ -1712,8 +1731,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </div>
 
             <div style={{ display: 'flex', gap: '10px' }}>
-              <select 
-                value={bulkProjectId} 
+              <select
+                value={bulkProjectId}
                 onChange={e => setBulkProjectId(e.target.value)}
                 style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontSize: '0.82rem', fontWeight: 600 }}
               >
@@ -1722,15 +1741,15 @@ export default function Certificates({ initialTab = 'ledger' }) {
                 ))}
               </select>
 
-              <input 
-                type="text" 
-                value={bulkBatchName} 
+              <input
+                type="text"
+                value={bulkBatchName}
                 onChange={e => setBulkBatchName(e.target.value)}
                 placeholder="Batch Name"
                 style={{ width: '180px', padding: '8px 12px', borderRadius: '8px', border: '1px solid #CBD5E1', background: 'var(--bg-glass)', color: 'var(--text-primary)', fontSize: '0.82rem' }}
               />
 
-              <button 
+              <button
                 onClick={handleEvaluateBulk}
                 style={{ padding: '8px 16px', background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
               >
@@ -1751,8 +1770,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
               <thead>
                 <tr>
                   <th style={{ width: '40px' }}>
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={bulkSelectedIds.length > 0 && bulkSelectedIds.length === bulkParticipants.filter(p => p.isEligible).length}
                       onChange={e => {
                         if (e.target.checked) setBulkSelectedIds(bulkParticipants.filter(p => p.isEligible).map(p => p.id));
@@ -1774,8 +1793,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   return (
                     <tr key={p.id} style={{ background: isSelected ? 'rgba(37,99,235,0.04)' : undefined }}>
                       <td>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           disabled={!p.isEligible}
                           checked={isSelected}
                           onChange={() => {
@@ -1815,7 +1834,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
               Selected <strong style={{ color: '#2563EB' }}>{bulkSelectedIds.length}</strong> eligible participants for issuance
             </span>
 
-            <button 
+            <button
               onClick={handleExecuteBulkGeneration}
               disabled={bulkGenerating || bulkSelectedIds.length === 0}
               style={{
@@ -1841,11 +1860,12 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── MODAL: CERTIFICATE CREATION WIZARD ─── */}
-      {isCertAuthority && (
+      {(isCertAuthority || user?.role === 'Trainer') && (
         <CertificateCreationWizard
           isOpen={isWizardOpen}
           onClose={() => setIsWizardOpen(false)}
           token={token}
+          user={user}
           projects={projects}
           clients={clients}
           onSuccess={() => {
@@ -1877,7 +1897,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {previewCert && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050, backdropFilter: 'blur(6px)' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '820px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-            
+
             <div style={{ padding: '18px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
@@ -1898,14 +1918,14 @@ export default function Certificates({ initialTab = 'ledger' }) {
                 background: '#081226', padding: '10px', borderRadius: '14px', position: 'relative', overflow: 'hidden',
                 boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
               }}>
-                
+
                 {/* Inner White Canvas with Gold Border */}
                 <div style={{
                   width: '100%', height: '100%', background: '#FFFFFF', borderRadius: '10px',
                   border: '1.5px solid #C5A059', position: 'relative', overflow: 'hidden',
                   display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
                 }}>
-                  
+
                   {/* Top-Right Polygon Geometry */}
                   <svg viewBox="0 0 300 300" style={{ position: 'absolute', top: 0, right: 0, width: '250px', height: '250px', pointerEvents: 'none', zIndex: 1 }} fill="none" xmlns="http://www.w3.org/2000/svg">
                     <path d="M 80 0 L 300 0 L 300 220 Z" fill="#0B1A38" opacity="0.95"/>
@@ -1920,9 +1940,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       ...getSealPlacementStyle(previewCert.sealPosition || previewCert.certificateSnapshot?.companySeal?.position || { preset: 'top-right', x: 84, y: 6, scale: 100 }),
                       zIndex: 10
                     }}>
-                      <img 
-                        src={previewCert.companySealUrl || '/assets/seals/retailedge_pro_gold_seal.svg'} 
-                        alt="Gold Seal Medallion" 
+                      <img
+                        src={previewCert.companySealUrl || '/assets/seals/retailedge_pro_gold_seal.svg'}
+                        alt="Gold Seal Medallion"
                         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                         onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
                       />
@@ -1931,7 +1951,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                   {/* Canvas Body Content */}
                   <div style={{ padding: '18px 26px 6px 26px', position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-                    
+
                     {/* Top Bar: Brand & Certificate ID */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -2020,13 +2040,13 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
                     {/* Lower Section: Signatures & QR Code */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '6px' }}>
-                      
+
                       {/* Authorized Signatory Block */}
                       <div style={{ width: '190px' }}>
                         <div style={{ height: '36px', display: 'flex', alignItems: 'center' }}>
-                          <img 
-                            src={previewCert.authorizedSignatureUrl || '/assets/signatures/amit_kumar_signature.svg'} 
-                            alt="Signature" 
+                          <img
+                            src={previewCert.authorizedSignatureUrl || '/assets/signatures/amit_kumar_signature.svg'}
+                            alt="Signature"
                             style={{ maxHeight: '32px', maxWidth: '135px', objectFit: 'contain' }}
                             onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
                           />
@@ -2072,13 +2092,13 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </div>
 
             <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: '#F8FAFC' }}>
-              <button 
+              <button
                 onClick={() => handleDownloadPDF(previewCert.id, previewCert.User?.name)}
                 style={{ padding: '8px 16px', background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <Download size={14} /> Download PDF
               </button>
-              <button 
+              <button
                 onClick={() => setPreviewCert(null)}
                 style={{ padding: '8px 16px', background: '#E2E8F0', color: '#0F172A', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
               >
@@ -2112,7 +2132,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                 Mandatory Reason for Revocation:
               </label>
-              <textarea 
+              <textarea
                 rows="3"
                 value={revokeReason}
                 onChange={e => setRevokeReason(e.target.value)}
@@ -2122,13 +2142,13 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
-              <button 
+              <button
                 onClick={() => { setRevokeCert(null); setRevokeReason(''); }}
                 style={{ padding: '8px 16px', background: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleConfirmRevoke}
                 disabled={actionLoading || !revokeReason.trim()}
                 style={{ padding: '8px 18px', background: '#EF4444', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: (!revokeReason.trim() || actionLoading) ? 'not-allowed' : 'pointer' }}
@@ -2162,7 +2182,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
               <label style={{ display: 'block', fontSize: '0.78rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
                 Reason for Reissue (Optional):
               </label>
-              <input 
+              <input
                 type="text"
                 value={reissueReason}
                 onChange={e => setReissueReason(e.target.value)}
@@ -2172,13 +2192,13 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '4px' }}>
-              <button 
+              <button
                 onClick={() => { setReissueCert(null); setReissueReason(''); }}
                 style={{ padding: '8px 16px', background: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleConfirmReissue}
                 disabled={actionLoading}
                 style={{ padding: '8px 18px', background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: actionLoading ? 'not-allowed' : 'pointer' }}
@@ -2194,7 +2214,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       {isCertAuthority && isAssetModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, backdropFilter: 'blur(6px)' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '580px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
-            
+
             {/* Header */}
             <div style={{ padding: '18px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2217,7 +2237,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
             {/* Content Body */}
             <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '72vh', overflowY: 'auto' }}>
-              
+
               {/* Input Mode Selector */}
               <div style={{ display: 'flex', gap: '6px', background: '#F1F5F9', padding: '4px', borderRadius: '10px' }}>
                 <button
@@ -2267,17 +2287,17 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
               {/* Mode 1: File Dropzone */}
               {assetUploadMode === 'file' && (
-                <div 
+                <div
                   onClick={() => document.getElementById('certAssetFileInput').click()}
                   style={{
                     border: '2px dashed #93C5FD', borderRadius: '12px', padding: '24px 16px', textAlign: 'center',
                     background: 'rgba(37,99,235,0.02)', cursor: 'pointer', transition: 'all 0.2s'
                   }}
                 >
-                  <input 
-                    id="certAssetFileInput" 
-                    type="file" 
-                    accept="image/png,image/svg+xml,image/jpeg,image/webp" 
+                  <input
+                    id="certAssetFileInput"
+                    type="file"
+                    accept="image/png,image/svg+xml,image/jpeg,image/webp"
                     style={{ display: 'none' }}
                     onChange={e => {
                       if (e.target.files && e.target.files[0]) {
@@ -2308,9 +2328,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
                     <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
                       Draw your digital signature below:
                     </label>
-                    <button 
-                      type="button" 
-                      onClick={clearCanvas} 
+                    <button
+                      type="button"
+                      onClick={clearCanvas}
                       style={{ background: '#F1F5F9', border: '1px solid #CBD5E1', padding: '3px 8px', borderRadius: '5px', fontSize: '0.7rem', color: '#64748B', cursor: 'pointer' }}
                     >
                       Clear Pad
@@ -2395,10 +2415,10 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
               {/* Set Default Option */}
               <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.78rem', color: '#334155', cursor: 'pointer' }}>
-                <input 
-                  type="checkbox" 
-                  checked={isAssetDefault} 
-                  onChange={e => setIsAssetDefault(e.target.checked)} 
+                <input
+                  type="checkbox"
+                  checked={isAssetDefault}
+                  onChange={e => setIsAssetDefault(e.target.checked)}
                 />
                 <span style={{ fontWeight: 600 }}>Set as active default asset for new certificates</span>
               </label>

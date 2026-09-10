@@ -10,8 +10,8 @@ import { AuthContext } from '../context/AuthContext';
 import { getSocket } from '../utils/socketService';
 import { generate15SlidePPT } from '../utils/pptHelper';
 import { generateExcelReport } from '../utils/excelHelper';
-import { downloadWorkbook, downloadPPT } from '../utils/downloadWorkbook';
 import ReportCenterView from '../components/ReportCenterView';
+import TrainerReportCenter from '../components/TrainerReportCenter';
 
 export default function Reports() {
   const { token, user } = useContext(AuthContext);
@@ -803,12 +803,12 @@ export default function Reports() {
       status: r.status || 'Finished'
     }));
 
-    // Use real database sessions if available; fall back to mock sessions only when no real data exists
-    const combined = formattedDb.length > 0 ? formattedDb : MOCK_SESSIONS;
+    // Use real database sessions
+    const combined = formattedDb;
 
     return combined.filter(r => 
-      r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.projectName.toLowerCase().includes(searchQuery.toLowerCase())
+      (r.title || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.projectName || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
   };
 
@@ -907,6 +907,14 @@ export default function Reports() {
   const cPath = trendData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getCY(d.c)}`).join(' ');
   const sPath = trendData.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)},${getSY(d.s)}`).join(' ');
 
+
+  if (user?.role === 'Trainer') {
+    return (
+      <div style={{ padding: '24px', background: 'var(--bg-glass)', minHeight: '100%', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>
+        <TrainerReportCenter token={token} user={user} />
+      </div>
+    );
+  }
 
   return (
     <div style={{ padding: '24px', background: 'var(--bg-glass)', minHeight: '100%', fontFamily: 'Poppins, sans-serif', boxSizing: 'border-box' }}>

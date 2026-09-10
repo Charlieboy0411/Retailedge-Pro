@@ -578,7 +578,10 @@ async function generatePDFBuffer(cert) {
 
     const page = await browser.newPage();
     await page.setViewport({ width: 1123, height: 794, deviceScaleFactor: 2 });
-    await page.setContent(htmlContent, { waitUntil: ['load', 'networkidle0'] });
+    await page.setContent(htmlContent, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    try {
+      await page.evaluateHandle('document.fonts.ready');
+    } catch (_) {}
 
     const pdfBuffer = await page.pdf({
       width: '1123px',

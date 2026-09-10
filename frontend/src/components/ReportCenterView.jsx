@@ -33,6 +33,11 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
 
   // Fetch Available Reports
   const fetchAvailableReports = async () => {
+    if (user?.role === 'Trainer') {
+      setLoading(false);
+      setReports([]);
+      return;
+    }
     try {
       setLoading(true);
       setError('');

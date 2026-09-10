@@ -844,6 +844,14 @@ router.post('/bulk-generate', requireAuth, requireRole(['Admin', 'Super Admin', 
       }
     }
 
+    if (req.user.role === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const trainerProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!projectId || !trainerProjectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
+      }
+    }
+
     const project = projectId ? await Project.findByPk(projectId) : null;
     const client = clientId ? await Client.findByPk(clientId) : null;
     const generated = [];

@@ -1,20 +1,21 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Users, CheckCircle, BarChart2, TrendingUp, Star, Calendar, 
-  ChevronDown, Plus, Play, Edit3, Trash2, WifiOff, Check, Copy, 
+import {
+  Users, CheckCircle, BarChart2, TrendingUp, Star, Calendar,
+  ChevronDown, Plus, Play, Edit3, Trash2, WifiOff, Check, Copy,
   X, Mail, BookOpen, Award, ArrowUpRight, Search, FileText,
   Volume2, HelpCircle, Clock, Video, Radio, AlertTriangle, CheckCircle2,
-  Filter, ChevronRight, UserCheck, ShieldCheck, RefreshCw, Zap
+  Filter, ChevronRight, UserCheck, ShieldCheck, RefreshCw, Zap, Activity
 } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CalendarWidget from './CalendarWidget';
+import ProjectFolder from './ProjectFolder';
 
-export default function TrainerDashboard({ 
-  quizzes = [], 
-  projects = [], 
-  usersList = [], 
+export default function TrainerDashboard({
+  quizzes = [],
+  projects = [],
+  usersList = [],
   token,
   user,
   meetings = [],
@@ -24,15 +25,32 @@ export default function TrainerDashboard({
   const [selectedDateFilter, setSelectedDateFilter] = useState('Last 7 Days');
   const [showDateDropdown, setShowDateDropdown] = useState(false);
   const [showActionDropdown, setShowActionDropdown] = useState(false);
-  
+
   // Operational state for Trainer Cockpit
   const [trainerProjects, setTrainerProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
   const [operationalParticipants, setOperationalParticipants] = useState([]);
   const [operationalSessions, setOperationalSessions] = useState([]);
+  const [trainerReports, setTrainerReports] = useState([]);
   const [loadingCockpit, setLoadingCockpit] = useState(false);
   const [coachingFilter, setCoachingFilter] = useState('all');
-  
+
+  // Synchronisation State Machine: 'idle' | 'syncing' | 'success' | 'error'
+  const [syncStatus, setSyncStatus] = useState('idle');
+  const [lastSyncedTime, setLastSyncedTime] = useState(new Date());
+  const [syncError, setSyncError] = useState('');
+  const isSyncingRef = useRef(false);
+
+  const formatSyncTime = (d) => {
+    if (!d) return '';
+    const day = String(d.getDate()).padStart(2, '0');
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[d.getMonth()];
+    const year = d.getFullYear();
+    const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return `${day} ${month} ${year}, ${time}`;
+  };
+
   // Modals state
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState(false);
@@ -43,7 +61,7 @@ export default function TrainerDashboard({
   const [scheduledMeetingDetails, setScheduledMeetingDetails] = useState(null);
   const [memberSearch, setMemberSearch] = useState('');
   const [isUrlCustom, setIsUrlCustom] = useState(false);
-  
+
   // Meeting form
   const [meetingForm, setMeetingForm] = useState({
     title: '',
@@ -56,11 +74,11 @@ export default function TrainerDashboard({
   });
 
   // Offline form
-  const [offlineForm, setOfflineForm] = useState({ 
-    isOffline: false, 
-    startNow: true,   // when true, startTime is ignored (quiz starts immediately)
-    startTime: '', 
-    endTime: '' 
+  const [offlineForm, setOfflineForm] = useState({
+    isOffline: false,
+    startNow: true,
+    startTime: '',
+    endTime: ''
   });
   const [offlineQuizLink, setOfflineQuizLink] = useState('');
   const [offlineBaseUrl, setOfflineBaseUrl] = useState(window.location.origin);
@@ -86,35 +104,123 @@ export default function TrainerDashboard({
 
   // Donut chart drilldown state
   const [drilldownProject, setDrilldownProject] = useState(null);
-  
-  // Performance chart timeline state
-  const [chartTimeline, setChartTimeline] = useState('Weekly'); // Daily, Weekly, Monthly
 
-  const chartData = {
-    Daily: {
-      labels: ['05 Jun', '06 Jun', '07 Jun', '08 Jun', '09 Jun', '10 Jun', '11 Jun'],
-      participants: [15, 13, 16, 14, 18, 12, 9],
-      completion: [52, 65, 81, 74, 91, 78, 85],
-      avgScore: [70, 82, 78, 76, 74, 68, 71]
-    },
-    Weekly: {
-      labels: ['Week 20', 'Week 21', 'Week 22', 'Week 23', 'Week 24'],
-      participants: [35, 48, 42, 55, 68],
-      completion: [62, 70, 78, 84, 91],
-      avgScore: [68, 72, 75, 78, 82]
-    },
-    Monthly: {
-      labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-      participants: [110, 130, 155, 140, 190, 230],
-      completion: [58, 64, 72, 78, 85, 91],
-      avgScore: [60, 65, 70, 74, 76, 80]
+  // Performance chart timeline state
+  const [chartTimeline, setChartTimeline] = useState('Monthly'); // Daily, Weekly, Monthly
+
+  // Dynamic Performance Trend Calculation (Ending in September 2026)
+  const computeDynamicTrend = () => {
+    const now = new Date(); // Context: 2026-09-10
+    const scopedReports = trainerReports.filter(r => {
+      if (selectedProjectId === 'all') return true;
+      return r.projectId === selectedProjectId || r.projectName === trainerProjects.find(p => p.id === selectedProjectId)?.name;
+    });
+
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+    if (chartTimeline === 'Daily') {
+      const labels = [];
+      const participants = [];
+      const completion = [];
+      const avgScore = [];
+
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now);
+        d.setDate(now.getDate() - i);
+        const dayStr = String(d.getDate()).padStart(2, '0');
+        const monthStr = monthNames[d.getMonth()];
+        labels.push(`${dayStr} ${monthStr}`);
+
+        const dateIso = d.toISOString().split('T')[0];
+        const dayMatches = scopedReports.filter(r => r.date === dateIso);
+        const dayParts = dayMatches.reduce((sum, r) => sum + (r.participants || 0), 0);
+        participants.push(dayParts);
+
+        if (dayMatches.length > 0) {
+          const avgSc = Math.round(dayMatches.reduce((sum, r) => sum + (parseInt(r.avgScore) || 0), 0) / dayMatches.length);
+          avgScore.push(avgSc);
+          completion.push(avgSc > 0 ? 100 : 0);
+        } else {
+          avgScore.push(0);
+          completion.push(0);
+        }
+      }
+
+      const totalP = participants.reduce((a, b) => a + b, 0);
+      return { labels, participants, completion, avgScore, hasData: totalP > 0 || scopedReports.length > 0 };
     }
+
+    if (chartTimeline === 'Weekly') {
+      const labels = [];
+      const participants = [];
+      const completion = [];
+      const avgScore = [];
+
+      for (let i = 4; i >= 0; i--) {
+        const endD = new Date(now);
+        endD.setDate(now.getDate() - (i * 7));
+        const startD = new Date(endD);
+        startD.setDate(endD.getDate() - 6);
+
+        labels.push(`W-${5 - i} (${endD.getDate()} ${monthNames[endD.getMonth()]})`);
+
+        const weekMatches = scopedReports.filter(r => {
+          if (!r.date) return false;
+          const rDate = new Date(r.date);
+          return rDate >= startD && rDate <= endD;
+        });
+
+        const weekParts = weekMatches.reduce((sum, r) => sum + (r.participants || 0), 0);
+        participants.push(weekParts);
+
+        if (weekMatches.length > 0) {
+          const avgSc = Math.round(weekMatches.reduce((sum, r) => sum + (parseInt(r.avgScore) || 0), 0) / weekMatches.length);
+          avgScore.push(avgSc);
+          completion.push(avgSc > 0 ? 100 : 0);
+        } else {
+          avgScore.push(0);
+          completion.push(0);
+        }
+      }
+
+      const totalP = participants.reduce((a, b) => a + b, 0);
+      return { labels, participants, completion, avgScore, hasData: totalP > 0 || scopedReports.length > 0 };
+    }
+
+    // Monthly: Rolling 6 months ending in current month (e.g. Apr, May, Jun, Jul, Aug, Sep)
+    const labels = [];
+    const participants = [];
+    const completion = [];
+    const avgScore = [];
+
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      labels.push(monthNames[d.getMonth()]);
+
+      const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthMatches = scopedReports.filter(r => r.date && r.date.startsWith(ym));
+
+      const monthParts = monthMatches.reduce((sum, r) => sum + (r.participants || 0), 0);
+      participants.push(monthParts);
+
+      if (monthMatches.length > 0) {
+        const avgSc = Math.round(monthMatches.reduce((sum, r) => sum + (parseInt(r.avgScore) || 0), 0) / monthMatches.length);
+        avgScore.push(avgSc);
+        completion.push(avgSc > 0 ? 100 : 0);
+      } else {
+        avgScore.push(0);
+        completion.push(0);
+      }
+    }
+
+    const totalP = participants.reduce((a, b) => a + b, 0);
+    return { labels, participants, completion, avgScore, hasData: totalP > 0 || scopedReports.length > 0 };
   };
 
-  const currentData = chartData[chartTimeline] || chartData.Weekly;
-  const nPoints = currentData.labels.length;
-  const maxPart = Math.max(...currentData.participants);
-  const partScale = maxPart > 0 ? maxPart * 1.2 : 30;
+  const currentTrend = computeDynamicTrend();
+  const nPoints = currentTrend.labels.length;
+  const maxPart = Math.max(...currentTrend.participants, 0);
+  const partScale = maxPart > 0 ? Math.ceil(maxPart * 1.25) : 20;
 
   const handleProjectChange = (projId) => {
     const projectMembers = usersList
@@ -132,11 +238,9 @@ export default function TrainerDashboard({
   };
 
   useEffect(() => {
-    // Rotates tips daily or simply on load
     const idx = Math.floor(Math.random() * TIPS.length);
     setTipIndex(idx);
 
-    // Fetch join URL for offline mode
     const fetchJoinUrl = async () => {
       try {
         const res = await axios.get('/api/join-url');
@@ -151,50 +255,89 @@ export default function TrainerDashboard({
   }, []);
 
   // Operational Trainer Cockpit Data Fetching
-  useEffect(() => {
+  const fetchTrainerCockpitData = async (isSilent = false) => {
     if (!token) return;
-    const fetchTrainerCockpitData = async () => {
+    try {
+      if (!isSilent) setLoadingCockpit(true);
+      // 1. Fetch assigned projects via /api/projects/my-projects
+      const projRes = await axios.get('/api/projects/my-projects', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const assignedProjects = projRes.data || [];
+      setTrainerProjects(assignedProjects);
+
+      // 2. Fetch trainings/sessions
+      const trainRes = await axios.get('/api/trainings', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const allTrainings = trainRes.data || [];
+      setOperationalSessions(allTrainings);
+
+      // 3. Fetch participants & eligibility metrics via /api/certificates/eligibility
+      const targetProj = selectedProjectId !== 'all' ? selectedProjectId : (assignedProjects[0]?.id || 'all');
       try {
-        setLoadingCockpit(true);
-        // 1. Fetch assigned projects via /api/projects/my-projects
-        const projRes = await axios.get('/api/projects/my-projects', {
+        const eligRes = await axios.post('/api/certificates/eligibility', {
+          projectId: targetProj,
+          minAttendance: 80,
+          minScore: 70,
+          minCompletion: 100
+        }, {
           headers: { Authorization: `Bearer ${token}` }
         });
-        const assignedProjects = projRes.data || [];
-        setTrainerProjects(assignedProjects);
-
-        // 2. Fetch trainings/sessions
-        const trainRes = await axios.get('/api/trainings', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        const allTrainings = trainRes.data || [];
-        setOperationalSessions(allTrainings);
-
-        // 3. Fetch participants & eligibility metrics via /api/certificates/eligibility
-        const targetProj = selectedProjectId !== 'all' ? selectedProjectId : (assignedProjects[0]?.id || 'all');
-        try {
-          const eligRes = await axios.post('/api/certificates/eligibility', {
-            projectId: targetProj,
-            minAttendance: 80,
-            minScore: 70,
-            minCompletion: 100
-          }, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (eligRes.data && eligRes.data.participants) {
-            setOperationalParticipants(eligRes.data.participants);
-          }
-        } catch (eligErr) {
-          console.error('Participant eligibility fetch error:', eligErr);
+        if (eligRes.data && eligRes.data.participants) {
+          setOperationalParticipants(eligRes.data.participants);
         }
-      } catch (err) {
-        console.error('Trainer cockpit data error:', err);
-      } finally {
-        setLoadingCockpit(false);
+      } catch (eligErr) {
+        console.warn('Participant eligibility fetch error:', eligErr);
       }
-    };
+
+      // 4. Fetch live session reports hosted by trainer
+      try {
+        const repRes = await axios.get('/api/reports', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        setTrainerReports(repRes.data || []);
+      } catch (repErr) {
+        console.warn('Trainer reports fetch error:', repErr);
+      }
+    } catch (err) {
+      console.error('Trainer cockpit data error:', err);
+    } finally {
+      if (!isSilent) setLoadingCockpit(false);
+    }
+  };
+
+  useEffect(() => {
     fetchTrainerCockpitData();
   }, [token, selectedProjectId]);
+
+  // Authoritative Synchronization Action Handler
+  const handleSyncDashboard = async () => {
+    if (isSyncingRef.current) return;
+    try {
+      isSyncingRef.current = true;
+      setSyncStatus('syncing');
+      setSyncError('');
+
+      const promises = [fetchTrainerCockpitData(true)];
+      if (fetchAllData) {
+        promises.push(fetchAllData(true));
+      }
+      await Promise.all(promises);
+
+      const now = new Date();
+      setLastSyncedTime(now);
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus('idle'), 3500);
+    } catch (err) {
+      console.error('Trainer dashboard sync failed:', err);
+      setSyncStatus('error');
+      setSyncError('Sync failed');
+      setTimeout(() => setSyncStatus('idle'), 4000);
+    } finally {
+      isSyncingRef.current = false;
+    }
+  };
 
   // URL generator for meeting modal based on chosen platform (Google Meet / Jitsi)
   useEffect(() => {
@@ -282,7 +425,7 @@ export default function TrainerDashboard({
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (offlineForm.isOffline) {
         setIsOfflineSuccessView(true);
       } else {
@@ -324,7 +467,7 @@ export default function TrainerDashboard({
   const handleOpenOfflineModal = (quiz) => {
     setSelectedOfflineQuiz(quiz);
     const conf = quiz.config || {};
-    
+
     const formatDatetimeLocal = (isoStr) => {
       if (!isoStr) return '';
       const date = new Date(isoStr);
@@ -384,36 +527,34 @@ export default function TrainerDashboard({
     if (!s.scheduledAt) return false;
     return s.scheduledAt.startsWith(todayDateStr);
   });
-  const todaySessionsCount = todaySessionsList.length > 0 ? todaySessionsList.length : 1;
+  const todaySessionsCount = todaySessionsList.length;
 
   const upcomingSessionsList = filteredSessions.filter(s => {
     if (!s.scheduledAt) return false;
     return new Date(s.scheduledAt) >= new Date();
   });
-  const upcomingSessionsCount = upcomingSessionsList.length > 0 ? upcomingSessionsList.length : 3;
+  const upcomingSessionsCount = upcomingSessionsList.length;
 
   const liveSessionsCount = filteredSessions.filter(s => s.status === 'Ongoing' || s.isLive).length;
 
-  const totalParticipantsCount = operationalParticipants.length > 0 ? operationalParticipants.length : 18;
+  const totalParticipantsCount = operationalParticipants.length;
 
   const attendanceRate = operationalParticipants.length > 0
     ? Math.round(operationalParticipants.reduce((sum, p) => sum + (p.attendancePercentage || 0), 0) / operationalParticipants.length)
-    : 89;
+    : 0;
 
-  const activeQuizzesCount = quizzes.length > 0 ? quizzes.length : 4;
+  const activeQuizzesCount = quizzes.length;
 
   const avgQuizScore = operationalParticipants.length > 0
     ? Math.round(operationalParticipants.reduce((sum, p) => sum + (p.assessmentScore || 0), 0) / operationalParticipants.length)
-    : 76;
+    : 0;
 
   // Authoritative RetailEdge Pro Rule:
   // Attendance >= 80% AND Passing Assessment >= 70% AND Not Yet Certified
-  const certificationReadyParticipants = operationalParticipants.filter(p => 
+  const certificationReadyParticipants = operationalParticipants.filter(p =>
     (p.attendancePercentage || 0) >= 80 && (p.assessmentScore || 0) >= 70
   );
-  const certificationReadyCount = operationalParticipants.length > 0
-    ? certificationReadyParticipants.length
-    : 12;
+  const certificationReadyCount = certificationReadyParticipants.length;
 
   // Coaching Status Classification:
   // <60% At Risk, 60-74% Needs Review, >=75% On Track
@@ -433,7 +574,7 @@ export default function TrainerDashboard({
   });
 
   const totalQuizzes = quizzes.length;
-  
+
   // Date Picker Option Click
   const handleDateFilterSelect = (val) => {
     setSelectedDateFilter(val);
@@ -442,7 +583,7 @@ export default function TrainerDashboard({
 
   return (
     <div style={{ padding: '0px', fontFamily: 'Poppins, sans-serif', color: 'var(--text-primary)' }}>
-      
+
       {/* ─── HEADER ROW ─── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
@@ -453,10 +594,45 @@ export default function TrainerDashboard({
             Operational Cockpit — Training Delivery & Participant Coaching Roster
           </p>
         </div>
-        
+
         {/* Right Header Filters & CTA */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', position: 'relative', flexWrap: 'wrap' }}>
-          
+
+          {/* Authoritative Sync Button with State Machine */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <button
+              onClick={handleSyncDashboard}
+              disabled={syncStatus === 'syncing'}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                background: syncStatus === 'success' ? 'rgba(16, 185, 129, 0.12)' : (syncStatus === 'error' ? 'rgba(239, 68, 68, 0.12)' : 'var(--bg-glass)'),
+                border: syncStatus === 'success' ? '1.5px solid #10B981' : (syncStatus === 'error' ? '1.5px solid #EF4444' : '1px solid #B7BEC7'),
+                borderRadius: '10px',
+                padding: '0 16px',
+                fontSize: '0.84rem',
+                fontWeight: 700,
+                color: syncStatus === 'success' ? '#059669' : (syncStatus === 'error' ? '#DC2626' : 'var(--text-primary)'),
+                cursor: syncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                height: '42px',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.04)',
+                transition: 'all 0.2s'
+              }}
+              title="Synchronize training sessions, attendance, and assessment metrics"
+            >
+              <RefreshCw size={15} style={{ animation: syncStatus === 'syncing' ? 'spin 1s linear infinite' : 'none' }} />
+              <span>
+                {syncStatus === 'syncing' ? '↻ Syncing…' : (syncStatus === 'success' ? '✓ Synced just now' : (syncStatus === 'error' ? '⚠ Sync failed — Retry' : 'Sync'))}
+              </span>
+            </button>
+            {lastSyncedTime && (
+              <span style={{ fontSize: '0.66rem', color: 'var(--text-secondary)', marginTop: '3px' }}>
+                Last synced: {formatSyncTime(lastSyncedTime)}
+              </span>
+            )}
+          </div>
+
           {/* Assigned Projects Selector */}
           <div style={{ position: 'relative' }}>
             <select
@@ -488,7 +664,7 @@ export default function TrainerDashboard({
 
           {/* Date Range Filter Button */}
           <div style={{ position: 'relative' }}>
-            <button 
+            <button
               onClick={() => setShowDateDropdown(!showDateDropdown)}
               style={{
                 display: 'flex',
@@ -524,7 +700,7 @@ export default function TrainerDashboard({
                 overflow: 'hidden'
               }}>
                 {['Today', 'Last 7 Days', 'Last 30 Days', 'Custom Range'].map(opt => (
-                  <div 
+                  <div
                     key={opt}
                     onClick={() => handleDateFilterSelect(opt)}
                     style={{
@@ -551,7 +727,7 @@ export default function TrainerDashboard({
 
           {/* Quick Action Button */}
           <div style={{ position: 'relative' }}>
-            <button 
+            <button
               onClick={() => setShowActionDropdown(!showActionDropdown)}
               style={{
                 display: 'flex',
@@ -592,7 +768,7 @@ export default function TrainerDashboard({
                   { label: 'Upload Content', action: () => navigate('/trainings') },
                   { label: 'Generate Certificate', action: () => navigate('/certificates') }
                 ].map(act => (
-                  <div 
+                  <div
                     key={act.label}
                     onClick={() => { act.action(); setShowActionDropdown(false); }}
                     style={{
@@ -618,7 +794,7 @@ export default function TrainerDashboard({
 
       {/* ─── 8 OPERATIONAL KPI CARDS GRID ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: '16px', marginBottom: '24px' }}>
-        
+
         {/* KPI 1: Today's Sessions */}
         <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', padding: '16px 18px', background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '14px', position: 'relative' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' }}>
@@ -749,19 +925,19 @@ export default function TrainerDashboard({
 
       </div>
 
-      {/* ─── SECTION 1: TODAY'S DELIVERY (OPERATIONAL SESSIONS COCKPIT) ─── */}
+      {/* ─── SECTION 1: OPERATIONAL SESSIONS & RECENT QUIZ BATCHES (PROJECT FOLDERS) ─── */}
       <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px', marginBottom: '24px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
             <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Clock size={19} color='var(--primary)' />
-              Today's Delivery — Operational Sessions
+              Operational Sessions & Recent Quiz Batches
             </h3>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '4px 0 0 0' }}>
-              "What do I need to deliver today?" Live batch execution, attendance rosters, and assessment launches.
+              Authoritative project hierarchy — live batch execution, attendance rosters, and assessment launches.
             </p>
           </div>
-          
+
           <button
             onClick={() => { setIsSuccessView(false); setIsUrlCustom(false); setIsMeetingModalOpen(true); }}
             style={{
@@ -775,108 +951,34 @@ export default function TrainerDashboard({
           </button>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.84rem' }}>
-            <thead>
-              <tr style={{ borderBottom: '2px solid rgba(183, 190, 199, 0.4)', color: 'var(--text-secondary)' }}>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Project / Subproject</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Topic / Session</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Schedule</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Participants</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Attendance</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700 }}>Quiz Status</th>
-                <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Primary Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredSessions.length > 0 ? (
-                filteredSessions.slice(0, 5).map((session, idx) => {
-                  const proj = session.Project || trainerProjects.find(p => p.id === session.projectId) || { name: 'Project Alpha' };
-                  const isToday = session.scheduledAt ? session.scheduledAt.startsWith(todayDateStr) : idx === 0;
-                  return (
-                    <tr key={session.id || idx} style={{ borderBottom: '1px solid rgba(183, 190, 199, 0.2)', transition: 'background 0.15s' }}>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--text-primary)', display: 'block' }}>{proj.name}</span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Batch-{idx + 1}</span>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{session.title || 'Retail Customer Experience Mastery'}</span>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                          {session.platform === 'jitsi' ? 'Jitsi Meet' : 'Google Meet'}
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: isToday ? '#2563EB' : 'var(--text-secondary)', fontWeight: 600 }}>
-                          <Clock size={13} />
-                          {session.scheduledAt ? new Date(session.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM - 11:30 AM'}
-                        </span>
-                        {isToday && (
-                          <span style={{ display: 'block', fontSize: '0.68rem', color: '#10B981', fontWeight: 700 }}>TODAY</span>
-                        )}
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{session.inviteeCount || (12 + idx * 2)} Enrolled</span>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <div style={{ width: '60px', height: '6px', background: 'rgba(183, 190, 199, 0.3)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${88 - idx * 4}%`, height: '100%', background: '#10B981', borderRadius: '3px' }} />
-                          </div>
-                          <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#10B981' }}>{88 - idx * 4}%</span>
-                        </div>
-                      </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          padding: '3px 8px', borderRadius: '6px', fontSize: '0.72rem', fontWeight: 700,
-                          background: idx % 2 === 0 ? 'rgba(16, 185, 129, 0.1)' : 'rgba(245, 158, 11, 0.1)',
-                          color: idx % 2 === 0 ? '#10B981' : '#F59E0B',
-                          border: `1px solid ${idx % 2 === 0 ? 'rgba(16, 185, 129, 0.25)' : 'rgba(245, 158, 11, 0.25)'}`
-                        }}>
-                          {idx % 2 === 0 ? 'Quiz Attached' : 'Quiz Pending'}
-                        </span>
-                      </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
-                        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                          <button
-                            onClick={() => {
-                              if (session.url) window.open(session.url, '_blank');
-                              else navigate('/attendance');
-                            }}
-                            style={{
-                              padding: '6px 12px', borderRadius: '6px',
-                              background: '#2563EB', color: 'white', border: 'none',
-                              fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                              display: 'inline-flex', alignItems: 'center', gap: '4px'
-                            }}
-                          >
-                            <Play size={12} fill="white" /> Launch Session
-                          </button>
-                          <button
-                            onClick={() => navigate('/attendance')}
-                            style={{
-                              padding: '6px 10px', borderRadius: '6px',
-                              background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7',
-                              fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer',
-                              color: 'var(--text-primary)'
-                            }}
-                          >
-                            Roster
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={7} style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)' }}>
-                    No sessions scheduled for this project selection. Click "Schedule Training Batch" to launch a live room.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+        {/* Project Folders Listing for Sessions */}
+        {trainerProjects.length > 0 ? (
+          <div>
+            {trainerProjects
+              .filter(p => selectedProjectId === 'all' || p.id === selectedProjectId)
+              .map(project => {
+                const projectSessions = filteredSessions.filter(s => s.projectId === project.id);
+                return (
+                  <ProjectFolder
+                    key={project.id}
+                    project={project}
+                    items={projectSessions}
+                    type="sessions"
+                    defaultExpanded={projectSessions.length > 0}
+                    onLaunchSession={(session) => {
+                      if (session.url) window.open(session.url, '_blank');
+                      else navigate('/attendance');
+                    }}
+                  />
+                );
+              })
+            }
+          </div>
+        ) : (
+          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', borderRadius: '10px' }}>
+            No assigned training projects available. Contact your administrator to be assigned to a retail project.
+          </div>
+        )}
       </div>
 
       {/* ─── SECTION 2: PARTICIPANT ATTENTION & COACHING (OPERATIONAL TRIAGE) ─── */}
@@ -1049,7 +1151,7 @@ export default function TrainerDashboard({
 
       {/* ─── MIDDLE SECTIONS: Performance Overview & Activity Feed ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '24px', marginBottom: '24px' }}>
-        
+
         {/* Performance Overview (Chart) */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -1057,7 +1159,7 @@ export default function TrainerDashboard({
               <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Performance Overview</h3>
               <p style={{ fontSize: '0.75rem', color: '#727A86', margin: '2px 0 0 0' }}>Training effectiveness & participation trends</p>
             </div>
-            
+
             {/* Chart Timeline Selection */}
             <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '8px', border: '1px solid #B7BEC7' }}>
               {['Daily', 'Weekly', 'Monthly'].map(tl => (
@@ -1081,7 +1183,7 @@ export default function TrainerDashboard({
               ))}
             </div>
           </div>
-          
+
           {/* Chart Legend */}
           <div style={{ display: 'flex', gap: '16px', marginBottom: '16px', fontSize: '0.78rem', fontWeight: 500 }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
@@ -1121,8 +1223,8 @@ export default function TrainerDashboard({
               <text x="470" y="174" fill="#727A86" fontSize="8" fontWeight="600" textAnchor="start">0%</text>
 
               {/* X Axis Labels */}
-              {currentData.labels.map((label, idx) => {
-                const x = 50 + (idx * (400 / (nPoints - 1)));
+              {currentTrend.labels.map((label, idx) => {
+                const x = 50 + (idx * (400 / Math.max(nPoints - 1, 1)));
                 return (
                   <text key={idx} x={x} y="186" fill="#727A86" fontSize="8" fontWeight="600" textAnchor="middle">
                     {label}
@@ -1131,41 +1233,41 @@ export default function TrainerDashboard({
               })}
 
               {/* Bars: Participants count */}
-              {currentData.participants.map((val, idx) => {
-                const x = 50 + (idx * (400 / (nPoints - 1)));
-                const height = (val / partScale) * 150;
+              {currentTrend.participants.map((val, idx) => {
+                const x = 50 + (idx * (400 / Math.max(nPoints - 1, 1)));
+                const height = partScale > 0 ? (val / partScale) * 150 : 0;
                 const y = 170 - height;
                 return (
                   <g key={idx}>
-                    <rect 
-                      x={x - 12} 
-                      y={y} 
-                      width="24" 
-                      height={height} 
-                      fill='var(--primary)' 
+                    <rect
+                      x={x - 12}
+                      y={y}
+                      width="24"
+                      height={height}
+                      fill='var(--primary)'
                       rx="4"
                       style={{ cursor: 'pointer', transition: 'fill 0.2s' }}
-                      onMouseOver={e => e.currentTarget.setAttribute('fill', 'var(--primary)')}
-                      onMouseOut={e => e.currentTarget.setAttribute('fill', 'var(--primary)')}
                     />
-                    <text x={x} y={y - 6} fill='var(--text-primary)' fontSize="7" fontWeight="700" textAnchor="middle">{val}</text>
+                    {val > 0 && (
+                      <text x={x} y={y - 6} fill='var(--text-primary)' fontSize="7" fontWeight="700" textAnchor="middle">{val}</text>
+                    )}
                   </g>
                 );
               })}
 
               {/* Line 1: Completion % */}
               {(() => {
-                const points = currentData.completion.map((val, idx) => {
-                  const x = 50 + (idx * (400 / (nPoints - 1)));
+                const points = currentTrend.completion.map((val, idx) => {
+                  const x = 50 + (idx * (400 / Math.max(nPoints - 1, 1)));
                   const y = 170 - (val / 100) * 150;
-                  return { x, y };
+                  return { x, y, val };
                 });
                 const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
                 return (
                   <g>
                     <path d={d} fill="none" stroke="#3B8C68" strokeWidth="3" strokeLinecap="round" />
                     {points.map((pt, idx) => (
-                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill='var(--bg-glass)' stroke="#3B8C68" strokeWidth="2.5" />
+                      <circle key={idx} cx={pt.x} cy={pt.y} r="4" fill='var(--bg-glass)' stroke="#3B8C68" strokeWidth="2.5" />
                     ))}
                   </g>
                 );
@@ -1173,22 +1275,52 @@ export default function TrainerDashboard({
 
               {/* Line 2: Avg Score % */}
               {(() => {
-                const points = currentData.avgScore.map((val, idx) => {
-                  const x = 50 + (idx * (400 / (nPoints - 1)));
+                const points = currentTrend.avgScore.map((val, idx) => {
+                  const x = 50 + (idx * (400 / Math.max(nPoints - 1, 1)));
                   const y = 170 - (val / 100) * 150;
-                  return { x, y };
+                  return { x, y, val };
                 });
                 const d = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
                 return (
                   <g>
                     <path d={d} fill="none" stroke="#C79A3B" strokeWidth="3" strokeLinecap="round" />
                     {points.map((pt, idx) => (
-                      <circle key={idx} cx={pt.x} cy={pt.y} r="4.5" fill='var(--bg-glass)' stroke="#C79A3B" strokeWidth="2.5" />
+                      <circle key={idx} cx={pt.x} cy={pt.y} r="4" fill='var(--bg-glass)' stroke="#C79A3B" strokeWidth="2.5" />
                     ))}
                   </g>
                 );
               })()}
             </svg>
+
+            {/* Empty State overlay if no live session data */}
+            {!currentTrend.hasData && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 24,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: 'rgba(255, 255, 255, 0.7)',
+                  backdropFilter: 'blur(2px)',
+                  borderRadius: '10px',
+                  textAlign: 'center',
+                  padding: '16px'
+                }}
+              >
+                <span style={{ fontSize: '1.2rem', marginBottom: '4px' }}>📊</span>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Insufficient Data for {chartTimeline} Trend
+                </span>
+                <span style={{ fontSize: '0.74rem', color: 'var(--text-secondary)', maxWidth: '320px', marginTop: '4px' }}>
+                  Complete quizzes and training sessions in your assigned projects to populate live performance analytics.
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -1196,59 +1328,52 @@ export default function TrainerDashboard({
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Recent Activity</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>View All</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => navigate('/reports')}>View Reports</span>
           </div>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flex: 1 }}>
-            
-            {/* Act 1 */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: 'rgba(34, 197, 94, 0.2)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <CheckCircle size={16} color="#15803D" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Hosted for Idonneous</div>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>2 mins ago</span>
-            </div>
-
-            {/* Act 2 */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: '#F3E8FF', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Play size={16} color="#7C3AED" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Hosted for Galderma</div>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>1 hour ago</span>
-            </div>
-
-            {/* Act 3 */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: 'rgba(234, 88, 12, 0.15)', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Users size={16} color="#EA580C" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>13 participants completed</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Test Quiz Offline</div>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>2 hours ago</span>
-            </div>
-
-            {/* Act 4 */}
-            <div style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
-              <div style={{ background: '#E0F2FE', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Award size={16} color="#0369A1" />
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Certificates issued</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>12 certificates generated</div>
-              </div>
-              <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>3 hours ago</span>
-            </div>
-
+            {(() => {
+              const activities = [];
+              if (trainerReports && trainerReports.length > 0) {
+                trainerReports.slice(0, 4).forEach(rep => {
+                  activities.push({
+                    type: 'report',
+                    title: rep.quizTitle || rep.title || 'Training Assessment Completed',
+                    sub: `${rep.projectName || 'Assigned Project'} • ${rep.participants || 0} participants • Avg ${rep.avgScore || 0}%`,
+                    time: rep.date || 'Recent'
+                  });
+                });
+              }
+              if (activities.length < 4 && quizzes && quizzes.length > 0) {
+                quizzes.slice(0, 4 - activities.length).forEach(q => {
+                  activities.push({
+                    type: 'quiz',
+                    title: q.title,
+                    sub: `Hosted for ${q.Project?.name || 'Assigned Project'} • ${q.questions?.length || 0} Questions`,
+                    time: q.createdAt ? new Date(q.createdAt).toLocaleDateString() : 'Active'
+                  });
+                });
+              }
+              if (activities.length === 0) {
+                return (
+                  <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.82rem' }}>
+                    No recent activity recorded for your assigned projects.
+                  </div>
+                );
+              }
+              return activities.slice(0, 4).map((act, i) => (
+                <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
+                  <div style={{ background: act.type === 'report' ? 'rgba(34, 197, 94, 0.2)' : '#E0F2FE', width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {act.type === 'report' ? <CheckCircle size={16} color="#15803D" /> : <Play size={16} color="#0369A1" />}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{act.title}</div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{act.sub}</div>
+                  </div>
+                  <span style={{ fontSize: '0.72rem', color: '#727A86', whiteSpace: 'nowrap' }}>{act.time}</span>
+                </div>
+              ));
+            })()}
           </div>
         </div>
 
@@ -1256,181 +1381,207 @@ export default function TrainerDashboard({
 
       {/* ─── BOTTOM SECTIONS: Top Quiz, Donut Chart, Quick Actions ─── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 280px), 1fr))', gap: '24px', marginBottom: '24px' }}>
-        
+
         {/* Top Quiz Performance */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: 0 }}>Top Quiz Performance</h3>
-            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>View All</span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }} onClick={() => navigate('/quizzes')}>View All</span>
           </div>
-          
+
           <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-            
-            {/* Rank 1 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#FEF08A', color: '#A16207', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>1</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Galderma Launchpad Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Galderma</div>
-              </div>
-              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>92%</span>
-            </div>
+            {(() => {
+              const topQuizzes = [...trainerReports]
+                .filter(r => r.avgScore !== undefined && r.avgScore !== null)
+                .sort((a, b) => (parseInt(b.avgScore) || 0) - (parseInt(a.avgScore) || 0))
+                .slice(0, 3);
 
-            {/* Rank 2 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--border-glass)', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>2</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Test Quiz Offline</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Idonneous</div>
-              </div>
-              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>85%</span>
-            </div>
+              if (topQuizzes.length === 0) {
+                if (quizzes && quizzes.length > 0) {
+                  return quizzes.slice(0, 3).map((q, idx) => (
+                    <div key={q.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: idx === 0 ? '#FEF08A' : 'var(--border-glass)', color: idx === 0 ? '#A16207' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>{idx + 1}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{q.title}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{q.Project?.name || 'Assigned Project'}</div>
+                      </div>
+                      <span style={{ padding: '4px 10px', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', borderRadius: '20px', fontSize: '0.75rem', fontWeight: 600 }}>{q.questions?.length || 0} Qs</span>
+                    </div>
+                  ));
+                }
+                return (
+                  <div style={{ textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.82rem', padding: '24px 0' }}>
+                    No quiz performance data recorded yet.
+                  </div>
+                );
+              }
 
-            {/* Rank 3 */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#FFEDD5', color: '#C2410C', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>3</div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Product Knowledge Quiz</div>
-                <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Idonneous</div>
-              </div>
-              <span style={{ padding: '4px 10px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>78%</span>
-            </div>
-
+              return topQuizzes.map((q, idx) => {
+                const score = parseInt(q.avgScore) || 0;
+                const badgeColor = score >= 80 ? '#15803D' : (score >= 60 ? '#A16207' : '#DC2626');
+                const badgeBg = score >= 80 ? 'rgba(34, 197, 94, 0.2)' : (score >= 60 ? '#FEF08A' : '#FEE2E2');
+                return (
+                  <div key={q.id || idx} style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: idx === 0 ? '#FEF08A' : (idx === 1 ? 'var(--border-glass)' : '#FFEDD5'), color: idx === 0 ? '#A16207' : (idx === 1 ? 'var(--text-secondary)' : '#C2410C'), display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '0.85rem' }}>{idx + 1}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-primary)', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{q.quizTitle || q.title || 'Quiz Assessment'}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{q.projectName || 'Project'}</div>
+                    </div>
+                    <span style={{ padding: '4px 10px', background: badgeBg, color: badgeColor, borderRadius: '20px', fontSize: '0.78rem', fontWeight: 700 }}>{score}%</span>
+                  </div>
+                );
+              });
+            })()}
           </div>
         </div>
 
         {/* Participants by Project Donut Chart */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 16px 0' }}>Participants by Project</h3>
-          
+
           {drilldownProject ? (
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                 <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--primary)' }}>{drilldownProject} Learners</span>
-                <button 
+                <button
                   onClick={() => setDrilldownProject(null)}
-                  style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer' }}
+                  style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--bg-tertiary)', padding: '2px 8px', borderRadius: '4px', cursor: 'pointer', border: 'none' }}
                 >
                   Back
                 </button>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '130px', overflowY: 'auto' }}>
                 {usersList
-                  .filter(u => drilldownProject === 'Others' ? !['Idonneous', 'Galderma'].some(p => u.Project?.name?.includes(p)) : u.Project?.name?.toLowerCase().includes(drilldownProject.toLowerCase()))
+                  .filter(u => {
+                    const pName = u.Project?.name || '';
+                    return pName.toLowerCase() === drilldownProject.toLowerCase() || u.projectId === drilldownProject;
+                  })
                   .slice(0, 6)
                   .map((usr, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', padding: '4px 0', borderBottom: '1px solid var(--bg-tertiary)' }}>
                       <span style={{ fontWeight: 600 }}>{usr.name}</span>
-                      <span style={{ color: 'var(--text-secondary)' }}>{usr.Role?.role_name || 'Supervisor'}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>{usr.Role?.role_name || 'Participant'}</span>
                     </div>
                   ))
                 }
-                {usersList.filter(u => drilldownProject === 'Others' ? !['Idonneous', 'Galderma'].some(p => u.Project?.name?.includes(p)) : u.Project?.name?.toLowerCase().includes(drilldownProject.toLowerCase())).length === 0 && (
-                  <div style={{ textAlign: 'center', color: '#727A86', fontSize: '0.78rem', padding: '20px 0' }}>No specific participants registered.</div>
+                {usersList.filter(u => (u.Project?.name || '').toLowerCase() === drilldownProject.toLowerCase() || u.projectId === drilldownProject).length === 0 && (
+                  <div style={{ textAlign: 'center', color: '#727A86', fontSize: '0.78rem', padding: '20px 0' }}>No participants found in this project.</div>
                 )}
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-              {/* Donut Chart SVG */}
-              <div style={{ width: '120px', height: '120px', position: 'relative' }}>
-                <svg width="120" height="120" viewBox="0 0 120 120" style={{ transform: 'rotate(-90deg)' }}>
-                  {/* Outer circle segments (donut) */}
-                  {/* Segment 1: Idonneous (12/18 = 66.7% | Circumference: 2 * PI * r = 2 * PI * 40 = 251.2 | Dasharray: 167.5, 83.7) */}
-                  <circle 
-                    cx="60" 
-                    cy="60" 
-                    r="40" 
-                    fill="none" 
-                    stroke='var(--primary)' 
-                    strokeWidth="16" 
-                    strokeDasharray="167.5 83.7"
-                    style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
-                    onClick={() => setDrilldownProject('Idonneous')}
-                    onMouseOver={e => e.currentTarget.setAttribute('stroke-width', '20')}
-                    onMouseOut={e => e.currentTarget.setAttribute('stroke-width', '16')}
-                  />
-                  {/* Segment 2: Galderma (4/18 = 22.2% | Dasharray: 55.8, 195.4 | Offset: -167.5) */}
-                  <circle 
-                    cx="60" 
-                    cy="60" 
-                    r="40" 
-                    fill="none" 
-                    stroke="#3B8C68" 
-                    strokeWidth="16" 
-                    strokeDasharray="55.8 195.4"
-                    strokeDashoffset="-167.5"
-                    style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
-                    onClick={() => setDrilldownProject('Galderma')}
-                    onMouseOver={e => e.currentTarget.setAttribute('stroke-width', '20')}
-                    onMouseOut={e => e.currentTarget.setAttribute('stroke-width', '16')}
-                  />
-                  {/* Segment 3: Others (2/18 = 11.1% | Dasharray: 27.9, 223.3 | Offset: -223.3) */}
-                  <circle 
-                    cx="60" 
-                    cy="60" 
-                    r="40" 
-                    fill="none" 
-                    stroke='var(--primary)' 
-                    strokeWidth="16" 
-                    strokeDasharray="27.9 223.3"
-                    strokeDashoffset="-223.3"
-                    style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
-                    onClick={() => setDrilldownProject('Others')}
-                    onMouseOver={e => e.currentTarget.setAttribute('stroke-width', '20')}
-                    onMouseOut={e => e.currentTarget.setAttribute('stroke-width', '16')}
-                  />
-                </svg>
-                {/* Text inside Donut */}
-                <div style={{
-                  position: 'absolute',
-                  top: '50%',
-                  left: '50%',
-                  transform: 'translate(-50%, -50%)',
-                  textAlign: 'center',
-                  fontFamily: 'Poppins, sans-serif'
-                }}>
-                  <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>18</div>
-                  <div style={{ fontSize: '0.62rem', color: '#727A86', textTransform: 'uppercase', fontWeight: 600 }}>Total</div>
-                </div>
-              </div>
+            (() => {
+              const projectBreakdown = (trainerProjects.length > 0 ? trainerProjects : projects).map(proj => {
+                const count = usersList.filter(u => u.projectId === proj.id || u.Project?.id === proj.id).length;
+                return {
+                  id: proj.id,
+                  name: proj.name,
+                  count
+                };
+              });
 
-              {/* Legends with percentages */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem', fontWeight: 500, flex: 1, paddingLeft: '8px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Idonneous')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%' }} />
-                    Idonneous
-                  </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>12 (66.7%)</strong>
+              const totalAssignedLearners = projectBreakdown.reduce((acc, p) => acc + p.count, 0);
+              const colors = ['var(--primary)', '#3B8C68', '#C79A3B', '#7C3AED', '#06B6D4'];
+              const circumference = 251.327; // 2 * Math.PI * 40
+
+              let accumulatedOffset = 0;
+
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+                  {/* Donut Chart SVG */}
+                  <div style={{ width: '120px', height: '120px', position: 'relative', flexShrink: 0 }}>
+                    <svg width="120" height="120" viewBox="0 0 120 120" style={{ transform: 'rotate(-90deg)' }}>
+                      {totalAssignedLearners === 0 ? (
+                        <circle
+                          cx="60"
+                          cy="60"
+                          r="40"
+                          fill="none"
+                          stroke="var(--bg-tertiary)"
+                          strokeWidth="16"
+                        />
+                      ) : (
+                        projectBreakdown.map((item, idx) => {
+                          if (item.count === 0) return null;
+                          const ratio = item.count / totalAssignedLearners;
+                          const dashLength = ratio * circumference;
+                          const dashSpace = circumference - dashLength;
+                          const currentOffset = accumulatedOffset;
+                          accumulatedOffset -= dashLength;
+
+                          return (
+                            <circle
+                              key={item.id || idx}
+                              cx="60"
+                              cy="60"
+                              r="40"
+                              fill="none"
+                              stroke={colors[idx % colors.length]}
+                              strokeWidth="16"
+                              strokeDasharray={`${dashLength} ${dashSpace}`}
+                              strokeDashoffset={currentOffset}
+                              style={{ cursor: 'pointer', transition: 'stroke-width 0.2s' }}
+                              onClick={() => setDrilldownProject(item.name)}
+                              onMouseOver={e => e.currentTarget.setAttribute('stroke-width', '20')}
+                              onMouseOut={e => e.currentTarget.setAttribute('stroke-width', '16')}
+                            />
+                          );
+                        })
+                      )}
+                    </svg>
+                    {/* Text inside Donut */}
+                    <div style={{
+                      position: 'absolute',
+                      top: '50%',
+                      left: '50%',
+                      transform: 'translate(-50%, -50%)',
+                      textAlign: 'center',
+                      fontFamily: 'Poppins, sans-serif'
+                    }}>
+                      <div style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
+                        {totalAssignedLearners}
+                      </div>
+                      <div style={{ fontSize: '0.62rem', color: '#727A86', textTransform: 'uppercase', fontWeight: 600 }}>Total</div>
+                    </div>
+                  </div>
+
+                  {/* Legends with percentages */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.78rem', fontWeight: 500, flex: 1, paddingLeft: '8px' }}>
+                    {projectBreakdown.length === 0 ? (
+                      <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>No projects assigned yet.</span>
+                    ) : (
+                      projectBreakdown.slice(0, 3).map((item, idx) => {
+                        const pct = totalAssignedLearners > 0 ? ((item.count / totalAssignedLearners) * 100).toFixed(1) : '0.0';
+                        return (
+                          <div
+                            key={item.id || idx}
+                            style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+                            onClick={() => setDrilldownProject(item.name)}
+                          >
+                            <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
+                              <span style={{ display: 'inline-block', width: '8px', height: '8px', background: colors[idx % colors.length], borderRadius: '50%' }} />
+                              <span style={{ maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.name}</span>
+                            </span>
+                            <strong style={{ color: 'var(--text-primary)' }}>{item.count} ({pct}%)</strong>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Galderma')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: '#3B8C68', borderRadius: '50%' }} />
-                    Galderma
-                  </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>4 (22.2%)</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setDrilldownProject('Others')}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)' }}>
-                    <span style={{ display: 'inline-block', width: '8px', height: '8px', background: 'var(--primary)', borderRadius: '50%' }} />
-                    Others
-                  </span>
-                  <strong style={{ color: 'var(--text-primary)' }}>2 (11.1%)</strong>
-                </div>
-              </div>
-            </div>
+              );
+            })()
           )}
         </div>
 
         {/* Quick Actions Panel */}
         <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px' }}>
           <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 16px 0' }}>Quick Actions</h3>
-          
+
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            
+
             {/* Action 1 */}
-            <div 
+            <div
               onClick={() => navigate('/builder')}
               style={{
                 background: 'var(--bg-tertiary)',
@@ -1452,7 +1603,7 @@ export default function TrainerDashboard({
             </div>
 
             {/* Action 2 */}
-            <div 
+            <div
               onClick={() => navigate('/reports')}
               style={{
                 background: 'var(--bg-tertiary)',
@@ -1474,7 +1625,7 @@ export default function TrainerDashboard({
             </div>
 
             {/* Action 3 */}
-            <div 
+            <div
               onClick={() => navigate('/trainings')}
               style={{
                 background: 'var(--bg-tertiary)',
@@ -1496,7 +1647,7 @@ export default function TrainerDashboard({
             </div>
 
             {/* Action 4 */}
-            <div 
+            <div
               onClick={() => navigate('/certificates')}
               style={{
                 background: 'var(--bg-tertiary)',
@@ -1522,100 +1673,65 @@ export default function TrainerDashboard({
 
       </div>
 
-      {/* ─── LIVE ARENA MY QUIZZES LIST ─── */}
+      {/* ─── LIVE ARENA MY QUIZZES (PROJECT FOLDER HIERARCHY) ─── */}
       <div className="glass-card" style={{ background: 'var(--bg-glass)', border: '1px solid #B7BEC7', borderRadius: '16px', padding: '24px', marginBottom: '24px' }}>
-        <h3 style={{ marginBottom: '16px', fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: '1.1rem' }}>🎯 Live Arena — My Quizzes</h3>
-        
-        {quizzes.length > 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {quizzes.map(quiz => (
-              <div key={quiz.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid #B7BEC7' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>{quiz.title}</h4>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '8px', marginTop: '6px' }}>
-                    <span style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 500 }}>
-                      {quiz.questions ? quiz.questions.length : 0} Questions • {quiz.Project ? quiz.Project.name : 'No Project'}
-                    </span>
-                    {quiz.config?.isOffline && (() => {
-                      const now = new Date();
-                      const start = quiz.config.offlineStartTime ? new Date(quiz.config.offlineStartTime) : null;
-                      const end = quiz.config.offlineEndTime ? new Date(quiz.config.offlineEndTime) : null;
-                      const linkUrl = `${offlineBaseUrl}/offline-quiz/${quiz.id}`;
-                      let badge;
-                      if (start && now < start) {
-                        badge = (
-                          <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(245,158,11,0.08)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.2)', borderRadius: '4px' }}>
-                            ⏰ Scheduled
-                          </span>
-                        );
-                      } else if (end && now > end) {
-                        badge = (
-                          <span className="badge" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(239,68,68,0.08)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '4px' }}>
-                            🚫 Expired
-                          </span>
-                        );
-                      } else {
-                        badge = (
-                          <span className="badge badge-success" style={{ fontSize: '0.7rem', padding: '2px 8px', background: 'rgba(34, 197, 94, 0.2)', color: '#15803D', border: '1px solid rgba(22,163,74,0.2)', borderRadius: '4px' }}>
-                            🟢 Offline Active
-                          </span>
-                        );
-                      }
-                      return (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          {badge}
-                          <a 
-                            href={linkUrl} 
-                            target="_blank"
-                            rel="noreferrer"
-                            style={{ color: 'var(--primary)', fontSize: '0.78rem', textDecoration: 'underline', fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                          >
-                            🔗 Open Quiz
-                          </a>
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                  <button 
-                    className="btn btn-secondary btn-sm" 
-                    style={{ padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)' }} 
-                    onClick={() => handleOpenOfflineModal(quiz)} 
-                    title="Configure Offline Mode"
-                  >
-                    <WifiOff size={14} color='var(--text-secondary)' /> <span style={{ color: 'var(--text-secondary)' }}>Offline Mode</span>
-                  </button>
-                  <button 
-                    className="btn btn-primary btn-sm" 
-                    style={{ padding: '6px 14px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)', border: 'none', color: 'white', fontWeight: 600 }} 
-                    onClick={() => navigate(`/host/${quiz.id}`)}
-                  >
-                    <Play size={14} color="white" /> Host Live
-                  </button>
-                  <button 
-                    className="btn btn-secondary btn-sm" 
-                    style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)' }} 
-                    onClick={() => navigate(`/builder/${quiz.id}`)}
-                    title="Edit Quiz"
-                  >
-                    <Edit3 size={14} color='var(--text-secondary)' />
-                  </button>
-                  <button 
-                    className="btn btn-secondary btn-sm" 
-                    style={{ padding: '6px 10px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', background: 'var(--bg-glass)', color: '#EF4444' }} 
-                    onClick={() => handleDeleteQuiz(quiz.id)}
-                    title="Delete Quiz Room"
-                  >
-                    <Trash2 size={14} color="#EF4444" />
-                  </button>
-                </div>
-              </div>
-            ))}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontFamily: 'Poppins, sans-serif', fontWeight: 700, fontSize: '1.1rem' }}>🎯 Live Arena — My Quizzes</h3>
+            <p style={{ margin: '4px 0 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Interactive quizzes organized by assigned project folder</p>
           </div>
-        ) : (
-          <p style={{ color: '#727A86', marginTop: '16px', fontSize: '0.85rem' }}>No quizzes found. Use the Create Quiz actions to build one!</p>
-        )}
+          <button
+            className="btn btn-primary btn-sm"
+            onClick={() => navigate('/builder')}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', padding: '6px 14px', borderRadius: '8px' }}
+          >
+            <Plus size={14} /> Create Quiz
+          </button>
+        </div>
+
+        {(() => {
+          const activeProjects = (trainerProjects.length > 0 ? trainerProjects : projects);
+          const unassignedQuizzes = quizzes.filter(q => !q.projectId || !activeProjects.some(p => p.id === q.projectId));
+
+          if (activeProjects.length === 0 && quizzes.length === 0) {
+            return <p style={{ color: '#727A86', marginTop: '16px', fontSize: '0.85rem' }}>No quizzes found. Use the Create Quiz actions to build one!</p>;
+          }
+
+          return (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+              {activeProjects.map(proj => {
+                const projQuizzes = quizzes.filter(q => q.projectId === proj.id || q.Project?.id === proj.id);
+                return (
+                  <ProjectFolder
+                    key={proj.id}
+                    project={proj}
+                    items={projQuizzes}
+                    type="quizzes"
+                    defaultExpanded={true}
+                    offlineBaseUrl={offlineBaseUrl}
+                    onOpenOfflineModal={handleOpenOfflineModal}
+                    onDeleteQuiz={handleDeleteQuiz}
+                    onHostQuiz={(quiz) => navigate(`/host/${quiz.id}`)}
+                  />
+                );
+              })}
+
+              {unassignedQuizzes.length > 0 && (
+                <ProjectFolder
+                  key="unassigned"
+                  project={{ id: 'unassigned', name: 'General / Unassigned Quizzes' }}
+                  items={unassignedQuizzes}
+                  type="quizzes"
+                  defaultExpanded={true}
+                  offlineBaseUrl={offlineBaseUrl}
+                  onOpenOfflineModal={handleOpenOfflineModal}
+                  onDeleteQuiz={handleDeleteQuiz}
+                  onHostQuiz={(quiz) => navigate(`/host/${quiz.id}`)}
+                />
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {/* ─── ROTATING TRAINER TIP WIDGET ─── */}
@@ -1637,8 +1753,8 @@ export default function TrainerDashboard({
             <span style={{ fontSize: '1.1rem' }}>💡</span>
             <span><strong>Pro Tip:</strong> {TIPS[tipIndex]}</span>
           </div>
-          <button 
-            onClick={() => setShowTip(false)} 
+          <button
+            onClick={() => setShowTip(false)}
             style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px' }}
           >
             <X size={16} color='var(--primary)' />
@@ -1650,37 +1766,37 @@ export default function TrainerDashboard({
       {isMeetingModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
           <div className="glass-card" style={{ width: '600px', background: 'var(--bg-glass)', maxHeight: '90vh', overflowY: 'auto', padding: '32px', borderRadius: '16px', border: '1px solid #B7BEC7', boxShadow: '0 20px 50px rgba(0,0,0,0.15)' }}>
-            
+
             {!isSuccessView ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                   <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 800 }}>Create New Meeting</h3>
                   <button onClick={() => { setIsMeetingModalOpen(false); setIsUrlCustom(false); }} style={{ cursor: 'pointer', background: 'none', border: 'none', color: 'var(--text-secondary)' }}><X size={20} /></button>
                 </div>
-                
+
                 <form onSubmit={handleScheduleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                  
+
                   {/* Topic */}
                   <div>
                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Meeting Topic/Title *</label>
-                    <input 
-                      type="text" 
-                      value={meetingForm.title} 
-                      onChange={e => setMeetingForm({...meetingForm, title: e.target.value})} 
-                      required 
+                    <input
+                      type="text"
+                      value={meetingForm.title}
+                      onChange={e => setMeetingForm({...meetingForm, title: e.target.value})}
+                      required
                       placeholder="e.g. Product Knowledge Assessment Review"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }} 
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }}
                     />
                   </div>
 
                   {/* Agenda */}
                   <div>
                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Description/Agenda</label>
-                    <textarea 
-                      value={meetingForm.description} 
-                      onChange={e => setMeetingForm({...meetingForm, description: e.target.value})} 
+                    <textarea
+                      value={meetingForm.description}
+                      onChange={e => setMeetingForm({...meetingForm, description: e.target.value})}
                       placeholder="Enter meeting agenda or notes..."
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', minHeight: '60px', resize: 'vertical', fontSize: '0.88rem' }} 
+                      style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', minHeight: '60px', resize: 'vertical', fontSize: '0.88rem' }}
                     />
                   </div>
 
@@ -1688,9 +1804,9 @@ export default function TrainerDashboard({
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                     <div>
                       <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Select Project</label>
-                      <select 
-                        value={meetingForm.projectId} 
-                        onChange={e => handleProjectChange(e.target.value)} 
+                      <select
+                        value={meetingForm.projectId}
+                        onChange={e => handleProjectChange(e.target.value)}
                         style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem', outline: 'none' }}
                       >
                         <option value="">-- General / Global --</option>
@@ -1700,12 +1816,12 @@ export default function TrainerDashboard({
 
                     <div>
                       <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Date & Time *</label>
-                      <input 
-                        type="datetime-local" 
-                        value={meetingForm.scheduledAt} 
-                        onChange={e => setMeetingForm({...meetingForm, scheduledAt: e.target.value})} 
-                        required 
-                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }} 
+                      <input
+                        type="datetime-local"
+                        value={meetingForm.scheduledAt}
+                        onChange={e => setMeetingForm({...meetingForm, scheduledAt: e.target.value})}
+                        required
+                        style={{ width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.88rem' }}
                       />
                     </div>
                   </div>
@@ -1732,19 +1848,19 @@ export default function TrainerDashboard({
                       Meeting Link (Google Meet / Jitsi URL) *
                     </label>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input 
-                        type="text" 
-                        value={meetingForm.url} 
+                      <input
+                        type="text"
+                        value={meetingForm.url}
                         onChange={e => {
                           setIsUrlCustom(true);
                           setMeetingForm({...meetingForm, url: e.target.value});
-                        }} 
+                        }}
                         placeholder="https://meet.google.com/abc-defg-hij"
                         required
-                        style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.85rem' }} 
+                        style={{ flex: 1, padding: '10px 12px', borderRadius: '8px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.85rem' }}
                       />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleCopyLink(meetingForm.url)}
                         style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '8px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}
                       >
@@ -1758,9 +1874,9 @@ export default function TrainerDashboard({
                   <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
                       <label style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Invite Members</label>
-                      <input 
-                        type="text" 
-                        placeholder="Search members..." 
+                      <input
+                        type="text"
+                        placeholder="Search members..."
                         value={memberSearch}
                         onChange={e => setMemberSearch(e.target.value)}
                         style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.78rem', width: '180px' }}
@@ -1773,11 +1889,11 @@ export default function TrainerDashboard({
                           const isChecked = meetingForm.inviteeIds.includes(u.id);
                           return (
                             <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 0', borderBottom: '1px solid var(--bg-tertiary)', cursor: 'pointer' }}>
-                              <input 
-                                type="checkbox" 
-                                checked={isChecked} 
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
                                 onChange={() => {
-                                  const updatedIds = isChecked 
+                                  const updatedIds = isChecked
                                     ? meetingForm.inviteeIds.filter(id => id !== u.id)
                                     : [...meetingForm.inviteeIds, u.id];
                                   setMeetingForm({...meetingForm, inviteeIds: updatedIds});
@@ -1833,22 +1949,22 @@ export default function TrainerDashboard({
                   <div>
                     <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', marginBottom: '4px', fontWeight: 600 }}>Google Meet Link</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input 
-                        type="text" 
-                        value={scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : ''} 
-                        readOnly 
-                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }} 
+                      <input
+                        type="text"
+                        value={scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : ''}
+                        readOnly
+                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }}
                       />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleCopyLink(scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : '')}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
                         {linkCopied ? <Check size={12} color="#3B8C68" /> : <Copy size={12} />}
                         {linkCopied ? "Copied" : "Copy"}
                       </button>
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => window.open(scheduledMeetingDetails ? `${window.location.origin}/guest-join?id=${scheduledMeetingDetails.id}` : '', '_blank')}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: 'linear-gradient(135deg, #2563EB 0%, #3B82F6 100%)', border: 'none', color: 'white', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
@@ -1858,8 +1974,8 @@ export default function TrainerDashboard({
                   </div>
                 </div>
 
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => {
                     setIsMeetingModalOpen(false);
                     setIsSuccessView(false);
@@ -1879,7 +1995,7 @@ export default function TrainerDashboard({
       {isOfflineModalOpen && selectedOfflineQuiz && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, backdropFilter: 'blur(4px)' }}>
           <div className="glass-card" style={{ width: '480px', background: 'var(--bg-glass)', padding: '28px', borderRadius: '16px', border: '1px solid #B7BEC7', boxShadow: '0 20px 50px rgba(0,0,0,0.15)' }}>
-            
+
             {!isOfflineSuccessView ? (
               <>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #B7BEC7', paddingBottom: '12px' }}>
@@ -1896,8 +2012,8 @@ export default function TrainerDashboard({
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Learners can join asynchronously via a link</div>
                     </div>
                     {/* Switch styled checkbox */}
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       checked={offlineForm.isOffline}
                       onChange={e => setOfflineForm({ ...offlineForm, isOffline: e.target.checked })}
                       style={{ width: '20px', height: '20px', cursor: 'pointer' }}
@@ -1912,8 +2028,8 @@ export default function TrainerDashboard({
                           <div style={{ fontWeight: 700, fontSize: '0.83rem', color: '#15803D' }}>⚡ Start Immediately</div>
                           <div style={{ fontSize: '0.72rem', color: '#4B5563' }}>Quiz is live the moment you save — no scheduled start</div>
                         </div>
-                        <input 
-                          type="checkbox" 
+                        <input
+                          type="checkbox"
                           checked={offlineForm.startNow}
                           onChange={e => setOfflineForm({ ...offlineForm, startNow: e.target.checked, startTime: e.target.checked ? '' : offlineForm.startTime })}
                           style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#3B8C68' }}
@@ -1925,8 +2041,8 @@ export default function TrainerDashboard({
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                           <div>
                             <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Start Date &amp; Time</label>
-                            <input 
-                              type="datetime-local" 
+                            <input
+                              type="datetime-local"
                               value={offlineForm.startTime}
                               onChange={e => setOfflineForm({ ...offlineForm, startTime: e.target.value })}
                               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
@@ -1935,8 +2051,8 @@ export default function TrainerDashboard({
                           </div>
                           <div>
                             <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>End Date &amp; Time</label>
-                            <input 
-                              type="datetime-local" 
+                            <input
+                              type="datetime-local"
                               value={offlineForm.endTime}
                               onChange={e => setOfflineForm({ ...offlineForm, endTime: e.target.value })}
                               style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
@@ -1950,8 +2066,8 @@ export default function TrainerDashboard({
                       {offlineForm.startNow && (
                         <div>
                           <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Closes At (End Date &amp; Time)</label>
-                          <input 
-                            type="datetime-local" 
+                          <input
+                            type="datetime-local"
                             value={offlineForm.endTime}
                             onChange={e => setOfflineForm({ ...offlineForm, endTime: e.target.value })}
                             style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-primary)', fontSize: '0.82rem', boxSizing: 'border-box' }}
@@ -1963,14 +2079,14 @@ export default function TrainerDashboard({
                       <div>
                         <label style={{ display: 'block', marginBottom: '6px', fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Shareable Quiz Link</label>
                         <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
-                          <input 
-                            type="text" 
-                            value={offlineQuizLink} 
-                            readOnly 
+                          <input
+                            type="text"
+                            value={offlineQuizLink}
+                            readOnly
                             style={{ flex: 1, padding: '10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)', fontSize: '0.82rem' }}
                           />
-                          <button 
-                            type="button" 
+                          <button
+                            type="button"
                             onClick={() => handleCopyLink(offlineQuizLink)}
                             style={{ display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', padding: '10px 14px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}
                           >
@@ -2008,14 +2124,14 @@ export default function TrainerDashboard({
                   <div>
                     <span style={{ fontSize: '0.75rem', color: '#727A86', display: 'block', marginBottom: '4px', fontWeight: 600 }}>Shareable Quiz Link</span>
                     <div style={{ display: 'flex', gap: '8px' }}>
-                      <input 
-                        type="text" 
-                        value={offlineQuizLink} 
-                        readOnly 
-                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }} 
+                      <input
+                        type="text"
+                        value={offlineQuizLink}
+                        readOnly
+                        style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #B7BEC7', background: 'var(--bg-glass)', color: 'var(--text-secondary)', fontSize: '0.8rem' }}
                       />
-                      <button 
-                        type="button" 
+                      <button
+                        type="button"
                         onClick={() => handleCopyLink(offlineQuizLink)}
                         style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 12px', borderRadius: '6px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
@@ -2026,8 +2142,8 @@ export default function TrainerDashboard({
                   </div>
                 </div>
 
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={() => {
                     setIsOfflineModalOpen(false);
                     setIsOfflineSuccessView(false);
@@ -2038,7 +2154,7 @@ export default function TrainerDashboard({
                 </button>
               </div>
             )}
-            
+
           </div>
         </div>
       )}

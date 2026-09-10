@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-export default function CertificateCreationWizard({ isOpen, onClose, token, onSuccess, projects = [], clients = [] }) {
+export default function CertificateCreationWizard({ isOpen, onClose, token, user, onSuccess, projects = [], clients = [] }) {
   if (!isOpen) return null;
 
   const [step, setStep] = useState(1);
@@ -19,8 +19,8 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, onSu
   const [selectedClientId, setSelectedClientId] = useState(clients[0]?.id || '');
   const [selectedTrainingId, setSelectedTrainingId] = useState('');
   const [batchName, setBatchName] = useState('UI Mumbai Promoter Batch 04');
-  const [selectedTrainerId, setSelectedTrainerId] = useState('');
-  const [trainerName, setTrainerName] = useState('Aakash Verma');
+  const [selectedTrainerId, setSelectedTrainerId] = useState(user?.id || '');
+  const [trainerName, setTrainerName] = useState(user?.name || 'Aakash Verma');
 
   // Step 2: Participants & Rules State
   const [minAttendance, setMinAttendance] = useState(80);
@@ -37,6 +37,13 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, onSu
   const [includeTrainerSignature, setIncludeTrainerSignature] = useState(true);
   const [includeCompanySeal, setIncludeCompanySeal] = useState(true);
   const [sealPosition, setSealPosition] = useState('bottom-right');
+
+  // Ensure project selection when projects prop updates
+  useEffect(() => {
+    if (projects.length > 0 && (!selectedProjectId || !projects.some(p => p.id === selectedProjectId))) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects]);
 
   // Fetch trainings & trainers on open
   useEffect(() => {
@@ -61,6 +68,11 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, onSu
   };
 
   const fetchTrainers = async () => {
+    if (user?.role === 'Trainer') {
+      setSelectedTrainerId(user.id);
+      setTrainerName(user.name);
+      return;
+    }
     try {
       const res = await axios.get('/api/users?role=Trainer', {
         headers: { Authorization: `Bearer ${token}` }
