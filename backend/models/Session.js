@@ -27,7 +27,7 @@ const Session = sequelize.define('Session', {
     type: DataTypes.DATE,
   },
   session_name: {
-    type: DataTypes.VIRTUAL,
+    type: DataTypes.STRING(255),
     allowNull: true,
   },
   current_question_index: {

@@ -46,11 +46,18 @@ router.post('/login', async (req, res) => {
   }
 });
 
+const passwordResetService = require('../services/passwordResetService');
+const emailService = require('../services/emailService');
+
 // ── FORGOT PASSWORD (public) ──────────────────────────────────────────────────
-// Accepts optional `newPassword` — if provided, uses that; otherwise auto-generates one.
+// Strictly generates a single-use token and sends it out-of-band.
+// NEVER allows direct password choice; NEVER returns plaintext passwords.
+// Always returns a generic response to prevent account enumeration.
 router.post('/forgot-password', async (req, res) => {
-  const { email, newPassword: customPassword } = req.body;
+  const { email } = req.body;
   if (!email) return res.status(400).json({ error: 'Email is required.' });
+
+  const GENERIC_MSG = 'If the account exists, password reset instructions have been sent.';
 
   try {
     let lookupEmail = email;
@@ -61,38 +68,71 @@ router.post('/forgot-password', async (req, res) => {
     let user = await User.findOne({ where: { email: lookupEmail } });
     if (!user) user = await User.findOne({ where: { email } });
 
+    // Non-existent account: return generic success without leaking existence
+    if (!user || user.status !== 'Active') {
+      return res.json({ success: true, message: GENERIC_MSG });
+    }
+
+    try {
+      const { rawToken } = await passwordResetService.createResetToken(user.id);
+      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+      const resetUrl = `${frontendUrl.replace(/\/$/, '')}/reset-password?token=${rawToken}`;
+      await emailService.sendPasswordResetEmail({
+        to: user.email,
+        name: user.name,
+        resetUrl
+      });
+    } catch (deliveryErr) {
+      // Log operational warning internally without exposing error to caller
+      console.error('[PasswordReset Error] Token generation / delivery failed:', deliveryErr.message);
+    }
+
+    // Always return generic response to caller; never leak token or account info
+    return res.json({
+      success: true,
+      message: GENERIC_MSG
+    });
+  } catch (err) {
+    console.error('Forgot password error:', err);
+    // Generic response even on error to prevent timing/enumeration attacks
+    res.json({ success: true, message: GENERIC_MSG });
+  }
+});
+
+// ── RESET PASSWORD (public with valid token) ──────────────────────────────────
+// Consumes single-use token, invalidates user's remaining tokens, and updates password.
+router.post('/reset-password', async (req, res) => {
+  const { token, newPassword } = req.body;
+
+  if (!token || !newPassword) {
+    return res.status(400).json({ error: 'Token and new password are required.' });
+  }
+
+  if (typeof newPassword !== 'string' || newPassword.length < 6) {
+    return res.status(400).json({ error: 'New password must be at least 6 characters.' });
+  }
+
+  try {
+    const result = await passwordResetService.verifyAndConsumeToken(token);
+    if (!result.valid) {
+      return res.status(400).json({ error: 'Invalid or expired password reset token.' });
+    }
+
+    const user = await User.findByPk(result.userId);
     if (!user) {
-      return res.json({ success: true, message: 'If that email is registered, the password has been updated.' });
+      return res.status(400).json({ error: 'Invalid or expired password reset token.' });
     }
 
-    if (user.status !== 'Active') {
-      return res.status(403).json({ error: 'This account is not active. Contact your administrator.' });
-    }
-
-    // Use custom password if provided, otherwise auto-generate
-    let plainPassword;
-    if (customPassword && customPassword.trim().length >= 6) {
-      plainPassword = customPassword.trim();
-    } else {
-      const chars = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789!@#';
-      plainPassword = '';
-      for (let i = 0; i < 10; i++) plainPassword += chars[Math.floor(Math.random() * chars.length)];
-    }
-
-    const hashed = await bcrypt.hash(plainPassword, 10);
+    // Hash the new password with bcrypt
+    const hashed = await bcrypt.hash(newPassword, 10);
     await user.update({ password: hashed });
 
     res.json({
       success: true,
-      newPassword: customPassword ? null : plainPassword,  // only return generated password, not user's own
-      isCustom: !!customPassword,
-      name: user.name,
-      message: customPassword
-        ? 'Password updated successfully. You can now log in with your new password.'
-        : 'A new password has been generated. Please copy it and log in, then change it immediately.'
+      message: 'Password has been reset successfully. You may now log in with your new password.'
     });
   } catch (err) {
-    console.error('Forgot password error:', err);
+    console.error('Reset password error:', err);
     res.status(500).json({ error: 'Server error. Please try again.' });
   }
 });

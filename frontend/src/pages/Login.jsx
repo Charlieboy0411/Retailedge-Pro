@@ -48,12 +48,6 @@ export default function Login() {
   const [fpLoading, setFpLoading]     = useState(false);
   const [fpError, setFpError]         = useState('');
   const [fpResult, setFpResult]       = useState(null);
-  const [fpCopied, setFpCopied]       = useState(false);
-  const [fpMode, setFpMode]           = useState('auto');
-  const [fpNewPw, setFpNewPw]         = useState('');
-  const [fpConfirm, setFpConfirm]     = useState('');
-  const [fpShowNew, setFpShowNew]     = useState(false);
-  const [fpShowConf, setFpShowConf]   = useState(false);
 
   // Rotate tips
   useEffect(() => {
@@ -106,12 +100,6 @@ export default function Login() {
     setFpEmail(email);
     setFpError('');
     setFpResult(null);
-    setFpCopied(false);
-    setFpMode('auto');
-    setFpNewPw('');
-    setFpConfirm('');
-    setFpShowNew(false);
-    setFpShowConf(false);
   };
 
   const closeFp = () => {
@@ -125,48 +113,15 @@ export default function Login() {
     setFpError('');
     setFpLoading(true);
     try {
-      const payload = { email: fpEmail };
-      if (fpMode === 'manual') {
-        if (!fpNewPw || fpNewPw.length < 6) {
-          setFpError('Password must be at least 6 characters.');
-          setFpLoading(false);
-          return;
-        }
-        if (fpNewPw !== fpConfirm) {
-          setFpError('Passwords do not match.');
-          setFpLoading(false);
-          return;
-        }
-        payload.newPassword = fpNewPw;
-      }
-      const res = await axios.post('/api/auth/reset-password', payload);
-      if (res.data.manualSet) {
-        setFpResult({ manualSet: true, name: res.data.name });
-      } else if (res.data.newPassword) {
-        setFpResult({ newPassword: res.data.newPassword, name: res.data.name });
-      } else {
-        setFpResult({ generic: true });
-      }
+      const res = await axios.post('/api/auth/forgot-password', { email: fpEmail });
+      setFpResult({
+        success: true,
+        message: res.data?.message || 'If the account exists, password reset instructions have been sent.'
+      });
     } catch (err) {
       setFpError(err.response?.data?.error || 'Failed to process request. Please try again.');
     } finally {
       setFpLoading(false);
-    }
-  };
-
-  const copyPassword = () => {
-    if (fpResult?.newPassword) {
-      navigator.clipboard.writeText(fpResult.newPassword).catch(() => {});
-      setFpCopied(true);
-      setTimeout(() => setFpCopied(false), 2500);
-    }
-  };
-
-  const useNewPassword = () => {
-    if (fpResult?.newPassword) {
-      setEmail(fpEmail);
-      setPassword(fpResult.newPassword);
-      closeFp();
     }
   };
 
@@ -400,18 +355,17 @@ export default function Login() {
             {fpResult ? (
               <div style={{ textAlign: 'center', padding: '16px 0' }}>
                 <CheckCircle2 size={44} color="#10B981" style={{ margin: '0 auto 12px auto' }} />
-                <h4 style={{ color: '#10B981', fontWeight: 800, margin: '0 0 6px 0' }}>Credentials Updated!</h4>
-                {fpResult.newPassword && (
-                  <div style={{ background: '#0B1220', border: '1px solid #1E293B', borderRadius: '8px', padding: '12px', margin: '14px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontFamily: 'monospace', fontSize: '1.1rem', color: '#60A5FA', fontWeight: 700 }}>{fpResult.newPassword}</span>
-                    <button onClick={copyPassword} style={{ background: '#1E293B', border: 'none', color: '#FFFFFF', padding: '6px 10px', borderRadius: '6px', fontSize: '0.75rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      {fpCopied ? <Check size={14} color="#10B981" /> : <Copy size={14} />}
-                      <span>{fpCopied ? 'Copied' : 'Copy'}</span>
-                    </button>
-                  </div>
-                )}
-                <button onClick={useNewPassword} className="btn btn-primary" style={{ width: '100%', marginTop: '12px' }}>
-                  Use Credentials &amp; Sign In
+                <h4 style={{ color: '#10B981', fontWeight: 800, margin: '0 0 8px 0', fontSize: '1.1rem' }}>
+                  Request Received
+                </h4>
+                <p style={{ fontSize: '0.88rem', color: '#CBD5E1', lineHeight: 1.5, margin: '0 0 14px 0' }}>
+                  {fpResult.message || 'If an account matching this email exists, password reset instructions have been dispatched.'}
+                </p>
+                <div style={{ background: '#0B1220', border: '1px solid #1E293B', borderRadius: '8px', padding: '10px 14px', margin: '0 0 18px 0', fontSize: '0.78rem', color: '#94A3B8', lineHeight: 1.4 }}>
+                  For security reasons, password reset links expire after 15 minutes and can only be used once. Please check your inbox or spam folder.
+                </div>
+                <button onClick={closeFp} className="btn btn-primary" style={{ width: '100%' }}>
+                  Back to Sign In
                 </button>
               </div>
             ) : (

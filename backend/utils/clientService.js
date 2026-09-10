@@ -198,9 +198,12 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
     });
 
     if (quizParticipants.length > 0) {
-      const scores = quizParticipants.map(r => Number(r.score || 0));
+      const scores = quizParticipants.map(r => {
+        const raw = Number(r.score || 0);
+        return raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw;
+      });
       const sumScore = scores.reduce((a, b) => a + b, 0);
-      avgScore = Math.round(sumScore / scores.length);
+      avgScore = Math.min(100, Math.round(sumScore / scores.length));
       const passedCount = scores.filter(s => s >= 70).length;
       passRate = Math.round((passedCount / scores.length) * 100);
     } else {
@@ -226,7 +229,10 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   for (const p of participants) {
     const pParts = await Participant.findAll({ where: { userId: p.id }, attributes: ['score'] });
     const pAvg = pParts.length > 0
-      ? Math.round(pParts.reduce((acc, curr) => acc + Number(curr.score || 0), 0) / pParts.length)
+      ? Math.round(pParts.reduce((acc, curr) => {
+          const raw = Number(curr.score || 0);
+          return acc + (raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw);
+        }, 0) / pParts.length)
       : 70;
 
     const pAtt = await JitsiAttendance.findAll({ where: { userId: p.id }, attributes: ['attendancePercentage'] });
@@ -329,7 +335,10 @@ async function getClientParticipants(clientUser, targetProjectId = 'all', target
       attributes: ['score']
     });
     const avgScore = pParts.length > 0
-      ? Math.round(pParts.reduce((acc, r) => acc + Number(r.score || 0), 0) / pParts.length)
+      ? Math.min(100, Math.round(pParts.reduce((acc, r) => {
+          const raw = Number(r.score || 0);
+          return acc + (raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw);
+        }, 0) / pParts.length))
       : 75;
 
     // 3. Training Progress

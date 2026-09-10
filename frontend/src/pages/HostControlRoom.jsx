@@ -5,7 +5,8 @@ import { AuthContext } from '../context/AuthContext';
 import { 
   Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, 
   Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, 
-  Check, Clock, Sparkles, Shield, Radio, CheckCircle2, AlertCircle
+  Check, Clock, Sparkles, Shield, Radio, CheckCircle2, AlertCircle,
+  Copy, ExternalLink
 } from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
@@ -27,6 +28,7 @@ export default function HostControlRoom() {
   const { token, user } = useContext(AuthContext);
   const navigate = useNavigate();
 
+  const isLocalHost = typeof window !== 'undefined' && (['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname) || window.location.hostname.endsWith('.local'));
   const querySessionName = new URLSearchParams(window.location.search).get('sessionName') || '';
   const [sessionName, setSessionName] = useState(querySessionName);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -101,21 +103,38 @@ export default function HostControlRoom() {
     return () => clearInterval(interval);
   }, [isLocalHost]);
 
-  // QR 5-second fallback timer
+  // QR fallback timer — only triggers if roomCode actually exists and QR failed to render
   useEffect(() => {
     if (qrDataUrl) {
       setQrError(false);
       setQrLoading(false);
       return;
     }
-    const timer = setTimeout(() => {
-      if (!qrDataUrl) {
-        setQrError(true);
-        setQrLoading(false);
-      }
-    }, 5000);
-    return () => clearTimeout(timer);
-  }, [qrDataUrl]);
+    if (roomCode) {
+      const timer = setTimeout(() => {
+        if (!qrDataUrl) {
+          setQrError(true);
+          setQrLoading(false);
+        }
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [qrDataUrl, roomCode]);
+
+  // Helper to emit host_start_quiz reliably
+  const emitHostStartQuiz = (targetSocket) => {
+    const s = targetSocket || socket;
+    if (!s || !s.connected || roomCodeRef.current) return;
+    const currentUser = user || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null);
+    const authToken = token || localStorage.getItem('jwt') || localStorage.getItem('token');
+    s.emit('host_start_quiz', {
+      quizId: quizId,
+      hostId: currentUser?.id,
+      hostName: currentUser?.name || 'Authorized Trainer',
+      token: authToken,
+      sessionName: sessionName || null
+    });
+  };
 
   // Fetch Quiz details and initialize socket
   useEffect(() => {
@@ -134,6 +153,8 @@ export default function HostControlRoom() {
       const code = roomCodeRef.current;
       if (code) {
         socket.emit('host_rejoin_room', { roomCode: code, quizId: quizId });
+      } else {
+        emitHostStartQuiz(socket);
       }
     });
 
@@ -154,6 +175,18 @@ export default function HostControlRoom() {
       }
     };
     socket.on('session_created', handleSessionCreated);
+    socket.on('session_started', handleSessionCreated);
+
+    socket.on('error', (err) => {
+      console.warn('[HostControlRoom] Socket error:', err);
+    });
+
+    // Safety retry interval if connected but roomCode not yet assigned
+    const retryTimer = setInterval(() => {
+      if (socket && socket.connected && !roomCodeRef.current) {
+        emitHostStartQuiz(socket);
+      }
+    }, 2000);
 
     socket.on('participant_metrics', (data) => {
       setMetrics(data);
@@ -254,6 +287,7 @@ export default function HostControlRoom() {
     socket.on('emoji_received', handleReaction);
 
     return () => {
+      clearInterval(retryTimer);
       if (socket) socket.disconnect();
     };
   }, [quizId]);
@@ -296,15 +330,8 @@ export default function HostControlRoom() {
         headers: { Authorization: `Bearer ${authToken}` }
       });
       setQuiz(response.data);
-      if (!sessionStarted.current) {
-        sessionStarted.current = true;
-        socket.emit('host_start_quiz', {
-          quizId: quizId,
-          hostId: user?.id,
-          hostName: user?.name || 'Authorized Trainer',
-          token: authToken,
-          sessionName: sessionName || null
-        });
+      if (!roomCodeRef.current && socket && socket.connected) {
+        emitHostStartQuiz(socket);
       }
     } catch (error) {
       console.error('Failed to fetch quiz', error);
@@ -506,6 +533,38 @@ export default function HostControlRoom() {
             <div style={{ fontSize: '2rem', fontWeight: 900, color: '#2563EB', letterSpacing: '3px', fontFamily: 'monospace' }}>
               {formattedRoomCode}
             </div>
+            {roomCode && (
+              <button
+                id="copy-join-link-btn"
+                onClick={() => {
+                  const effectiveBase = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+                  const fullLink = `${effectiveBase}/join?code=${roomCode}`;
+                  navigator.clipboard.writeText(fullLink);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                }}
+                style={{
+                  marginTop: '8px',
+                  width: '100%',
+                  background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
+                  border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
+                  borderRadius: '8px',
+                  padding: '6px 10px',
+                  color: copiedLink ? '#34D399' : '#93C5FD',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'all 0.2s'
+                }}
+              >
+                {copiedLink ? <Check size={13} /> : <Copy size={13} />}
+                <span>{copiedLink ? 'Link Copied!' : 'Copy Live Join Link'}</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -571,8 +630,18 @@ export default function HostControlRoom() {
               <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
                 Waiting for Participants to Connect
               </h1>
-              <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '520px', marginBottom: '36px' }}>
-                Learners can scan the QR code on the left or visit <strong style={{ color: '#06B6D4' }}>/join</strong> and enter PIN <strong style={{ color: '#2563EB' }}>{formattedRoomCode}</strong>
+              <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '600px', marginBottom: '36px', lineHeight: 1.6 }}>
+                Learners can scan the QR code on the left or visit{' '}
+                <a
+                  href={roomCode ? `${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}` : '#'}
+                  target="_blank"
+                  rel="noreferrer"
+                  style={{ color: '#06B6D4', textDecoration: 'underline', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                >
+                  <span>{((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join</span>
+                  <ExternalLink size={14} />
+                </a>
+                {' '}and enter PIN <strong style={{ color: '#2563EB', fontSize: '1.3rem', letterSpacing: '2px', fontFamily: 'monospace' }}>{formattedRoomCode}</strong>
               </p>
 
               {/* Connected Participant Chips */}
