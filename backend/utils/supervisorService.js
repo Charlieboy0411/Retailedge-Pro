@@ -254,7 +254,7 @@ class SupervisorService {
       // Attendance >= 80% AND Assessment >= 70%
       const existingCert = certMap.get(member.id);
       const isEligible = attendancePct >= 80 && scorePct >= 70;
-      let certStatus = 'In Progress';
+      let certStatus;
       if (existingCert) {
         certStatus = 'Certified';
       } else if (isEligible) {

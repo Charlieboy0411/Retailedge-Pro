@@ -131,8 +131,8 @@ function resolvePeriodDateRange(period = 'current_month', customStartDate = null
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0 = Jan, 8 = Sep
 
-  let start = null;
-  let end = null;
+  let start;
+  let end;
 
   if (normalized === 'current_month' || normalized === 'this_month') {
     start = new Date(currentYear, currentMonth, 1, 0, 0, 0, 0);
@@ -290,10 +290,10 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
   const trainingIds = trainingRecords.map(t => t.id);
 
   // Stage 2: Parallel fetch of participation metrics across participants & modules
-  let allUserScores = [];
-  let allUserAtt = [];
-  let allUserProg = [];
-  let allTrainingCompletions = [];
+  let allUserScores;
+  let allUserAtt;
+  let allUserProg;
+  let allTrainingCompletions;
 
   const stage2Promises = [];
   if (participantIds.length > 0) {
@@ -338,8 +338,8 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
   // 4. Curriculum Completion Rate (Exact Numerator / Denominator)
   // Numerator: Total completed module assignments in scope
   // Denominator: Total potential assignments (totalLearners * activeModules) or actual progress records
-  let curriculumCompletionRate = null;
-  let hasCurriculumData = false;
+  let curriculumCompletionRate;
+  let hasCurriculumData;
 
   if (allUserProg.length > 0) {
     hasCurriculumData = true;
@@ -363,8 +363,8 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
     userAttMap.get(r.userId).push(pct);
   });
 
-  let attendanceRate = null;
-  let hasAttendanceData = false;
+  let attendanceRate;
+  let hasAttendanceData;
 
   if (userAttMap.size > 0) {
     hasAttendanceData = true;
@@ -390,9 +390,9 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
     }
   });
 
-  let assessmentAverageScore = null;
-  let assessmentPassRate = null;
-  let hasAssessmentData = false;
+  let assessmentAverageScore;
+  let assessmentPassRate;
+  let hasAssessmentData;
   const assessedLearnersCount = userScoresMap.size;
 
   if (assessedLearnersCount > 0) {
@@ -510,10 +510,10 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
   // NEEDS ATTENTION: Attendance < 80%, deficit learners > 0, evaluated pass rate 60-69%, or curriculum completion < 70%
   // WATCH: Near-threshold conditions (Attendance 80-84% or Pass Rate 70-74%) — never overrides Critical or Needs Attention
   // HEALTHY: All required standards met
-  let healthStatus = 'Healthy';
-  let badgeColor = 'green';
-  let healthScore = 95;
-  let healthSummary = 'All capability indicators meet active operational standards.';
+  let healthStatus;
+  let badgeColor;
+  let healthScore;
+  let healthSummary;
 
   const hasDeliveryOrEvaluationEvidence = hasAttendanceData || hasAssessmentData || hasCurriculumData;
 

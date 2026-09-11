@@ -15,7 +15,7 @@ module.exports = [
   js.configs.recommended,
   {
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2022,
       sourceType: 'commonjs',
       globals: {
         // Node.js globals
@@ -30,6 +30,7 @@ module.exports = [
         setInterval: 'readonly',
         clearInterval: 'readonly',
         Buffer: 'readonly',
+        fetch: 'readonly',
         // Jest globals
         jest: 'readonly',
         describe: 'readonly',
@@ -44,12 +45,27 @@ module.exports = [
     rules: {
       // Warnings instead of errors for formatting and unused elements to keep CI clean but informative
       'no-unused-vars': ['warn', { 'argsIgnorePattern': '^_' }],
+      'no-useless-assignment': 'warn',
       'no-undef': 'error',
       'no-unreachable': 'warn',
       'no-duplicate-case': 'error',
       'no-empty': 'warn',
       'semi': ['warn', 'always'],
       'quotes': ['warn', 'single', { 'avoidEscape': true }]
+    }
+  },
+  {
+    // Browser evaluation contexts used inside Puppeteer / visual test runners
+    files: ['tests/**/*.js', 'scripts/**/*.js'],
+    languageOptions: {
+      globals: {
+        window: 'readonly',
+        document: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        navigator: 'readonly',
+        fetch: 'readonly',
+      }
     }
   }
 ];

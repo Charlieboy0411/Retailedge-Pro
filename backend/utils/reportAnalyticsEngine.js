@@ -624,7 +624,7 @@ async function runMonthlyClosing(period = '2026-08', user = null) {
  */
 async function getAvailableReports(filters = {}, user = null) {
   const isClient = user && user.role === 'Client';
-  let accessibleProjectIds = [];
+  let accessibleProjectIds;
   if (isClient) {
     const clientService = require('./clientService');
     accessibleProjectIds = await clientService.getAccessibleClientProjectIds(user);

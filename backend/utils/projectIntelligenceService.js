@@ -521,7 +521,7 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
           quizTitle: quizMeta.title,
           projectName: quizMeta.projectName,
           quizType: qType,
-          score: `${eff}/${totalQ}`,
+          score: `${correctCount}/${totalQ}`,
           percentage: pct,
           arenaPoints: p.score || 0,
           passed,
