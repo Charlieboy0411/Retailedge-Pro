@@ -41,6 +41,72 @@ function determineProjectHealth(attendanceRate, completionRate, passRate) {
 }
 
 /**
+ * Pure calculation helper: Compiles individual participant assessment scores, percentages, and arena points.
+ */
+function compileSessionParticipantResults(participants = [], totalQuestions = 1, quizMode = 'ONLINE') {
+  let totalScore = 0;
+  let passedCount = 0;
+  let highestScore = 0;
+  let lowestScore = 100;
+  const scores = [];
+  const attentionParticipants = [];
+
+  const results = participants.map(p => {
+    const rawScore = p.score || 0;
+    const responses = p.Responses || [];
+    const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+    const scorePct = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
+    scores.push(scorePct);
+    totalScore += scorePct;
+    if (scorePct > highestScore) highestScore = scorePct;
+    if (scorePct < lowestScore) lowestScore = scorePct;
+
+    const passed = scorePct >= 60;
+    if (passed) passedCount++;
+    else {
+      attentionParticipants.push({
+        id: p.id,
+        name: p.name,
+        employeeId: p.employeeId || 'N/A',
+        score: `${scorePct}%`,
+        reason: 'Failed minimum assessment mark (< 60%)'
+      });
+    }
+
+    return {
+      id: p.id,
+      name: p.name,
+      employeeId: p.employeeId || 'N/A',
+      mode: quizMode,
+      score: `${scorePct}%`,
+      rawScore: `${correctCount}/${totalQuestions}`,
+      arenaPoints: rawScore,
+      status: passed ? 'Pass' : 'Fail',
+      passed,
+      timeSpent: '12m',
+      attendancePercentage: '100%',
+      certificationImpact: passed ? 'Eligible for Credential' : 'Re-test Required'
+    };
+  });
+
+  scores.sort((a, b) => a - b);
+  const medianScore = scores.length > 0 ? scores[Math.floor(scores.length / 2)] : 0;
+  const avgScore = scores.length > 0 ? Math.round(totalScore / scores.length) : 0;
+
+  return {
+    results,
+    scores,
+    totalScore,
+    passedCount,
+    highestScore: scores.length > 0 ? highestScore : 0,
+    lowestScore: scores.length > 0 ? lowestScore : 0,
+    medianScore,
+    avgScore,
+    attentionParticipants
+  };
+}
+
+/**
  * LEVEL 1: Project / Quiz Report
  * Automatically generated whenever a quiz/session is completed.
  */
@@ -81,51 +147,17 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
   const completed = participants.filter(p => (p.Responses || []).length >= totalQuestions).length || participants.length;
   const pending = Math.max(0, assigned - completed);
 
-  let totalScore = 0;
-  let passedCount = 0;
-  let highestScore = 0;
-  let lowestScore = 100;
-  const scores = [];
-  const attentionParticipants = [];
+  const compiled = compileSessionParticipantResults(participants, totalQuestions, quizMode);
+  const participantResults = compiled.results;
+  const scores = compiled.scores;
+  const totalScore = compiled.totalScore;
+  const passedCount = compiled.passedCount;
+  const highestScore = compiled.highestScore;
+  const lowestScore = compiled.lowestScore;
+  const medianScore = compiled.medianScore;
+  const avgScore = compiled.avgScore;
+  const attentionParticipants = compiled.attentionParticipants;
 
-  const participantResults = participants.map(p => {
-    const rawScore = p.score || 0;
-    const scorePct = Math.min(100, Math.round((rawScore / totalQuestions) * 100));
-    scores.push(scorePct);
-    totalScore += scorePct;
-    if (scorePct > highestScore) highestScore = scorePct;
-    if (scorePct < lowestScore) lowestScore = scorePct;
-
-    const passed = scorePct >= 60;
-    if (passed) passedCount++;
-    else {
-      attentionParticipants.push({
-        id: p.id,
-        name: p.name,
-        employeeId: p.employeeId || 'N/A',
-        score: `${scorePct}%`,
-        reason: 'Failed minimum assessment mark (< 60%)'
-      });
-    }
-
-    return {
-      id: p.id,
-      name: p.name,
-      employeeId: p.employeeId || 'N/A',
-      mode: quizMode,
-      score: `${scorePct}%`,
-      rawScore: `${rawScore}/${totalQuestions}`,
-      status: passed ? 'Pass' : 'Fail',
-      passed,
-      timeSpent: '12m',
-      attendancePercentage: '100%',
-      certificationImpact: passed ? 'Eligible for Credential' : 'Re-test Required'
-    };
-  });
-
-  scores.sort((a, b) => a - b);
-  const medianScore = scores.length > 0 ? scores[Math.floor(scores.length / 2)] : 75;
-  const avgScore = scores.length > 0 ? Math.round(totalScore / scores.length) : 80;
   const completionRate = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
   const attemptRate = assigned > 0 ? Math.round((attempted / assigned) * 100) : 0;
   const passRate = completed > 0 ? Math.round((passedCount / completed) * 100) : 0;
@@ -682,5 +714,6 @@ module.exports = {
   runMonthlyClosing,
   getAvailableReports,
   determineProjectHealth,
-  calculateDelta
+  calculateDelta,
+  compileSessionParticipantResults
 };

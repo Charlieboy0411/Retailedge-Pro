@@ -177,24 +177,51 @@ export default function TrainerReportCenter({ token, user }) {
     }
   };
 
-  // Export Individual Report to Excel
-  const handleExportSessionExcel = (report) => {
+  // Ensure session has full participant details before export
+  const ensureSessionDetail = async (report) => {
+    if (report.participants && Array.isArray(report.participants) && report.participants.length > 0 && typeof report.participants[0] === 'object') {
+      return report;
+    }
     try {
-      generateExcelReport(report, report.projectName || 'Project');
+      const res = await axios.get(`/api/reports/${report.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return { ...report, ...res.data };
     } catch (err) {
+      console.warn('Could not fetch full session detail for export, using report summary', err);
+      return report;
+    }
+  };
+
+  // Export Individual Report to Excel
+  const handleExportSessionExcel = async (report) => {
+    try {
+      const fullReport = await ensureSessionDetail(report);
+      await generateExcelReport('quiz', fullReport, {
+        presenterName: user?.name || 'Trainer',
+        footerText: `RetailEdge Pro · ${fullReport.projectName || 'Training'}`
+      });
+    } catch (err) {
+      console.error('Failed to generate Excel report:', err);
       alert('Failed to generate Excel report');
     }
   };
 
   // Export Individual Report to PPT
-  const handleExportSessionPPT = (report) => {
+  const handleExportSessionPPT = async (report) => {
     try {
-      generate15SlidePPT(report, {
-        theme: 'standard',
-        presenter: user?.name || 'Trainer',
-        role: 'Trainer'
-      });
+      const fullReport = await ensureSessionDetail(report);
+      await generate15SlidePPT(
+        fullReport,
+        [],
+        'standard',
+        {
+          presenterName: user?.name || 'Trainer',
+          footerText: `RetailEdge Pro · ${fullReport.projectName || 'Training'}`
+        }
+      );
     } catch (err) {
+      console.error('Failed to generate PowerPoint deck:', err);
       alert('Failed to generate PowerPoint deck');
     }
   };
@@ -923,7 +950,7 @@ export default function TrainerReportCenter({ token, user }) {
       {/* ─── REPORT DETAIL INSPECTOR MODAL ─── */}
       {activeModal === 'detail' && selectedReportDetail && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, backdropFilter: 'blur(4px)' }}>
-          <div className="glass-card" style={{ width: '700px', background: 'var(--bg-glass)', maxHeight: '88vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', border: '1px solid #B7BEC7' }}>
+          <div className="glass-card" style={{ width: '850px', maxWidth: '95vw', background: 'var(--bg-glass)', maxHeight: '88vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', border: '1px solid #B7BEC7' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
@@ -937,20 +964,90 @@ export default function TrainerReportCenter({ token, user }) {
             </div>
 
             {/* Metric Summary */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
               <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Submissions</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selectedReportDetail.participants || 0}</div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Participants</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {selectedReportDetail.participantsCount || (Array.isArray(selectedReportDetail.participants) ? selectedReportDetail.participants.length : selectedReportDetail.participants) || 0}
+                </div>
               </div>
               <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Average Score</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563EB' }}>{selectedReportDetail.avgScore || '0%'}</div>
               </div>
               <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Questions</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {selectedReportDetail.totalQuestions || (selectedReportDetail.questions ? selectedReportDetail.questions.length : 0)}
+                </div>
+              </div>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
                 <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#16A34A' }}>{selectedReportDetail.status || 'Finished'}</div>
               </div>
             </div>
+
+            {/* Learner Roster Table */}
+            {Array.isArray(selectedReportDetail.participants) && selectedReportDetail.participants.length > 0 && typeof selectedReportDetail.participants[0] === 'object' && (
+              <div style={{ marginBottom: '20px' }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                  Learner Roster ({selectedReportDetail.participants.length})
+                </h4>
+                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-glass)' }}>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Learner</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Assessment Score</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Assessment %</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Arena Points</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Completion</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Time Spent</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedReportDetail.participants.map((p, idx) => {
+                        const pctVal = parseInt(p.percentage) || 0;
+                        const isPass = pctVal >= 70;
+                        return (
+                          <tr key={p.id || idx} style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                            <td style={{ padding: '10px 12px' }}>
+                              <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{p.name}</div>
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{p.employeeId || 'ID: N/A'}</div>
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {p.score || '0 / 0'}
+                            </td>
+                            <td style={{ padding: '10px 12px' }}>
+                              <span style={{
+                                display: 'inline-block',
+                                padding: '3px 8px',
+                                borderRadius: '12px',
+                                fontSize: '0.74rem',
+                                fontWeight: 700,
+                                background: isPass ? 'rgba(22, 163, 74, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                                color: isPass ? '#16A34A' : '#EF4444'
+                              }}>
+                                {p.percentage || '0%'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '10px 12px', fontWeight: 700, color: '#F59E0B' }}>
+                              {p.arenaPoints != null ? `${p.arenaPoints} pts` : '0 pts'}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {p.completion || '100%'}
+                            </td>
+                            <td style={{ padding: '10px 12px', color: 'var(--text-secondary)' }}>
+                              {p.timeSpent || '0s'}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {/* Questions Roster */}
             {selectedReportDetail.questions && selectedReportDetail.questions.length > 0 && (

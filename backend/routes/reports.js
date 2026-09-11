@@ -76,7 +76,8 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       },
       {
         model: Participant,
-        attributes: ['id', 'name', 'score']
+        attributes: ['id', 'name', 'score'],
+        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       },
       {
         model: User,
@@ -140,12 +141,17 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
     // Map the raw data to a cleaner format for the frontend
     const reports = sessions.map(session => {
       const participants = session.Participants || [];
-      const totalScore = participants.reduce((sum, p) => sum + p.score, 0);
-      // totalQuestions is the number of questions in the quiz (each correct answer = 1 point)
       const totalQuestions = session.Quiz && session.Quiz.questions ? session.Quiz.questions.length : 0;
-      const avgScore = participants.length > 0 && totalQuestions > 0
-        ? Math.round((totalScore / (participants.length * totalQuestions)) * 100)
-        : participants.length > 0 ? Math.min(100, totalScore) : 0;
+
+      let totalPercentageSum = 0;
+      participants.forEach(p => {
+        const responses = p.Responses || [];
+        const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+        const pPct = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
+        totalPercentageSum += pPct;
+      });
+
+      const avgScore = participants.length > 0 ? Math.round(totalPercentageSum / participants.length) : 0;
 
       return {
         id: session.id,
@@ -210,9 +216,11 @@ router.get('/attendance', requireAuth, async (req, res) => {
       const participations = u.Participants || [];
       const individualLogs = participations.map(p => {
         const totalQuestions = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-        const percentage = totalQuestions > 0 ? Math.round((p.score / totalQuestions) * 100) : 0;
+        const responses = p.Responses || [];
+        const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+        const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
         
-        const totalTimeMs = (p.Responses || []).reduce((sum, r) => sum + (r.response_time || 0), 0);
+        const totalTimeMs = responses.reduce((sum, r) => sum + (r.response_time || 0), 0);
         const timeSpentSec = Math.round(totalTimeMs / 1000);
 
         return {
@@ -221,8 +229,9 @@ router.get('/attendance', requireAuth, async (req, res) => {
           quizTitle: p.Session?.Quiz ? p.Session.Quiz.title : 'Unknown Quiz',
           projectId: p.Session?.Quiz?.Project?.id || null,
           projectName: p.Session?.Quiz?.Project?.name || 'General',
-          score: `${p.score} / ${totalQuestions}`,
+          score: `${correctCount} / ${totalQuestions}`,
           percentage: `${percentage}%`,
+          arenaPoints: p.score || 0,
           timeSpent: `${timeSpentSec}s`,
           status: 'Completed'
         };
@@ -259,7 +268,10 @@ router.get('/attendance', requireAuth, async (req, res) => {
           avgScore: participations.length > 0 
             ? `${Math.round(participations.reduce((sum, p) => {
                 const totalQ = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-                return sum + (totalQ > 0 ? (p.score / totalQ) * 100 : 0);
+                const responses = p.Responses || [];
+                const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+                const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
+                return sum + pct;
               }, 0) / participations.length)}%`
             : '0%',
           datesCount: [...new Set([
@@ -312,6 +324,7 @@ router.get('/attendance', requireAuth, async (req, res) => {
         {
           model: Participant,
           include: [
+            Response,
             {
               model: Session,
               include: [
@@ -349,7 +362,9 @@ router.get('/attendance', requireAuth, async (req, res) => {
         let totalPercentage = 0;
         participations.forEach(p => {
           const totalQuestions = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-          const percentage = totalQuestions > 0 ? (p.score / totalQuestions) * 100 : 0;
+          const responses = p.Responses || [];
+          const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+          const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
           totalPercentage += percentage;
         });
 
@@ -450,6 +465,7 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
 
     const participants = await Participant.findAll({
       include: [
+        Response,
         {
           model: Session,
           where: sessionWhere,
@@ -473,23 +489,28 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
         userStats[key] = {
           name: p.name,
           employeeId: p.employeeId || 'N/A',
-          totalScore: 0,
+          totalCorrect: 0,
           totalQuestions: 0,
-          attempts: 0
+          attempts: 0,
+          arenaPoints: 0
         };
       }
       const questionsCount = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-      userStats[key].totalScore += p.score || 0;
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      userStats[key].totalCorrect += correctCount;
       userStats[key].totalQuestions += questionsCount;
       userStats[key].attempts += 1;
+      userStats[key].arenaPoints += (p.score || 0);
     });
 
     const leaderboard = Object.values(userStats)
       .map(u => {
-        const percentage = u.totalQuestions > 0 ? Math.round((u.totalScore / u.totalQuestions) * 100) : 0;
+        const percentage = u.totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((u.totalCorrect / u.totalQuestions) * 100))) : 0;
         return {
           name: u.name,
           score: `${percentage}%`,
+          arenaPoints: u.arenaPoints,
           completion: '100%'
         };
       })
@@ -828,12 +849,17 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
           model: Quiz,
           include: [
             { model: Question, as: 'questions' },
-            { model: Project, attributes: ['id', 'name'] }
+            { model: Project, attributes: ['id', 'name', 'parentId'] }
           ]
         },
         {
           model: Participant,
           include: [Response]
+        },
+        {
+          model: User,
+          as: 'host',
+          attributes: ['id', 'name']
         }
       ]
     });
@@ -854,51 +880,67 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       const isHost = session.hostId === req.user.id;
-      const isProjectAuthorized = session.Quiz?.projectId && accessibleProjectIds.includes(session.Quiz.projectId);
+      const isProjectAuthorized = session.Quiz?.projectId && (
+        accessibleProjectIds.includes(session.Quiz.projectId) ||
+        (session.Quiz.Project?.parentId && accessibleProjectIds.includes(session.Quiz.Project.parentId))
+      );
       if (!isHost && !isProjectAuthorized) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to view this session report.' });
       }
     }
 
     const totalQuestions = session.Quiz && session.Quiz.questions ? session.Quiz.questions.length : 0;
+    let totalScoreSum = 0;
 
     const participantsDetails = (session.Participants || []).map(p => {
-      const totalTimeMs = (p.Responses || []).reduce((sum, r) => sum + (r.response_time || 0), 0);
+      const responses = p.Responses || [];
+      const totalTimeMs = responses.reduce((sum, r) => sum + (r.response_time || 0), 0);
       const timeSpentSec = Math.round(totalTimeMs / 1000);
       
-      const percentage = totalQuestions > 0 ? Math.round((p.score / totalQuestions) * 100) : 0;
-      const answeredQuestions = (p.Responses || []).length;
-      const completionPercentage = totalQuestions > 0 ? Math.round((answeredQuestions / totalQuestions) * 100) : 0;
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
+      totalScoreSum += percentage;
+
+      const answeredQuestions = responses.length;
+      const completionPercentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((answeredQuestions / totalQuestions) * 100))) : 0;
 
       return {
         id: p.id,
         name: p.name,
         employeeId: p.employeeId || 'N/A',
         mobileNumber: p.mobileNumber || 'N/A',
-        score: `${p.score} / ${totalQuestions}`,
-        timeSpent: `${timeSpentSec}s`,
+        score: `${correctCount} / ${totalQuestions}`,
         percentage: `${percentage}%`,
+        arenaPoints: p.score || 0,
+        timeSpent: `${timeSpentSec}s`,
         completion: `${completionPercentage}%`,
         storeName: p.storeName || null,
-        responses: (p.Responses || []).map(r => ({
+        responses: responses.map(r => ({
           questionId: r.questionId,
-          answer: r.answer
+          answer: r.answer,
+          points_awarded: r.points_awarded
         }))
       };
     });
+
+    const avgScore = participantsDetails.length > 0 ? Math.round(totalScoreSum / participantsDetails.length) : 0;
 
     res.json({
       sessionId: session.id,
       quizTitle: session.Quiz ? session.Quiz.title : 'Unknown Quiz',
       projectName: session.Quiz && session.Quiz.Project ? session.Quiz.Project.name : 'N/A',
+      hostName: session.host ? session.host.name : 'Lead Trainer',
       date: session.startedAt ? new Date(session.startedAt).toISOString().split('T')[0] : new Date(session.createdAt).toISOString().split('T')[0],
       totalQuestions,
+      status: session.status || 'Finished',
+      avgScore: `${avgScore}%`,
+      participantsCount: participantsDetails.length,
+      participants: participantsDetails,
       questions: (session.Quiz && session.Quiz.questions || []).map(q => ({
         id: q.id,
         text: q.text,
         correct_answer: q.correct_answer
-      })),
-      participants: participantsDetails
+      }))
     });
   } catch (error) {
     console.error('Error fetching session details:', error);

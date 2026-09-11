@@ -10,6 +10,7 @@ const Participant = require('../models/Participant');
 const Response = require('../models/Response');
 const Certificate = require('../models/Certificate');
 const JitsiAttendance = require('../models/JitsiAttendance');
+const Question = require('../models/Question');
 
 /**
  * Resolves all accessible project IDs for a Client user.
@@ -191,24 +192,48 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   // 6. Assessment Average Score & 7. Pass Rate (from Quiz Responses / Sessions)
   let avgScore = 0;
   let passRate = 0;
+  const partsByUserId = new Map();
+
   if (participantIds.length > 0) {
     const quizParticipants = await Participant.findAll({
       where: { userId: { [Op.in]: participantIds } },
-      attributes: ['score']
+      attributes: ['id', 'score', 'userId'],
+      include: [
+        {
+          model: Response,
+          attributes: ['id', 'points_awarded', 'is_correct']
+        },
+        {
+          model: Session,
+          attributes: ['id', 'quizId'],
+          include: [{
+            model: Quiz,
+            attributes: ['id'],
+            include: [{ model: Question, as: 'questions', attributes: ['id'] }]
+          }]
+        }
+      ]
+    });
+
+    quizParticipants.forEach(p => {
+      if (!partsByUserId.has(p.userId)) partsByUserId.set(p.userId, []);
+      partsByUserId.get(p.userId).push(p);
     });
 
     if (quizParticipants.length > 0) {
-      const scores = quizParticipants.map(r => {
-        const raw = Number(r.score || 0);
-        return raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw;
+      const scores = quizParticipants.map(p => {
+        const totalQ = p.Session?.Quiz?.questions?.length || 0;
+        const responses = p.Responses || [];
+        const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+        return totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
       });
       const sumScore = scores.reduce((a, b) => a + b, 0);
       avgScore = Math.min(100, Math.round(sumScore / scores.length));
       const passedCount = scores.filter(s => s >= 70).length;
       passRate = Math.round((passedCount / scores.length) * 100);
     } else {
-      avgScore = totalParticipants > 0 ? 72 : 0;
-      passRate = totalParticipants > 0 ? 65 : 0;
+      avgScore = 0;
+      passRate = 0;
     }
   }
 
@@ -227,20 +252,24 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   // Criteria: score < 60% OR attendance < 80%
   let atRiskCount = 0;
   for (const p of participants) {
-    const pParts = await Participant.findAll({ where: { userId: p.id }, attributes: ['score'] });
-    const pAvg = pParts.length > 0
-      ? Math.round(pParts.reduce((acc, curr) => {
-          const raw = Number(curr.score || 0);
-          return acc + (raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw);
-        }, 0) / pParts.length)
-      : 70;
+    const userParts = partsByUserId.get(p.id) || [];
+    let pAvg = 0;
+    if (userParts.length > 0) {
+      const userScores = userParts.map(up => {
+        const totalQ = up.Session?.Quiz?.questions?.length || 0;
+        const responses = up.Responses || [];
+        const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+        return totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
+      });
+      pAvg = Math.round(userScores.reduce((a, b) => a + b, 0) / userScores.length);
+    }
 
     const pAtt = await JitsiAttendance.findAll({ where: { userId: p.id }, attributes: ['attendancePercentage'] });
     const pAttRate = pAtt.length > 0
       ? Math.round(pAtt.reduce((acc, curr) => acc + (curr.attendancePercentage || 0), 0) / pAtt.length)
       : 80;
 
-    if (pAvg < 60 || pAttRate < 80) {
+    if ((userParts.length > 0 && pAvg < 60) || pAttRate < 80) {
       atRiskCount++;
     }
   }

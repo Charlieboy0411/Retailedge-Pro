@@ -7,6 +7,7 @@ const Certificate = require('../models/Certificate');
 const Session = require('../models/Session');
 const Quiz = require('../models/Quiz');
 const Question = require('../models/Question');
+const Response = require('../models/Response');
 const { Op } = require('sequelize');
 
 /**
@@ -83,16 +84,18 @@ class SupervisorService {
       ? Math.round((completedProgresses / progresses.length) * 100)
       : 0;
 
-    // 2. Quiz Participations & Scores for Team
     const participations = await Participant.findAll({
       where: { userId: { [Op.in]: teamUserIds } },
-      include: [{
-        model: Session,
-        include: [{
-          model: Quiz,
-          include: [{ model: Question, as: 'questions' }]
-        }]
-      }]
+      include: [
+        Response,
+        {
+          model: Session,
+          include: [{
+            model: Quiz,
+            include: [{ model: Question, as: 'questions' }]
+          }]
+        }
+      ]
     });
 
     let totalScore = 0;
@@ -101,7 +104,9 @@ class SupervisorService {
 
     participations.forEach(p => {
       const qCount = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-      const pct = qCount > 0 ? (p.score / qCount) * 100 : Math.min(100, p.score);
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const pct = qCount > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / qCount) * 100))) : 0;
       totalScore += pct;
       scoredAttempts++;
       if (pct >= 70) passedAttempts++;
@@ -147,7 +152,9 @@ class SupervisorService {
         let mTotal = 0;
         memberParts.forEach(p => {
           const qCount = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-          mTotal += qCount > 0 ? (p.score / qCount) * 100 : Math.min(100, p.score);
+          const responses = p.Responses || [];
+          const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+          mTotal += qCount > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / qCount) * 100))) : 0;
         });
         memberScore = Math.round(mTotal / memberParts.length);
       }
@@ -192,13 +199,16 @@ class SupervisorService {
 
     const participations = await Participant.findAll({
       where: { userId: { [Op.in]: teamUserIds } },
-      include: [{
-        model: Session,
-        include: [{
-          model: Quiz,
-          include: [{ model: Question, as: 'questions' }]
-        }]
-      }]
+      include: [
+        Response,
+        {
+          model: Session,
+          include: [{
+            model: Quiz,
+            include: [{ model: Question, as: 'questions' }]
+          }]
+        }
+      ]
     });
 
     const issuedCerts = await Certificate.findAll({
@@ -224,7 +234,9 @@ class SupervisorService {
         let sum = 0;
         memberParts.forEach(p => {
           const qCount = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-          sum += qCount > 0 ? (p.score / qCount) * 100 : Math.min(100, p.score);
+          const responses = p.Responses || [];
+          const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+          sum += qCount > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / qCount) * 100))) : 0;
         });
         scorePct = Math.round(sum / memberParts.length);
       }

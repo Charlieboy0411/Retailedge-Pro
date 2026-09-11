@@ -116,7 +116,7 @@ export default function HostControlRoom() {
           setQrError(true);
           setQrLoading(false);
         }
-      }, 5000);
+      }, 3500);
       return () => clearTimeout(timer);
     }
   }, [qrDataUrl, roomCode]);
@@ -304,17 +304,60 @@ export default function HostControlRoom() {
     try {
       setQrError(false);
       setQrLoading(true);
-      const effectiveBase = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+      const effectiveBase = (useLanQr && lanBaseUrl)
+        ? lanBaseUrl
+        : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
       const joinUrl = `${effectiveBase}/join?code=${code}`;
-      const dataUrl = await QRCode.toDataURL(joinUrl, {
-        margin: 2,
-        width: 220,
-        color: {
-          dark: '#0F172A',
-          light: '#FFFFFF'
+
+      const qrMethod = QRCode?.toDataURL ? QRCode : (QRCode?.default || QRCode);
+      // Step 1: Try Canvas toDataURL
+      try {
+        if (qrMethod && typeof qrMethod.toDataURL === 'function') {
+          const dataUrl = await qrMethod.toDataURL(joinUrl, {
+            margin: 2,
+            width: 220,
+            color: {
+              dark: '#0F172A',
+              light: '#FFFFFF'
+            }
+          });
+          if (dataUrl) {
+            setQrDataUrl(dataUrl);
+            setQrLoading(false);
+            setQrError(false);
+            return;
+          }
         }
-      });
-      setQrDataUrl(dataUrl);
+      } catch (canvasErr) {
+        console.warn('Canvas toDataURL failed, attempting SVG fallback:', canvasErr);
+      }
+
+      // Step 2: Fallback to SVG string generation (pure vector math, no canvas context required)
+      try {
+        if (qrMethod && typeof qrMethod.toString === 'function') {
+          const svgString = await qrMethod.toString(joinUrl, {
+            type: 'svg',
+            margin: 2,
+            width: 220,
+            color: {
+              dark: '#0F172A',
+              light: '#FFFFFF'
+            }
+          });
+          if (svgString) {
+            const svgDataUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svgString)}`;
+            setQrDataUrl(svgDataUrl);
+            setQrLoading(false);
+            setQrError(false);
+            return;
+          }
+        }
+      } catch (svgErr) {
+        console.warn('SVG toString QR fallback failed:', svgErr);
+      }
+
+      // If both methods fail
+      setQrError(true);
       setQrLoading(false);
     } catch (err) {
       console.error('QR generation error:', err);
@@ -505,12 +548,14 @@ export default function HostControlRoom() {
             ) : qrError ? (
               <div style={{ width: '180px', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#EF4444', textAlign: 'center', padding: '10px' }}>
                 <AlertCircle size={32} style={{ marginBottom: '8px' }} />
-                <span style={{ fontSize: '0.78rem', fontWeight: 700, marginBottom: '8px' }}>Unable to generate QR code</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B', marginBottom: '4px' }}>QR Code Unavailable</span>
+                <span style={{ fontSize: '0.7rem', color: '#64748B', marginBottom: '10px', lineHeight: 1.3 }}>Use Session PIN or direct Join link below</span>
                 <button
+                  id="retry-qr-btn"
                   onClick={() => generateQr(roomCodeRef.current || roomCode)}
-                  style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
+                  style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '6px 14px', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
                 >
-                  Retry
+                  Retry QR
                 </button>
               </div>
             ) : (
@@ -537,7 +582,9 @@ export default function HostControlRoom() {
               <button
                 id="copy-join-link-btn"
                 onClick={() => {
-                  const effectiveBase = (useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl;
+                  const effectiveBase = (useLanQr && lanBaseUrl)
+                    ? lanBaseUrl
+                    : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
                   const fullLink = `${effectiveBase}/join?code=${roomCode}`;
                   navigator.clipboard.writeText(fullLink);
                   setCopiedLink(true);

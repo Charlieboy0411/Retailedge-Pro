@@ -154,7 +154,8 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
     include: [
       {
         model: Participant,
-        attributes: ['id', 'userId', 'name', 'score', 'connectionStatus', 'createdAt']
+        attributes: ['id', 'userId', 'name', 'score', 'connectionStatus', 'createdAt'],
+        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       }
     ]
   });
@@ -179,8 +180,10 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
 
       // In RetailEdge, any recorded participant who attempted answers is completed
       completedAttempts++;
-      const pct = totalQ > 0 ? (p.score / totalQ) * 100 : 0;
-      totalScorePercentageSum += Math.min(100, pct);
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
+      totalScorePercentageSum += pct;
       if (pct >= 60) {
         passedAttempts++;
       }
@@ -459,7 +462,8 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
       { model: Quiz, attributes: ['id', 'title', 'config'] },
       {
         model: Participant,
-        attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'connectionStatus', 'createdAt']
+        attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'connectionStatus', 'createdAt'],
+        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       }
     ],
     order: [['createdAt', 'DESC']]
@@ -498,7 +502,9 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
       uniqueAttemptedUsers.add(p.userId || p.name);
 
       const totalQ = quizMeta.totalQuestions > 0 ? quizMeta.totalQuestions : 1;
-      const pct = Math.min(100, Math.round((p.score / totalQ) * 100));
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
       scoreSum += pct;
 
       const passed = pct >= 60;
@@ -515,8 +521,9 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
           quizTitle: quizMeta.title,
           projectName: quizMeta.projectName,
           quizType: qType,
-          score: `${p.score}/${totalQ}`,
+          score: `${eff}/${totalQ}`,
           percentage: pct,
+          arenaPoints: p.score || 0,
           passed,
           attemptDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : 'Recent'
         });
@@ -785,6 +792,7 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     quizAttempts = await Participant.findAll({
       where: { [Op.or]: quizOr },
       include: [
+        Response,
         {
           model: Session,
           include: [
@@ -827,7 +835,9 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
   let passedCount = 0;
   const attemptsFormatted = quizAttempts.map(qa => {
     const totalQ = qa.Session?.Quiz?.questions ? qa.Session.Quiz.questions.length : 1;
-    const pct = totalQ > 0 ? Math.round((qa.score / totalQ) * 100) : 0;
+    const responses = qa.Responses || [];
+    const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+    const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
     totalScoreSum += pct;
     const passed = pct >= 60;
     if (passed) passedCount++;
@@ -835,6 +845,8 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
       title: qa.Session?.Quiz ? qa.Session.Quiz.title : 'Assessment',
       type: qa.Session?.roomCode?.startsWith('off-') ? 'OFFLINE' : 'ONLINE',
       score: `${pct}%`,
+      rawScore: `${correctCount}/${totalQ}`,
+      arenaPoints: qa.score || 0,
       passed,
       date: qa.createdAt ? new Date(qa.createdAt).toISOString().split('T')[0] : 'Recent'
     };
@@ -983,7 +995,11 @@ async function getMasterTrainingOutcomeData(projectIds) {
       include: [
         { model: Quiz, attributes: ['id', 'title', 'config'] },
         { model: Project, attributes: ['id', 'name'] },
-        { model: Participant, attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'createdAt'] },
+        {
+          model: Participant,
+          attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'createdAt'],
+          include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
+        },
         { model: User, as: 'host', attributes: ['id', 'name'] }
       ]
     }),
@@ -1038,7 +1054,10 @@ async function getMasterTrainingOutcomeData(projectIds) {
 
     (session.Participants || []).forEach(p => {
       const cert = certMap[p.userId] || null;
-      const scorePct = Math.min(100, Math.round((p.score / 5) * 100));
+      const totalQ = session.Quiz?.questions ? session.Quiz.questions.length : 5;
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const scorePct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
       const passed = scorePct >= 60;
 
       outcomeRows.push({

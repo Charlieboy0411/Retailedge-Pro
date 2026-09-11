@@ -21,8 +21,21 @@ server {
     root /var/www/retailedge;
     index index.html index.htm;
     
+    # Cache-busting: Never cache index.html
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
+        expires -1;
+    }
+
+    # Hashed static assets: Cache immutably for 1 year
+    location /assets/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
     location / {
         try_files $uri $uri/ /index.html;
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0";
     }
     
     location /api/ {
