@@ -60,27 +60,31 @@ export default function LandingPage() {
     switch (role) {
       case 'Super Admin':
         setEmail('admin@quizhive.com');
-        setPassword('password');
+        setPassword('password123');
+        break;
+      case 'Program Manager':
+        setEmail('rubana@idonneous.com');
+        setPassword('password123');
         break;
       case 'T&D Manager':
-        setEmail('td@quizhive.com');
-        setPassword('password');
+        setEmail('charles@idonneous.com');
+        setPassword('password123');
         break;
       case 'Client':
-        setEmail('client.unilever@quizhive.com');
-        setPassword('password');
+        setEmail('client@quizhive.com');
+        setPassword('password123');
         break;
       case 'Supervisor':
-        setEmail('supervisor.north@quizhive.com');
-        setPassword('password');
+        setEmail('supervisor@quizhive.com');
+        setPassword('password123');
         break;
       case 'Trainer':
         setEmail('trainer@quizhive.com');
-        setPassword('password');
+        setPassword('password123');
         break;
       default:
         setEmail('admin@quizhive.com');
-        setPassword('password');
+        setPassword('password123');
     }
   };
 
@@ -95,17 +99,8 @@ export default function LandingPage() {
       login(token, user);
 
       const role = user.role || (user.Role ? user.Role.role_name : '');
-      if (['Project Manager', 'MD', 'COO', 'VP Operations', 'Client', 'Marketing Manager'].includes(role)) {
-        navigate('/pm-dashboard');
-      } else if (role === 'T&D Manager') {
-        navigate('/td-cockpit');
-      } else if (role === 'Supervisor') {
-        navigate('/supervisor-cockpit');
-      } else if (role === 'Trainer') {
-        navigate('/trainer-dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      const isPMRole = ['Program Manager', 'Project Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(role);
+      navigate(isPMRole ? '/pm-dashboard' : '/dashboard');
     } catch (err) {
       setLoginError(err.response?.data?.error || 'Authentication failed. Please verify credentials.');
     } finally {
@@ -1576,7 +1571,7 @@ export default function LandingPage() {
                   Or Quick-Fill Demo Enterprise Persona:
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                  {['Super Admin', 'T&D Manager', 'Client', 'Supervisor', 'Trainer'].map((role) => (
+                  {['Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'Supervisor', 'Trainer'].map((role) => (
                     <button
                       key={role}
                       type="button"

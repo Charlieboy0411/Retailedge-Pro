@@ -70,6 +70,11 @@ function App() {
           {/* Protected Routes inside Layout */}
           <Route path="/" element={<Layout />}>
             <Route path="dashboard"    element={<Dashboard />} />
+            {/* Direct cockpit aliases to unified dashboard */}
+            <Route path="trainer-dashboard" element={<Navigate to="/dashboard" replace />} />
+            <Route path="td-cockpit" element={<Navigate to="/dashboard" replace />} />
+            <Route path="supervisor-cockpit" element={<Navigate to="/dashboard" replace />} />
+            <Route path="client-cockpit" element={<Navigate to="/dashboard" replace />} />
             <Route path="pm-dashboard" element={
               <RoleGuard 
                 allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']} 
@@ -183,6 +188,9 @@ function App() {
               <HostControlRoom />
             </RoleGuard>
           } />
+
+          {/* Global Fallback Route for non-existent paths */}
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>
