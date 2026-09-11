@@ -33,6 +33,7 @@ export default function HostControlRoom() {
   const querySessionName = new URLSearchParams(window.location.search).get('sessionName') || '';
   const [sessionName, setSessionName] = useState(querySessionName);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [copiedPin, setCopiedPin] = useState(false);
   const [quiz, setQuiz] = useState(null);
   const [roomCode, setRoomCode] = useState('');
   const [sessionId, setSessionId] = useState(null);
@@ -526,6 +527,10 @@ export default function HostControlRoom() {
   }
 
   const formattedRoomCode = roomCode ? roomCode.replace(/(\d{3})(\d{3})/, '$1 $2') : 'Preparing...';
+  const effectiveBase = (useLanQr && lanBaseUrl)
+    ? lanBaseUrl
+    : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
+  const fullJoinLink = roomCode ? `${effectiveBase}/join?code=${roomCode}` : '';
 
   return (
     <div ref={containerRef} style={{ height: '100vh', width: '100vw', display: 'flex', background: '#0B1220', color: '#FFFFFF', overflow: 'hidden', position: 'relative', fontFamily: 'Manrope, Inter, sans-serif' }}>
@@ -555,6 +560,31 @@ export default function HostControlRoom() {
         </div>
       )}
 
+      {/* Toast Feedback for Copied PIN */}
+      {copiedPin && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '28px',
+          background: '#065F46',
+          color: '#ECFDF5',
+          border: '1px solid #10B981',
+          borderRadius: '10px',
+          padding: '12px 20px',
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          zIndex: 99999,
+          pointerEvents: 'none'
+        }}>
+          <Check size={18} style={{ color: '#34D399' }} />
+          <span>Session PIN ({formattedRoomCode}) Copied to Clipboard!</span>
+        </div>
+      )}
+
       {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
       <aside style={{
         width: '320px', background: '#0F172A', borderRight: '1px solid #1E293B',
@@ -572,12 +602,20 @@ export default function HostControlRoom() {
             </span>
           </div>
 
-          {/* QR Code White Card */}
-          <div style={{
-            background: '#FFFFFF', padding: '16px', borderRadius: '16px',
-            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)', display: 'flex',
-            flexDirection: 'column', alignItems: 'center', marginBottom: '16px'
-          }}>
+          {/* QR Code White Card - Clickable to open join page */}
+          <div 
+            onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
+            title={fullJoinLink ? "Click to open Live Arena Join page directly in a new tab" : "QR Code"}
+            style={{
+              background: '#FFFFFF', padding: '16px', borderRadius: '16px',
+              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)', display: 'flex',
+              flexDirection: 'column', alignItems: 'center', marginBottom: '10px',
+              cursor: fullJoinLink ? 'pointer' : 'default',
+              transition: 'transform 0.15s ease, box-shadow 0.15s ease'
+            }}
+            onMouseEnter={(e) => { if (fullJoinLink) e.currentTarget.style.transform = 'scale(1.02)'; }}
+            onMouseLeave={(e) => { if (fullJoinLink) e.currentTarget.style.transform = 'scale(1)'; }}
+          >
             {qrDataUrl ? (
               <img src={qrDataUrl} alt="QR Code to Join" style={{ width: '180px', height: '180px', display: 'block' }} />
             ) : hostError ? (
@@ -620,8 +658,8 @@ export default function HostControlRoom() {
             )}
           </div>
 
-          <div style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>
-            Scan with smartphone camera to join
+          <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>
+            Scan with smartphone camera or <span onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')} style={{ color: '#38BDF8', textDecoration: 'underline', cursor: 'pointer' }}>click to open ↗</span>
           </div>
 
           {/* Room PIN Display */}
@@ -634,24 +672,51 @@ export default function HostControlRoom() {
             </div>
             {roomCode && (
               <>
+                {/* Primary: Direct Open Button */}
+                <button
+                  id="open-join-link-btn"
+                  onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
+                  title="Directly opens the Live Arena Join page in a new tab"
+                  style={{
+                    marginTop: '10px',
+                    width: '100%',
+                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '9px 10px',
+                    color: '#FFFFFF',
+                    fontSize: '0.78rem',
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
+                    transition: 'all 0.15s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.92'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                >
+                  <ExternalLink size={14} />
+                  <span>Open Join Link (New Tab) ↗</span>
+                </button>
+
+                {/* Secondary: Copy Link Button */}
                 <button
                   id="copy-join-link-btn"
                   onClick={async () => {
-                    const effectiveBase = (useLanQr && lanBaseUrl)
-                      ? lanBaseUrl
-                      : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
-                    const fullLink = `${effectiveBase}/join?code=${roomCode}`;
-                    await copyTextToClipboard(fullLink);
+                    await copyTextToClipboard(fullJoinLink);
                     setCopiedLink(true);
                     setTimeout(() => setCopiedLink(false), 2500);
                   }}
                   style={{
-                    marginTop: '8px',
+                    marginTop: '6px',
                     width: '100%',
-                    background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
-                    border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
+                    background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.12)',
+                    border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.3)'}`,
                     borderRadius: '8px',
-                    padding: '8px 10px',
+                    padding: '7px 10px',
                     color: copiedLink ? '#34D399' : '#93C5FD',
                     fontSize: '0.75rem',
                     fontWeight: 700,
@@ -668,22 +733,24 @@ export default function HostControlRoom() {
                 </button>
 
                 {/* Direct Link Preview with quick open */}
-                <div style={{ marginTop: '8px', padding: '6px 10px', background: '#0F172A', borderRadius: '6px', border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                <div 
+                  onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
+                  title="Click to directly open join page in a new tab"
+                  style={{ 
+                    marginTop: '6px', padding: '6px 10px', background: '#0F172A', borderRadius: '6px', 
+                    border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    gap: '6px', cursor: 'pointer', transition: 'border-color 0.2s' 
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#38BDF8'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#1E293B'}
+                >
                   <span 
-                    title={`${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}`}
+                    title={fullJoinLink}
                     style={{ fontSize: '0.68rem', color: '#94A3B8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', flex: 1 }}
                   >
-                    {`${((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join?code=${roomCode}`}
+                    {fullJoinLink.replace(/^https?:\/\//, '')}
                   </span>
-                  <a
-                    href={`${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    title="Open Join Link in New Tab"
-                    style={{ color: '#38BDF8', display: 'flex', alignItems: 'center', padding: '2px', cursor: 'pointer' }}
-                  >
-                    <ExternalLink size={13} />
-                  </a>
+                  <ExternalLink size={13} style={{ color: '#38BDF8', flexShrink: 0 }} />
                 </div>
               </>
             )}
@@ -785,53 +852,135 @@ export default function HostControlRoom() {
                 <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
                   Waiting for Participants to Connect
                 </h1>
-                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '650px', marginBottom: '36px', lineHeight: 1.6 }}>
-                  Learners can scan the QR code on the left or visit{' '}
-                  <a
-                    href={roomCode ? `${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}` : '#'}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{ color: '#06B6D4', textDecoration: 'underline', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                  >
-                    <span>{((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join</span>
-                    <ExternalLink size={14} />
-                  </a>
-                  {' '}and enter PIN <strong style={{ color: '#2563EB', fontSize: '1.3rem', letterSpacing: '2px', fontFamily: 'monospace' }}>{formattedRoomCode}</strong>
+                {/* Interactive Learner Connect Card */}
+                <div style={{
+                  background: 'rgba(22, 32, 51, 0.75)',
+                  border: '1px solid #1E293B',
+                  backdropFilter: 'blur(8px)',
+                  borderRadius: '16px',
+                  padding: '24px 32px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '16px',
+                  maxWidth: '680px',
+                  width: '100%',
+                  margin: '0 auto 36px',
+                  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)'
+                }}>
+                  <div style={{ color: '#94A3B8', fontSize: '0.95rem', fontWeight: 600 }}>
+                    Learners can scan the QR code on the left or open this direct link:
+                  </div>
+
+                  {/* Big Clickable Direct Join Link */}
                   {roomCode && (
-                    <button
-                      onClick={async () => {
-                        const effectiveBase = (useLanQr && lanBaseUrl)
-                          ? lanBaseUrl
-                          : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
-                        const fullLink = `${effectiveBase}/join?code=${roomCode}`;
-                        const success = await copyTextToClipboard(fullLink);
-                        if (success) {
-                          setCopiedLink(true);
-                          setTimeout(() => setCopiedLink(false), 2500);
-                        }
-                      }}
-                      title="Copy Direct Join Link"
+                    <a
+                      href={fullJoinLink}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="Click to directly open Live Join Page in a new tab"
                       style={{
-                        marginLeft: '10px',
-                        background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
-                        border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
-                        borderRadius: '6px',
-                        padding: '3px 8px',
-                        color: copiedLink ? '#34D399' : '#93C5FD',
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        cursor: 'pointer',
+                        background: '#0F172A',
+                        border: '1.5px solid #2563EB',
+                        borderRadius: '12px',
+                        padding: '12px 24px',
+                        color: '#60A5FA',
+                        fontSize: '1.15rem',
+                        fontWeight: 800,
+                        fontFamily: 'monospace',
+                        textDecoration: 'none',
                         display: 'inline-flex',
                         alignItems: 'center',
-                        gap: '4px',
-                        verticalAlign: 'middle'
+                        gap: '10px',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        boxShadow: '0 4px 16px rgba(37, 99, 235, 0.25)'
                       }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#38BDF8'; e.currentTarget.style.color = '#38BDF8'; }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#60A5FA'; }}
                     >
-                      {copiedLink ? <Check size={12} /> : <Copy size={12} />}
-                      <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
-                    </button>
+                      <span>{fullJoinLink.replace(/^https?:\/\//, '')}</span>
+                      <ExternalLink size={18} />
+                    </a>
                   )}
-                </p>
+
+                  {/* Action Buttons: Direct Open + Copy */}
+                  {roomCode && (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
+                      <button
+                        onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
+                        style={{
+                          background: '#2563EB',
+                          color: '#FFFFFF',
+                          border: 'none',
+                          borderRadius: '8px',
+                          padding: '8px 20px',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                          transition: 'all 0.15s'
+                        }}
+                      >
+                        <ExternalLink size={14} />
+                        <span>Open Join Page (New Tab) ↗</span>
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          await copyTextToClipboard(fullJoinLink);
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2500);
+                        }}
+                        style={{
+                          background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
+                          border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
+                          borderRadius: '8px',
+                          padding: '8px 18px',
+                          color: copiedLink ? '#34D399' : '#93C5FD',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                        <span>{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
+                      </button>
+
+                      <button
+                        onClick={async () => {
+                          await copyTextToClipboard(roomCode);
+                          setCopiedPin(true);
+                          setTimeout(() => setCopiedPin(false), 2500);
+                        }}
+                        style={{
+                          background: copiedPin ? '#065F46' : '#1E293B',
+                          border: `1px solid ${copiedPin ? '#10B981' : '#334155'}`,
+                          borderRadius: '8px',
+                          padding: '8px 18px',
+                          color: copiedPin ? '#34D399' : '#94A3B8',
+                          fontSize: '0.85rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          transition: 'all 0.2s'
+                        }}
+                      >
+                        {copiedPin ? <Check size={14} /> : <Copy size={14} />}
+                        <span>{copiedPin ? 'PIN Copied!' : `Copy PIN: ${formattedRoomCode}`}</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 {/* Connected Participant Chips */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
