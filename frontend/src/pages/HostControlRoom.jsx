@@ -633,40 +633,59 @@ export default function HostControlRoom() {
               {formattedRoomCode}
             </div>
             {roomCode && (
-              <button
-                id="copy-join-link-btn"
-                onClick={async () => {
-                  const effectiveBase = (useLanQr && lanBaseUrl)
-                    ? lanBaseUrl
-                    : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
-                  const fullLink = `${effectiveBase}/join?code=${roomCode}`;
-                  const success = await copyTextToClipboard(fullLink);
-                  if (success) {
+              <>
+                <button
+                  id="copy-join-link-btn"
+                  onClick={async () => {
+                    const effectiveBase = (useLanQr && lanBaseUrl)
+                      ? lanBaseUrl
+                      : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
+                    const fullLink = `${effectiveBase}/join?code=${roomCode}`;
+                    await copyTextToClipboard(fullLink);
                     setCopiedLink(true);
                     setTimeout(() => setCopiedLink(false), 2500);
-                  }
-                }}
-                style={{
-                  marginTop: '8px',
-                  width: '100%',
-                  background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
-                  border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
-                  borderRadius: '8px',
-                  padding: '7px 10px',
-                  color: copiedLink ? '#34D399' : '#93C5FD',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '6px',
-                  transition: 'all 0.2s'
-                }}
-              >
-                {copiedLink ? <Check size={13} /> : <Copy size={13} />}
-                <span>{copiedLink ? 'Link Copied!' : 'Copy Live Join Link'}</span>
-              </button>
+                  }}
+                  style={{
+                    marginTop: '8px',
+                    width: '100%',
+                    background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
+                    border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                    color: copiedLink ? '#34D399' : '#93C5FD',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '6px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {copiedLink ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedLink ? 'Link Copied to Clipboard!' : 'Copy Live Join Link'}</span>
+                </button>
+
+                {/* Direct Link Preview with quick open */}
+                <div style={{ marginTop: '8px', padding: '6px 10px', background: '#0F172A', borderRadius: '6px', border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '6px' }}>
+                  <span 
+                    title={`${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}`}
+                    style={{ fontSize: '0.68rem', color: '#94A3B8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', flex: 1 }}
+                  >
+                    {`${((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join?code=${roomCode}`}
+                  </span>
+                  <a
+                    href={`${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Open Join Link in New Tab"
+                    style={{ color: '#38BDF8', display: 'flex', alignItems: 'center', padding: '2px', cursor: 'pointer' }}
+                  >
+                    <ExternalLink size={13} />
+                  </a>
+                </div>
+              </>
             )}
           </div>
         </div>

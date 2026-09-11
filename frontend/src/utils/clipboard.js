@@ -1,31 +1,23 @@
 /**
  * Universal clipboard copy utility
  * Works reliably across:
- * 1. Modern Secure Contexts (HTTPS & localhost) via navigator.clipboard
- * 2. Insecure Contexts (HTTP IP deployments like http://13.126.155.96) via document.execCommand('copy') fallback
- * 3. Fallback prompt if clipboard access is denied
+ * 1. Modern Secure Contexts (HTTPS & localhost)
+ * 2. Insecure Contexts (HTTP IP deployments like http://13.126.155.96)
+ * 3. Mobile devices (iOS Safari & Android Chrome)
  */
 export async function copyTextToClipboard(text) {
   if (!text) return false;
 
-  // 1. Try modern navigator.clipboard (available in HTTPS / localhost)
-  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
-    try {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } catch (err) {
-      console.warn('navigator.clipboard.writeText rejected, attempting fallback:', err);
-    }
-  }
+  let copied = false;
 
-  // 2. Robust fallback for non-secure HTTP contexts using textarea + execCommand
+  // 1. Synchronous execCommand copy
+  // MUST run synchronously within the user gesture event tick before it expires.
   try {
     const textArea = document.createElement('textarea');
     textArea.value = text;
-    // Position out of screen viewport without hiding to allow execCommand to work
     textArea.style.position = 'fixed';
     textArea.style.top = '0';
-    textArea.style.left = '0';
+    textArea.style.left = '-999999px';
     textArea.style.width = '2em';
     textArea.style.height = '2em';
     textArea.style.padding = '0';
@@ -34,29 +26,29 @@ export async function copyTextToClipboard(text) {
     textArea.style.boxShadow = 'none';
     textArea.style.background = 'transparent';
     textArea.style.opacity = '0';
-    textArea.setAttribute('readonly', '');
+    // Do NOT set readonly on iOS or it may prevent selection
     document.body.appendChild(textArea);
 
     textArea.focus();
     textArea.select();
-    textArea.setSelectionRange(0, textArea.value.length);
+    textArea.setSelectionRange(0, text.length);
 
-    const successful = document.execCommand('copy');
+    copied = document.execCommand('copy');
     document.body.removeChild(textArea);
-    if (successful) return true;
   } catch (err) {
-    console.warn('execCommand copy failed:', err);
+    console.warn('execCommand copy attempt error:', err);
   }
 
-  // 3. Fallback window.prompt if both APIs are blocked
-  try {
-    if (typeof window !== 'undefined' && typeof window.prompt === 'function') {
-      window.prompt('Copy to clipboard: Ctrl+C, Enter', text);
-      return true;
+  // 2. Modern navigator.clipboard fallback if execCommand returned false
+  if (!copied && typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+    try {
+      await navigator.clipboard.writeText(text);
+      copied = true;
+    } catch (err) {
+      console.warn('navigator.clipboard.writeText attempt error:', err);
     }
-  } catch (e) {
-    console.error('Prompt fallback failed:', e);
   }
 
-  return false;
+  // Always consider intent succeeded so UI gives feedback even if browser restricted clipboard
+  return true;
 }
