@@ -11,6 +11,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import CalendarWidget from './CalendarWidget';
 import ProjectFolder from './ProjectFolder';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 export default function TrainerDashboard({
   quizzes = [],
@@ -440,27 +441,10 @@ export default function TrainerDashboard({
   };
 
   const handleCopyLink = async (text) => {
-    try {
-      if (window.ClipboardItem) {
-        const html = `<a href="${text}">${text}</a>`;
-        const blobText = new Blob([text], { type: 'text/plain' });
-        const blobHtml = new Blob([html], { type: 'text/html' });
-        const data = [new ClipboardItem({
-            'text/plain': blobText,
-            'text/html': blobHtml
-        })];
-        await navigator.clipboard.write(data);
-      } else {
-        await navigator.clipboard.writeText(text);
-      }
+    const success = await copyTextToClipboard(text);
+    if (success) {
       setLinkCopied(true);
       setTimeout(() => setLinkCopied(false), 2000);
-    } catch (err) {
-      console.error('Clipboard write failed, falling back to writeText:', err);
-      navigator.clipboard.writeText(text).then(() => {
-        setLinkCopied(true);
-        setTimeout(() => setLinkCopied(false), 2000);
-      }).catch(e => console.error(e));
     }
   };
 

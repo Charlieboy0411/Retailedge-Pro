@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 let socket;
 
@@ -529,6 +530,31 @@ export default function HostControlRoom() {
   return (
     <div ref={containerRef} style={{ height: '100vh', width: '100vw', display: 'flex', background: '#0B1220', color: '#FFFFFF', overflow: 'hidden', position: 'relative', fontFamily: 'Manrope, Inter, sans-serif' }}>
       
+      {/* Toast Feedback for Copied Link */}
+      {copiedLink && (
+        <div style={{
+          position: 'fixed',
+          top: '24px',
+          right: '28px',
+          background: '#065F46',
+          color: '#ECFDF5',
+          border: '1px solid #10B981',
+          borderRadius: '10px',
+          padding: '12px 20px',
+          fontSize: '0.85rem',
+          fontWeight: 700,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          zIndex: 99999,
+          pointerEvents: 'none'
+        }}>
+          <Check size={18} style={{ color: '#34D399' }} />
+          <span>Live Arena Join Link Copied to Clipboard!</span>
+        </div>
+      )}
+
       {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
       <aside style={{
         width: '320px', background: '#0F172A', borderRight: '1px solid #1E293B',
@@ -609,14 +635,16 @@ export default function HostControlRoom() {
             {roomCode && (
               <button
                 id="copy-join-link-btn"
-                onClick={() => {
+                onClick={async () => {
                   const effectiveBase = (useLanQr && lanBaseUrl)
                     ? lanBaseUrl
                     : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
                   const fullLink = `${effectiveBase}/join?code=${roomCode}`;
-                  navigator.clipboard.writeText(fullLink);
-                  setCopiedLink(true);
-                  setTimeout(() => setCopiedLink(false), 2000);
+                  const success = await copyTextToClipboard(fullLink);
+                  if (success) {
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2500);
+                  }
                 }}
                 style={{
                   marginTop: '8px',
@@ -624,7 +652,7 @@ export default function HostControlRoom() {
                   background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
                   border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
                   borderRadius: '8px',
-                  padding: '6px 10px',
+                  padding: '7px 10px',
                   color: copiedLink ? '#34D399' : '#93C5FD',
                   fontSize: '0.75rem',
                   fontWeight: 700,
@@ -738,7 +766,7 @@ export default function HostControlRoom() {
                 <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
                   Waiting for Participants to Connect
                 </h1>
-                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '600px', marginBottom: '36px', lineHeight: 1.6 }}>
+                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '650px', marginBottom: '36px', lineHeight: 1.6 }}>
                   Learners can scan the QR code on the left or visit{' '}
                   <a
                     href={roomCode ? `${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}` : '#'}
@@ -750,6 +778,40 @@ export default function HostControlRoom() {
                     <ExternalLink size={14} />
                   </a>
                   {' '}and enter PIN <strong style={{ color: '#2563EB', fontSize: '1.3rem', letterSpacing: '2px', fontFamily: 'monospace' }}>{formattedRoomCode}</strong>
+                  {roomCode && (
+                    <button
+                      onClick={async () => {
+                        const effectiveBase = (useLanQr && lanBaseUrl)
+                          ? lanBaseUrl
+                          : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
+                        const fullLink = `${effectiveBase}/join?code=${roomCode}`;
+                        const success = await copyTextToClipboard(fullLink);
+                        if (success) {
+                          setCopiedLink(true);
+                          setTimeout(() => setCopiedLink(false), 2500);
+                        }
+                      }}
+                      title="Copy Direct Join Link"
+                      style={{
+                        marginLeft: '10px',
+                        background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
+                        border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
+                        borderRadius: '6px',
+                        padding: '3px 8px',
+                        color: copiedLink ? '#34D399' : '#93C5FD',
+                        fontSize: '0.75rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        verticalAlign: 'middle'
+                      }}
+                    >
+                      {copiedLink ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{copiedLink ? 'Copied!' : 'Copy Link'}</span>
+                    </button>
+                  )}
                 </p>
 
                 {/* Connected Participant Chips */}

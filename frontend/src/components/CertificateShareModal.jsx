@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Copy, Check, Share2, Mail, Download, ExternalLink, MessageCircle } from 'lucide-react';
 import axios from 'axios';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 export default function CertificateShareModal({ isOpen, onClose, certificate, token }) {
   if (!isOpen || !certificate) return null;
@@ -14,10 +15,12 @@ export default function CertificateShareModal({ isOpen, onClose, certificate, to
   const participantName = certificate.User?.name || 'Participant';
   const programName = certificate.Training?.title || certificate.Project?.name || 'Training Program';
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(verificationUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2500);
+  const handleCopyLink = async () => {
+    const success = await copyTextToClipboard(verificationUrl);
+    if (success) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    }
   };
 
   const handleWhatsAppShare = () => {

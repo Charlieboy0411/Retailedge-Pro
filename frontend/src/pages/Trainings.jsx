@@ -4,6 +4,7 @@ import { AuthContext } from '../context/AuthContext';
 import { Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Play, FileText, Presentation, Image as ImageIcon, Music, CheckCircle2, Circle, Plus, Trash2, ShieldAlert, Video, ExternalLink } from 'lucide-react';
 import CalendarWidget from '../components/CalendarWidget';
+import { copyTextToClipboard } from '../utils/clipboard';
 
 export default function Trainings() {
   const { token, user } = useContext(AuthContext);
@@ -621,9 +622,9 @@ export default function Trainings() {
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', marginTop: '8px' }}>
                           <button
                             type="button"
-                            onClick={() => {
+                            onClick={async () => {
                               const guestLink = `${window.location.origin}/guest-join?id=${selectedTraining.id}`;
-                              navigator.clipboard.writeText(guestLink);
+                              await copyTextToClipboard(guestLink);
                               alert('Guest Link copied! Please share THIS link with your attendees. They will NOT need to register or log in.');
                             }}
                             style={{
@@ -802,8 +803,8 @@ export default function Trainings() {
                     {newTraining.type === 'Meeting' && newTraining.url && (
                       <button 
                         type="button" 
-                        onClick={() => {
-                          navigator.clipboard.writeText(newTraining.url);
+                        onClick={async () => {
+                          await copyTextToClipboard(newTraining.url);
                           alert("Meeting link copied to clipboard!");
                         }}
                         className="btn btn-secondary"
