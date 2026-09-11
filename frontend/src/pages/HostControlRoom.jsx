@@ -46,6 +46,8 @@ export default function HostControlRoom() {
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [qrError, setQrError] = useState(false);
   const [qrLoading, setQrLoading] = useState(true);
+  const [hostError, setHostError] = useState(null);
+  const hostErrorRef = useRef(null);
   const [liveAnswers, setLiveAnswers] = useState([]);
   const [joinBaseUrl, setJoinBaseUrl] = useState(window.location.origin);
   const [joinMode, setJoinMode] = useState('lan');
@@ -124,7 +126,7 @@ export default function HostControlRoom() {
   // Helper to emit host_start_quiz reliably
   const emitHostStartQuiz = (targetSocket) => {
     const s = targetSocket || socket;
-    if (!s || !s.connected || roomCodeRef.current) return;
+    if (!s || !s.connected || roomCodeRef.current || hostErrorRef.current) return;
     const currentUser = user || (localStorage.getItem('user') ? JSON.parse(localStorage.getItem('user')) : null);
     const authToken = token || localStorage.getItem('jwt') || localStorage.getItem('token');
     s.emit('host_start_quiz', {
@@ -161,6 +163,8 @@ export default function HostControlRoom() {
     // Canonical session creation event (with legacy fallback)
     const handleSessionCreated = (data) => {
       if (data && data.roomCode) {
+        setHostError(null);
+        hostErrorRef.current = null;
         setRoomCode(data.roomCode);
         roomCodeRef.current = data.roomCode;
         setSessionId(data.sessionId);
@@ -179,11 +183,16 @@ export default function HostControlRoom() {
 
     socket.on('error', (err) => {
       console.warn('[HostControlRoom] Socket error:', err);
+      const msg = typeof err === 'string' ? err : (err?.message || 'Failed to start Live Arena session');
+      setHostError(msg);
+      hostErrorRef.current = msg;
+      setQrLoading(false);
+      setQrError(true);
     });
 
     // Safety retry interval if connected but roomCode not yet assigned
     const retryTimer = setInterval(() => {
-      if (socket && socket.connected && !roomCodeRef.current) {
+      if (socket && socket.connected && !roomCodeRef.current && !hostErrorRef.current) {
         emitHostStartQuiz(socket);
       }
     }, 2000);
@@ -545,6 +554,25 @@ export default function HostControlRoom() {
           }}>
             {qrDataUrl ? (
               <img src={qrDataUrl} alt="QR Code to Join" style={{ width: '180px', height: '180px', display: 'block' }} />
+            ) : hostError ? (
+              <div style={{ width: '180px', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#EF4444', textAlign: 'center', padding: '8px' }}>
+                <AlertCircle size={30} style={{ marginBottom: '6px' }} />
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#1E293B', marginBottom: '4px' }}>Session Blocked</span>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', marginBottom: '8px', lineHeight: 1.3 }}>{hostError}</span>
+                <button
+                  id="retry-qr-btn"
+                  onClick={() => {
+                    setHostError(null);
+                    hostErrorRef.current = null;
+                    setQrLoading(true);
+                    setQrError(false);
+                    emitHostStartQuiz(socket);
+                  }}
+                  style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '6px', padding: '5px 12px', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                >
+                  Retry
+                </button>
+              </div>
             ) : qrError ? (
               <div style={{ width: '180px', height: '180px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#EF4444', textAlign: 'center', padding: '10px' }}>
                 <AlertCircle size={32} style={{ marginBottom: '8px' }} />
@@ -670,42 +698,76 @@ export default function HostControlRoom() {
           
           {/* A. WAITING LOBBY */}
           {status === 'waiting' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
-              <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(37, 99, 235, 0.12)', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                <Radio size={32} />
+            hostError ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                  <AlertCircle size={32} />
+                </div>
+                <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#F87171', marginBottom: '12px' }}>
+                  Unable to Initialize Live Arena
+                </h1>
+                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '560px', marginBottom: '28px', lineHeight: 1.6 }}>
+                  {hostError}
+                </p>
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    style={{ background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Return to Dashboard
+                  </button>
+                  <button
+                    onClick={() => {
+                      setHostError(null);
+                      hostErrorRef.current = null;
+                      setQrLoading(true);
+                      setQrError(false);
+                      emitHostStartQuiz(socket);
+                    }}
+                    style={{ background: 'transparent', color: '#93C5FD', border: '1px solid #3B82F6', borderRadius: '8px', padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Retry Connection
+                  </button>
+                </div>
               </div>
-              <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
-                Waiting for Participants to Connect
-              </h1>
-              <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '600px', marginBottom: '36px', lineHeight: 1.6 }}>
-                Learners can scan the QR code on the left or visit{' '}
-                <a
-                  href={roomCode ? `${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}` : '#'}
-                  target="_blank"
-                  rel="noreferrer"
-                  style={{ color: '#06B6D4', textDecoration: 'underline', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-                >
-                  <span>{((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join</span>
-                  <ExternalLink size={14} />
-                </a>
-                {' '}and enter PIN <strong style={{ color: '#2563EB', fontSize: '1.3rem', letterSpacing: '2px', fontFamily: 'monospace' }}>{formattedRoomCode}</strong>
-              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(37, 99, 235, 0.12)', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                  <Radio size={32} />
+                </div>
+                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
+                  Waiting for Participants to Connect
+                </h1>
+                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '600px', marginBottom: '36px', lineHeight: 1.6 }}>
+                  Learners can scan the QR code on the left or visit{' '}
+                  <a
+                    href={roomCode ? `${(useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl}/join?code=${roomCode}` : '#'}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ color: '#06B6D4', textDecoration: 'underline', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  >
+                    <span>{((useLanQr && lanBaseUrl) ? lanBaseUrl : joinBaseUrl).replace(/^https?:\/\//, '')}/join</span>
+                    <ExternalLink size={14} />
+                  </a>
+                  {' '}and enter PIN <strong style={{ color: '#2563EB', fontSize: '1.3rem', letterSpacing: '2px', fontFamily: 'monospace' }}>{formattedRoomCode}</strong>
+                </p>
 
-              {/* Connected Participant Chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
-                {participants.map((p, i) => (
-                  <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#162033', border: '1px solid #1E293B', padding: '8px 16px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, color: '#FFFFFF' }}>
-                    <span>{p.avatar || getSmileyForName(p.name)}</span>
-                    <span>{p.name}</span>
-                  </div>
-                ))}
-                {participants.length === 0 && (
-                  <div style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.95rem' }}>
-                    No learners joined yet...
-                  </div>
-                )}
+                {/* Connected Participant Chips */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
+                  {participants.map((p, i) => (
+                    <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#162033', border: '1px solid #1E293B', padding: '8px 16px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, color: '#FFFFFF' }}>
+                      <span>{p.avatar || getSmileyForName(p.name)}</span>
+                      <span>{p.name}</span>
+                    </div>
+                  ))}
+                  {participants.length === 0 && (
+                    <div style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.95rem' }}>
+                      No learners joined yet...
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {/* B. ACTIVE QUESTION CANVAS */}

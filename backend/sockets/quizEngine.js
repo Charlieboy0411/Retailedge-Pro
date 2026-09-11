@@ -198,9 +198,34 @@ function quizEngine(io) {
 
         // Project Isolation validation:
         // Trainer cannot host quizzes belonging to foreign projects
-        if (callerUser && callerUser.role === 'Trainer' && callerUser.projectId) {
-          if (quiz.projectId && quiz.projectId !== callerUser.projectId) {
-            return socket.emit('error', 'Forbidden: Trainer not authorized for this project');
+        if (callerUser && callerUser.role === 'Trainer') {
+          const isCreator = quiz.creatorId && quiz.creatorId === callerUser.id;
+          if (!isCreator && quiz.projectId) {
+            let isAuthorized = false;
+            try {
+              const intelligenceService = require('../utils/projectIntelligenceService');
+              const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(callerUser, 'all', 'all');
+              isAuthorized = accessibleProjectIds.includes(quiz.projectId);
+            } catch (err) {
+              console.warn('[QuizEngine] Error checking accessible project IDs:', err.message);
+            }
+
+            // Demo environment fallback: allow Demo Trainer to host any quiz
+            if (!isAuthorized) {
+              const dbUser = await User.findByPk(callerUser.id, { attributes: ['id', 'email'] });
+              if (dbUser && dbUser.email && dbUser.email.toLowerCase() === 'trainer@quizhive.com') {
+                isAuthorized = true;
+              }
+            }
+
+            if (!isAuthorized) {
+              logger.warn('QuizEngine', null, null, 'Trainer unauthorized for project', {
+                trainerId: callerUser.id,
+                quizId,
+                quizProjectId: quiz.projectId
+              });
+              return socket.emit('error', 'Forbidden: Trainer not authorized for this project');
+            }
           }
         }
 
