@@ -119,15 +119,17 @@ app.get('/api/join-url', (req, res) => {
 
   const ip = getLanIp();
   const port = process.env.PORT || 5000;
-  const lanUrl = `http://${ip}:${port}`;
+  const defaultPublicHost = process.env.PUBLIC_URL || 'http://13.126.155.96';
+  const isPrivateSubnet = !ip || ip.startsWith('172.31.') || ip.startsWith('10.');
+  const lanUrl = isPrivateSubnet ? defaultPublicHost : `http://${ip}:${port}`;
 
-  const finalUrl = publicTunnelUrl || detectedPublicUrl || lanUrl;
+  const finalUrl = publicTunnelUrl || detectedPublicUrl || (isPrivateSubnet ? defaultPublicHost : lanUrl);
 
   res.json({
     url: finalUrl,
     lanUrl: lanUrl,
-    publicUrl: publicTunnelUrl || detectedPublicUrl,
-    mode: (publicTunnelUrl || detectedPublicUrl) ? 'public' : 'lan',
+    publicUrl: publicTunnelUrl || detectedPublicUrl || defaultPublicHost,
+    mode: (publicTunnelUrl || detectedPublicUrl || isPrivateSubnet) ? 'public' : 'lan',
     tunnelStatus: tunnelStatus,
     lanIp: ip,
     port: port

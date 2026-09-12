@@ -529,7 +529,7 @@ export default function HostControlRoom() {
   const formattedRoomCode = roomCode ? roomCode.replace(/(\d{3})(\d{3})/, '$1 $2') : 'Preparing...';
   const effectiveBase = (useLanQr && lanBaseUrl)
     ? lanBaseUrl
-    : (joinBaseUrl || (typeof window !== 'undefined' ? window.location.origin : ''));
+    : ((joinBaseUrl && !joinBaseUrl.includes('172.31.')) ? joinBaseUrl : (typeof window !== 'undefined' ? window.location.origin : ''));
   const fullJoinLink = roomCode ? `${effectiveBase}/join?code=${roomCode}` : '';
 
   return (
