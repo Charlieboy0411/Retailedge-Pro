@@ -194,10 +194,33 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   let passRate = 0;
   const partsByUserId = new Map();
 
+  // Find all quiz sessions for accessible projects (both Live Arena and Offline Quizzes)
+  const clientSessions = await Session.findAll({
+    where: {
+      [Op.or]: [
+        { projectId: { [Op.in]: projectIds } },
+        { '$Quiz.projectId$': { [Op.in]: projectIds } }
+      ]
+    },
+    include: [{ model: Quiz, attributes: ['id', 'projectId'] }],
+    attributes: ['id']
+  });
+  const clientSessionIds = clientSessions.map(s => s.id);
+
+  const participantQueryClauses = [];
   if (participantIds.length > 0) {
+    participantQueryClauses.push({ userId: { [Op.in]: participantIds } });
+  }
+  if (clientSessionIds.length > 0) {
+    participantQueryClauses.push({ sessionId: { [Op.in]: clientSessionIds } });
+  }
+
+  if (participantQueryClauses.length > 0) {
     const quizParticipants = await Participant.findAll({
-      where: { userId: { [Op.in]: participantIds } },
-      attributes: ['id', 'score', 'userId'],
+      where: {
+        [Op.or]: participantQueryClauses
+      },
+      attributes: ['id', 'score', 'userId', 'sessionId'],
       include: [
         {
           model: Response,
@@ -216,8 +239,10 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
     });
 
     quizParticipants.forEach(p => {
-      if (!partsByUserId.has(p.userId)) partsByUserId.set(p.userId, []);
-      partsByUserId.get(p.userId).push(p);
+      if (p.userId) {
+        if (!partsByUserId.has(p.userId)) partsByUserId.set(p.userId, []);
+        partsByUserId.get(p.userId).push(p);
+      }
     });
 
     if (quizParticipants.length > 0) {

@@ -133,10 +133,17 @@ export default function QuizBuilder() {
 
   const fetchProjects = async () => {
     try {
-      const response = await axios.get('/api/projects', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setProjects(response.data);
+      let res;
+      try {
+        res = await axios.get('/api/projects', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        res = await axios.get('/api/projects/my-projects', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      setProjects(res.data || []);
     } catch (error) {
       console.error('Failed to fetch projects', error);
     }
@@ -709,7 +716,9 @@ export default function QuizBuilder() {
                   >
                     <option value="">-- No Project (Global) --</option>
                     {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
+                      <option key={p.id} value={p.id}>
+                        {p.name}{p.Client ? ` (${p.Client.name})` : (p.project_code && p.project_code !== p.name ? ` (${p.project_code})` : '')}
+                      </option>
                     ))}
                   </select>
                 </div>

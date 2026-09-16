@@ -97,6 +97,12 @@ router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T
         if (!projectIds.includes(projectId)) {
           return res.status(403).json({ error: 'Forbidden: You are not authorized to create quizzes for this project.' });
         }
+      } else if (req.user.role === 'Trainer') {
+        // Trainer can assign quizzes to any active/valid project created by Admin
+        const targetProj = await Project.findByPk(projectId);
+        if (!targetProj) {
+          return res.status(400).json({ error: 'Selected project does not exist.' });
+        }
       } else {
         const intelligenceService = require('../utils/projectIntelligenceService');
         const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
@@ -303,13 +309,24 @@ router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super
         await Session.create({
           quizId: quiz.id,
           hostId: req.user.id,
+          projectId: quiz.projectId || null,
+          trainingId: quiz.trainingId || null,
+          session_name: quiz.title || 'Offline Quiz',
           roomCode: roomCode,
           status: 'active',
           current_question_index: 0,
           startedAt: new Date()
         });
-      } else if (session.status !== 'active') {
-        session.status = 'active';
+      } else {
+        if (session.status !== 'active') {
+          session.status = 'active';
+        }
+        if (quiz.projectId && session.projectId !== quiz.projectId) {
+          session.projectId = quiz.projectId;
+        }
+        if (quiz.trainingId && session.trainingId !== quiz.trainingId) {
+          session.trainingId = quiz.trainingId;
+        }
         await session.save();
       }
     } else {
@@ -642,12 +659,27 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 
       return res.status(403).json({ error: 'Unauthorized to edit this quiz' });
     }
 
+    if (projectId) {
+      const targetProj = await Project.findByPk(projectId);
+      if (!targetProj) {
+        return res.status(400).json({ error: 'Selected project does not exist.' });
+      }
+    }
+
     // Update Quiz
     quiz.title = title !== undefined ? title : quiz.title;
     quiz.description = description !== undefined ? description : quiz.description;
     quiz.config = config !== undefined ? config : quiz.config;
-    quiz.projectId = projectId !== undefined ? projectId : quiz.projectId;
+    quiz.projectId = projectId !== undefined ? (projectId || null) : quiz.projectId;
     await quiz.save();
+
+    // Synchronize active sessions for this quiz if projectId changed
+    if (projectId !== undefined) {
+      await Session.update(
+        { projectId: quiz.projectId },
+        { where: { quizId: quiz.id, status: ['active', 'waiting'] } }
+      );
+    }
 
     // Update questions
     if (questions) {

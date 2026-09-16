@@ -37,8 +37,8 @@ const upload = multer({
   }
 });
 
-// GET /api/projects - List all projects (Administrative / Management only)
-router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations']), async (req, res) => {
+// GET /api/projects - List all projects (Administrative, Management & Training)
+router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Trainer', 'Supervisor', 'Client', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     let whereClause = {};
 
@@ -225,16 +225,22 @@ router.post('/:id/executive-metrics', requireAuth, requireRole(['Admin', 'Super 
 // ─── PM INTELLIGENCE & PROJECT SCOPING ENDPOINTS ──────────────────────────────
 const intelligenceService = require('../utils/projectIntelligenceService');
 
-// GET /api/projects/my-projects - Returns projects assigned to the calling PM
+// GET /api/projects/my-projects - Returns projects assigned to the calling PM or Trainer
 router.get('/my-projects', requireAuth, async (req, res) => {
   try {
     const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-    if (accessibleIds.length === 0) {
+    let whereClause = {};
+    if (accessibleIds.length > 0) {
+      whereClause.id = { [require('sequelize').Op.in]: accessibleIds };
+    } else if (req.user.role === 'Trainer' || ['Admin', 'Super Admin'].includes(req.user.role)) {
+      // Trainers without strict individual project constraints can view all active projects
+      whereClause = {};
+    } else {
       return res.json([]);
     }
 
     const projects = await Project.findAll({
-      where: { id: { [require('sequelize').Op.in]: accessibleIds } },
+      where: whereClause,
       include: [
         { model: Project, as: 'parent', attributes: ['id', 'name'] },
         { model: Project, as: 'subProjects', attributes: ['id', 'name', 'status'] },

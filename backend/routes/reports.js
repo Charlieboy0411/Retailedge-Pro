@@ -75,6 +75,10 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
         ]
       },
       {
+        model: Project,
+        attributes: ['id', 'name']
+      },
+      {
         model: Participant,
         attributes: ['id', 'name', 'score'],
         include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
@@ -98,27 +102,39 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       if (!projectIds || projectIds.length === 0) {
         return res.status(403).json({ error: 'Forbidden: You have no assigned capability projects.' });
       }
-      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+      whereClause[Op.or] = [
+        { '$Quiz.projectId$': { [Op.in]: projectIds } },
+        { projectId: { [Op.in]: projectIds } }
+      ];
     } else if (['MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(userRole)) {
       if (!userProjectId) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
       const projectIds = await getAccessibleProjectIds(userProjectId);
-      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+      whereClause[Op.or] = [
+        { '$Quiz.projectId$': { [Op.in]: projectIds } },
+        { projectId: { [Op.in]: projectIds } }
+      ];
     } else if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
       const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
       if (!projectIds || projectIds.length === 0) {
         return res.status(403).json({ error: 'Forbidden: You have no assigned client projects.' });
       }
-      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+      whereClause[Op.or] = [
+        { '$Quiz.projectId$': { [Op.in]: projectIds } },
+        { projectId: { [Op.in]: projectIds } }
+      ];
     } else if (['Program Manager', 'Manager'].includes(userRole)) {
       // Restricted to specified project
       if (!userProjectId) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
       const projectIds = await getAccessibleProjectIds(userProjectId);
-      whereClause['$Quiz.projectId$'] = { [Op.in]: projectIds };
+      whereClause[Op.or] = [
+        { '$Quiz.projectId$': { [Op.in]: projectIds } },
+        { projectId: { [Op.in]: projectIds } }
+      ];
     } else if (userRole === 'Supervisor') {
       const supervisorService = require('../utils/supervisorService');
       const subordinateIds = await supervisorService.getTeamSubordinateIds(req.user.id);
@@ -128,8 +144,11 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
         participantInclude.required = true;
       }
     } else {
-      // Default / Other roles (e.g., Trainer only sees their own sessions)
-      whereClause.hostId = req.user.id;
+      // Default / Other roles (e.g., Trainer sees their own hosted or created sessions)
+      whereClause[Op.or] = [
+        { hostId: req.user.id },
+        { '$Quiz.creatorId$': req.user.id }
+      ];
     }
 
     const sessions = await Session.findAll({
@@ -152,11 +171,14 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       });
 
       const avgScore = participants.length > 0 ? Math.round(totalPercentageSum / participants.length) : 0;
+      const resolvedProjectName = (session.Quiz && session.Quiz.Project) ? session.Quiz.Project.name : (session.Project ? session.Project.name : 'N/A');
+      const resolvedProjectId = session.Quiz?.projectId || session.projectId || null;
 
       return {
         id: session.id,
         title: session.Quiz ? session.Quiz.title : 'Unknown Quiz',
-        projectName: session.Quiz && session.Quiz.Project ? session.Quiz.Project.name : 'N/A',
+        projectName: resolvedProjectName,
+        projectId: resolvedProjectId,
         hostName: session.host ? session.host.name : 'Unknown Host',
         date: session.startedAt ? new Date(session.startedAt).toISOString().split('T')[0] : new Date(session.createdAt).toISOString().split('T')[0],
         participants: participants.length,
@@ -853,6 +875,10 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
           ]
         },
         {
+          model: Project,
+          attributes: ['id', 'name', 'parentId']
+        },
+        {
           model: Participant,
           include: [Response]
         },
@@ -870,19 +896,22 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
 
     // Strict Scope check for non-Superadmin
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    const sessionProjId = session.Quiz?.projectId || session.projectId;
+    const sessionParentId = session.Quiz?.Project?.parentId || session.Project?.parentId;
+
     if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
       const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
-      if (!session.Quiz?.projectId || !clientProjectIds.includes(session.Quiz.projectId)) {
+      if (!sessionProjId || !clientProjectIds.includes(sessionProjId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to view this session report.' });
       }
     } else if (!['Admin', 'Super Admin'].includes(userRole)) {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      const isHost = session.hostId === req.user.id;
-      const isProjectAuthorized = session.Quiz?.projectId && (
-        accessibleProjectIds.includes(session.Quiz.projectId) ||
-        (session.Quiz.Project?.parentId && accessibleProjectIds.includes(session.Quiz.Project.parentId))
+      const isHost = session.hostId === req.user.id || session.Quiz?.creatorId === req.user.id;
+      const isProjectAuthorized = sessionProjId && (
+        accessibleProjectIds.includes(sessionProjId) ||
+        (sessionParentId && accessibleProjectIds.includes(sessionParentId))
       );
       if (!isHost && !isProjectAuthorized) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to view this session report.' });
@@ -928,7 +957,8 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
     res.json({
       sessionId: session.id,
       quizTitle: session.Quiz ? session.Quiz.title : 'Unknown Quiz',
-      projectName: session.Quiz && session.Quiz.Project ? session.Quiz.Project.name : 'N/A',
+      projectName: session.Quiz && session.Quiz.Project ? session.Quiz.Project.name : (session.Project ? session.Project.name : 'N/A'),
+      projectId: sessionProjId || null,
       hostName: session.host ? session.host.name : 'Lead Trainer',
       date: session.startedAt ? new Date(session.startedAt).toISOString().split('T')[0] : new Date(session.createdAt).toISOString().split('T')[0],
       totalQuestions,

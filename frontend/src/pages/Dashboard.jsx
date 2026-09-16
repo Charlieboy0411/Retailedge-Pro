@@ -177,13 +177,17 @@ export default function Dashboard() {
 
   const fetchProjects = async () => {
     try {
-      const endpoint = (user?.role === 'Trainer' || user?.role === 'Employee')
-        ? '/api/projects/my-projects'
-        : '/api/projects';
-      const response = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setProjects(response.data);
+      let res;
+      try {
+        res = await axios.get('/api/projects', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      } catch (e) {
+        res = await axios.get('/api/projects/my-projects', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+      }
+      setProjects(res.data || []);
     } catch (error) {
       console.error('Failed to fetch projects', error);
     }
