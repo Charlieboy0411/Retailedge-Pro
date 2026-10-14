@@ -43,12 +43,15 @@ export default function LiveQuiz() {
   const playerName   = location.state?.playerName   || saved.name || currentUser?.name || 'Learner';
   const playerAvatar = location.state?.avatar       || saved.avatar || '🙂';
   const playerEmpId  = location.state?.employeeId   || saved.employeeId || '';
+  const playerZone   = location.state?.zone         || saved.zone || '';
   const playerMobile = location.state?.mobileNumber || saved.mobileNumber || '';
   const playerDevice = location.state?.deviceId     || saved.deviceId || getDeviceId();
 
   const [status, setStatus] = useState('waiting');
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [submissionStatus, setSubmissionStatus] = useState('idle'); // idle, submitting, confirmed, rejected
+  const [submissionError, setSubmissionError]   = useState('');
   const [participantId, setParticipantId] = useState(saved.participantId || null);
   const [myScore, setMyScore] = useState(saved.score || 0);
   const [myAvatar, setMyAvatar] = useState(playerAvatar);
@@ -91,6 +94,7 @@ export default function LiveQuiz() {
         name: playerName,
         avatar: playerAvatar,
         employeeId: playerEmpId,
+        zone: playerZone,
         mobileNumber: playerMobile,
         deviceId: playerDevice,
       });
@@ -119,6 +123,7 @@ export default function LiveQuiz() {
           name: playerName,
           avatar: data.avatar || playerAvatar,
           employeeId: playerEmpId,
+          zone: data.zone || playerZone,
           mobileNumber: playerMobile,
           deviceId: playerDevice,
           score: data.score || 0,
@@ -137,6 +142,8 @@ export default function LiveQuiz() {
       const q = data.question || data;
       setCurrentQuestion(q);
       setSelectedAnswer(null);
+      setSubmissionStatus('idle');
+      setSubmissionError('');
       setLiveAnswers([]);
       setStatus('question');
       setTimeLeft(data.duration || q.time_limit || 20);
@@ -156,6 +163,19 @@ export default function LiveQuiz() {
         }
         return [...prev, data];
       });
+    };
+
+    const onAnswerConfirmed = (data) => {
+      setSubmissionStatus('confirmed');
+      setStatus('answered');
+      if (data && data.totalScore !== undefined) {
+        setMyScore(data.totalScore);
+      }
+    };
+
+    const onAnswerRejected = (data) => {
+      setSubmissionStatus('rejected');
+      setSubmissionError(data?.reason || data?.error || 'Failed to record answer. Please try again.');
     };
 
     const onAnswerRevealed = (data) => {
@@ -178,6 +198,8 @@ export default function LiveQuiz() {
       setStatus('waiting');
       setCurrentQuestion(null);
       setSelectedAnswer(null);
+      setSubmissionStatus('idle');
+      setSubmissionError('');
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setCorrectAnswer(null);
@@ -196,6 +218,8 @@ export default function LiveQuiz() {
     socket.on('participant_joined', onParticipantJoined);
     socket.on('new_question', onNewQuestion);
     socket.on('answer_received', onAnswerReceived);
+    socket.on('answer_confirmed', onAnswerConfirmed);
+    socket.on('answer_rejected', onAnswerRejected);
     socket.on('answer_revealed', onAnswerRevealed);
     socket.on('leaderboard_update', onLeaderboardUpdate);
     socket.on('lobby_reset', onLobbyReset);
@@ -206,7 +230,7 @@ export default function LiveQuiz() {
     return () => {
       if (socket) socket.disconnect();
     };
-  }, [cleanCode, playerName, playerAvatar, playerEmpId, playerMobile, playerDevice]);
+  }, [cleanCode, playerName, playerAvatar, playerEmpId, playerZone, playerMobile, playerDevice]);
 
   useEffect(() => {
     const iv = setInterval(() => setTipIndex(i => (i + 1) % SHELFY_TIPS.length), 4500);
@@ -239,7 +263,9 @@ export default function LiveQuiz() {
   };
 
   const submitAnswer = (answerText) => {
-    setStatus('answered');
+    if (status !== 'question' || submissionStatus === 'submitting' || submissionStatus === 'confirmed') return;
+    setSubmissionStatus('submitting');
+    setSubmissionError('');
     const timeTaken = Date.now() - questionStartTime;
     if (socket && currentQuestion) {
       socket.emit('submit_answer', {
@@ -259,19 +285,30 @@ export default function LiveQuiz() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0B1220', color: '#FFFFFF', position: 'relative', overflow: 'hidden', fontFamily: 'Manrope, Inter, sans-serif' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100dvh',
+      width: '100vw',
+      background: '#0B1220',
+      color: '#FFFFFF',
+      position: 'relative',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      fontFamily: 'Manrope, Inter, sans-serif'
+    }}>
       
       {/* ─── WAITING LOBBY STATE ─── */}
       {status === 'waiting' && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: '460px', padding: '36px 28px', textAlign: 'center', background: '#111827', border: '1px solid #1E293B', borderRadius: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: '460px', padding: '36px 24px', textAlign: 'center', background: '#111827', border: '1px solid #1E293B', borderRadius: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', boxSizing: 'border-box' }}>
             
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(37, 99, 235, 0.12)', border: '1px solid rgba(37, 99, 235, 0.25)', padding: '6px 14px', borderRadius: '20px', marginBottom: '20px' }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#06B6D4' }} />
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Live Learning Arena</span>
             </div>
 
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#FFFFFF', margin: '0 0 8px 0' }}>Ready for Session</h2>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: '0 0 8px 0' }}>Ready for Session</h2>
             <p style={{ color: '#94A3B8', fontSize: '0.9rem', marginBottom: '24px' }}>The host will initiate the quiz shortly.</p>
 
             {joinError && (
@@ -309,17 +346,17 @@ export default function LiveQuiz() {
 
       {/* ─── ACTIVE QUESTION / ANSWERED / REVEALED STATES ─── */}
       {['question', 'answered', 'revealed'].includes(status) && currentQuestion && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
           
           {/* Header Bar */}
-          <div style={{ background: '#0F172A', borderBottom: '1px solid #1E293B', padding: '14px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ background: '#0F172A', borderBottom: '1px solid #1E293B', padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>{myAvatar}</span>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF' }}>{playerName}</span>
+              <span style={{ fontSize: '1.2rem' }}>{myAvatar}</span>
+              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playerName}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <div style={{ background: '#162033', border: '1px solid #1E293B', borderRadius: '8px', padding: '4px 10px', fontSize: '0.8rem', fontWeight: 700, color: '#10B981' }}>
-                Score: {myScore} pts
+                {myScore} pts
               </div>
               {timeLeft > 0 && status === 'question' && (
                 <div style={{
@@ -337,16 +374,42 @@ export default function LiveQuiz() {
           </div>
 
           {/* Question Content */}
-          <div style={{ flex: 1, padding: '24px 20px 100px', maxWidth: '600px', margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ background: '#111827', border: '1px solid #1E293B', padding: '24px', borderRadius: '16px', marginBottom: '24px', textAlign: 'center' }}>
-              <h2 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#FFFFFF', margin: 0, lineHeight: 1.35 }}>
+          <div style={{
+            flex: 1,
+            padding: '20px 16px 130px',
+            maxWidth: '600px',
+            margin: '0 auto',
+            width: '100%',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{
+              background: '#111827',
+              border: '1px solid #1E293B',
+              padding: '20px 18px',
+              borderRadius: '16px',
+              marginBottom: '20px',
+              textAlign: 'center',
+              wordBreak: 'break-word',
+              overflowWrap: 'break-word',
+              width: '100%',
+              boxSizing: 'border-box'
+            }}>
+              <h2 style={{
+                fontSize: '1.25rem',
+                fontWeight: 700,
+                color: '#FFFFFF',
+                margin: 0,
+                lineHeight: 1.45,
+                wordBreak: 'break-word',
+                overflowWrap: 'break-word'
+              }}>
                 {currentQuestion.text}
               </h2>
             </div>
 
             {/* Options Selection */}
             {['mcq', 'multi_select', 'true_false', 'poll'].includes(currentQuestion.type) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
                 {getOptions(currentQuestion).map((opt, i) => {
                   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
                   const letter = letters[i] || '?';
@@ -373,40 +436,133 @@ export default function LiveQuiz() {
                     btnColor = '#60A5FA';
                   }
 
+                  const isDisabled = status === 'answered' || status === 'revealed' || submissionStatus === 'submitting' || submissionStatus === 'confirmed';
+
                   return (
                     <button
                       key={i}
-                      disabled={status === 'answered' || status === 'revealed'}
+                      disabled={isDisabled}
                       onClick={() => {
                         setSelectedAnswer(opt);
                         submitAnswer(opt);
                       }}
                       style={{
-                        padding: '16px 18px', borderRadius: '12px', background: btnBg,
-                        border: `1.5px solid ${btnBorder}`, color: btnColor,
-                        display: 'flex', alignItems: 'center', gap: '12px',
-                        fontSize: '1rem', fontWeight: 600, cursor: status === 'question' ? 'pointer' : 'default',
-                        textAlign: 'left', transition: 'all 0.15s'
+                        minHeight: '52px',
+                        padding: '14px 16px',
+                        borderRadius: '12px',
+                        background: btnBg,
+                        border: `1.5px solid ${btnBorder}`,
+                        color: btnColor,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '12px',
+                        fontSize: '0.95rem',
+                        fontWeight: 600,
+                        cursor: isDisabled ? 'default' : 'pointer',
+                        textAlign: 'left',
+                        transition: 'all 0.15s',
+                        width: '100%',
+                        boxSizing: 'border-box'
                       }}
                     >
                       <span style={{
-                        width: '26px', height: '26px', borderRadius: '6px',
+                        width: '28px',
+                        height: '28px',
+                        borderRadius: '6px',
                         background: isSelected ? '#2563EB' : '#1E293B',
-                        color: '#FFFFFF', display: 'flex', alignItems: 'center',
-                        justifyContent: 'center', fontSize: '0.8rem', fontWeight: 800
+                        color: '#FFFFFF',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.82rem',
+                        fontWeight: 800,
+                        flexShrink: 0
                       }}>
                         {letter}
                       </span>
-                      <span style={{ flex: 1 }}>{opt}</span>
-                      {status === 'revealed' && isCorrect && <CheckCircle2 size={18} color="#10B981" />}
+                      <span style={{
+                        flex: 1,
+                        wordBreak: 'break-word',
+                        overflowWrap: 'break-word',
+                        lineHeight: 1.35
+                      }}>
+                        {opt}
+                      </span>
+                      {status === 'revealed' && isCorrect && <CheckCircle2 size={18} color="#10B981" style={{ flexShrink: 0 }} />}
                     </button>
                   );
                 })}
               </div>
             )}
 
-            {status === 'answered' && (
-              <div style={{ marginTop: '24px', textAlign: 'center', padding: '16px', background: '#111827', borderRadius: '12px', border: '1px solid #1E293B', color: '#93C5FD', fontSize: '0.9rem' }}>
+            {submissionStatus === 'submitting' && (
+              <div style={{
+                marginTop: '20px',
+                textAlign: 'center',
+                padding: '14px',
+                background: 'rgba(37, 99, 235, 0.12)',
+                borderRadius: '12px',
+                border: '1px solid rgba(37, 99, 235, 0.35)',
+                color: '#93C5FD',
+                fontSize: '0.9rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px'
+              }}>
+                <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #3B82F6', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+                <span>Recording response securely with server...</span>
+              </div>
+            )}
+
+            {submissionStatus === 'rejected' && (
+              <div style={{
+                marginTop: '20px',
+                textAlign: 'center',
+                padding: '14px',
+                background: 'rgba(239, 68, 68, 0.12)',
+                borderRadius: '12px',
+                border: '1px solid #EF4444',
+                color: '#F87171',
+                fontSize: '0.88rem'
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: '4px' }}>Submission Not Persisted</div>
+                <div style={{ marginBottom: '8px' }}>{submissionError || 'Please try again before the deadline.'}</div>
+                {timeLeft > 0 && status === 'question' && (
+                  <button
+                    onClick={() => {
+                      setSubmissionStatus('idle');
+                      setSubmissionError('');
+                      if (selectedAnswer) submitAnswer(selectedAnswer);
+                    }}
+                    style={{
+                      background: '#EF4444',
+                      color: '#FFF',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '6px 16px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Retry Submission
+                  </button>
+                )}
+              </div>
+            )}
+
+            {(status === 'answered' || submissionStatus === 'confirmed') && (
+              <div style={{
+                marginTop: '20px',
+                textAlign: 'center',
+                padding: '16px',
+                background: '#111827',
+                borderRadius: '12px',
+                border: '1px solid #1E293B',
+                color: '#93C5FD',
+                fontSize: '0.9rem'
+              }}>
                 ✓ Response recorded! Waiting for host to reveal results...
               </div>
             )}

@@ -80,7 +80,7 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       },
       {
         model: Participant,
-        attributes: ['id', 'name', 'score'],
+        attributes: ['id', 'name', 'score', 'employeeId', 'storeName'],
         include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       },
       {

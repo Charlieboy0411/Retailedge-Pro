@@ -203,6 +203,15 @@ export default function HostControlRoom() {
       setMetrics(data);
     });
 
+    socket.on('host_roster_sync', (data) => {
+      if (data && Array.isArray(data.participants)) {
+        setParticipants(data.participants);
+      }
+      if (data && data.metrics) {
+        setMetrics(data.metrics);
+      }
+    });
+
     socket.on('participant_joined', (data) => {
       setParticipants(prev => {
         const exists = prev.find(p => p.id === data.id);
@@ -985,9 +994,38 @@ export default function HostControlRoom() {
                 {/* Connected Participant Chips */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
                   {participants.map((p, i) => (
-                    <div key={p.id || i} style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#162033', border: '1px solid #1E293B', padding: '8px 16px', borderRadius: '20px', fontSize: '0.9rem', fontWeight: 600, color: '#FFFFFF' }}>
-                      <span>{p.avatar || getSmileyForName(p.name)}</span>
-                      <span>{p.name}</span>
+                    <div 
+                      key={p.id || i} 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: '10px', 
+                        background: p.disconnected ? 'rgba(30, 41, 59, 0.6)' : '#162033', 
+                        border: `1px solid ${p.disconnected ? '#334155' : '#1E293B'}`, 
+                        padding: '8px 16px', 
+                        borderRadius: '20px', 
+                        fontSize: '0.9rem', 
+                        fontWeight: 600, 
+                        color: p.disconnected ? '#94A3B8' : '#FFFFFF',
+                        opacity: p.disconnected ? 0.75 : 1
+                      }}
+                    >
+                      <span style={{ fontSize: '1.2rem' }}>{p.avatar || getSmileyForName(p.name)}</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span style={{ fontWeight: 700 }}>{p.name}</span>
+                          {p.disconnected && (
+                            <span style={{ fontSize: '0.65rem', background: '#EF4444', color: '#FFF', padding: '1px 6px', borderRadius: '8px', fontWeight: 700 }}>
+                              Offline
+                            </span>
+                          )}
+                        </div>
+                        {(p.employeeId || p.zone || p.storeName) && (
+                          <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
+                            {[p.employeeId ? `ID: ${p.employeeId}` : '', (p.zone || p.storeName) ? `Zone: ${p.zone || p.storeName}` : ''].filter(Boolean).join(' • ')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   ))}
                   {participants.length === 0 && (

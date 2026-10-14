@@ -312,16 +312,19 @@ export default function Join() {
     setError('');
     const code = roomCode.replace(/\s+/g, '');
     const name = guestName.trim();
-    if (!code) { setError('Please enter a room code.'); return; }
-    if (!name) { setError('Please enter your name.'); return; }
-    if (!guestEmpId.trim()) { setError('Please enter your Employee ID.'); return; }
-    if (!guestZone) { setError('Please select a Zone.'); return; }
+    const empId = guestEmpId.trim();
+    const zone = (guestZone || '').trim();
 
-    const session = { name, employeeId: guestEmpId, zone: guestZone, avatar };
+    if (!code) { setError('Please enter a room code.'); return; }
+    if (!name) { setError('Please enter your full name.'); return; }
+    if (!empId) { setError('Please enter your Employee ID.'); return; }
+    if (!zone) { setError('Please select your designated Zone.'); return; }
+
+    const session = { name, employeeId: empId, zone, avatar };
     saveSession(code, session);
 
     navigate(`/live/${code}`, {
-      state: { playerName: name, employeeId: guestEmpId, zone: guestZone, avatar, deviceId: getDeviceId() }
+      state: { playerName: name, employeeId: empId, zone, avatar, deviceId: getDeviceId() }
     });
   };
 
@@ -335,17 +338,17 @@ export default function Join() {
 
   const handleLmsJoin = (e) => {
     e.preventDefault();
-    // LMS login flow — for now navigate with username as name
     setError('');
     const code = roomCode.replace(/\s+/g, '');
+    const username = lmsUsername.trim();
     if (!code) { setError('Please enter a room code.'); return; }
-    if (!lmsUsername.trim()) { setError('Please enter your LMS username.'); return; }
+    if (!username) { setError('Please enter your LMS username.'); return; }
     
-    const session = { name: lmsUsername.trim(), employeeId: lmsUsername.trim(), avatar };
+    const session = { name: username, employeeId: username, zone: 'General', avatar };
     saveSession(code, session);
 
     navigate(`/live/${code}`, {
-      state: { playerName: lmsUsername.trim(), employeeId: lmsUsername.trim(), avatar, deviceId: getDeviceId() }
+      state: { playerName: username, employeeId: username, zone: 'General', avatar, deviceId: getDeviceId() }
     });
   };
 
@@ -363,11 +366,11 @@ export default function Join() {
     if (!code) { setError('Please enter a room code.'); return; }
     if (otpCode !== '123456') { setError('Invalid OTP. Please enter 123456.'); return; }
 
-    const session = { name: otpName.trim(), mobileNumber: otpMobile, avatar };
+    const session = { name: otpName.trim(), mobileNumber: otpMobile.trim(), zone: 'General', avatar };
     saveSession(code, session);
 
     navigate(`/live/${code}`, {
-      state: { playerName: otpName.trim(), mobileNumber: otpMobile, avatar, deviceId: getDeviceId() }
+      state: { playerName: otpName.trim(), mobileNumber: otpMobile.trim(), zone: 'General', avatar, deviceId: getDeviceId() }
     });
   };
 

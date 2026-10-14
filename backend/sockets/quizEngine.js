@@ -77,17 +77,57 @@ const broadcastMetrics = (io, roomCode, sessionId) => {
 const startServerTimer = (io, roomCode, durationSeconds, questionId) => {
   clearServerTimer(roomCode);
   let remaining = durationSeconds;
+  const startedAt = Date.now();
+  const deadline = startedAt + (durationSeconds * 1000);
   activeTimers[roomCode] = {
     questionId,
     remaining,
-    intervalId: setInterval(() => {
+    startedAt,
+    deadline,
+    intervalId: setInterval(async () => {
       remaining--;
-      activeTimers[roomCode].remaining = remaining;
+      if (activeTimers[roomCode]) {
+        activeTimers[roomCode].remaining = remaining;
+      }
       io.to(roomCode).emit('timer_tick', { remaining });
       if (remaining <= 0) {
         clearServerTimer(roomCode);
         io.to(roomCode).emit('timer_expired');
         io.to(roomCode).emit('time_up'); // legacy alias for host
+
+        // Automatic Correct-Answer Reveal (Phase 7)
+        try {
+          const question = await Question.findByPk(questionId);
+          const correctAnswer = question ? question.correct_answer : null;
+          const session = await Session.findOne({ where: { roomCode } });
+          let leaderboardData = [];
+          if (session) {
+            const participants = await Participant.findAll({
+              where: { sessionId: session.id },
+              order: [['score', 'DESC'], ['createdAt', 'ASC']],
+              limit: 10,
+            });
+            leaderboardData = participants.map((p, idx) => ({
+              rank: idx + 1,
+              id: p.id,
+              name: p.name,
+              employeeId: p.employeeId,
+              zone: p.storeName,
+              avatar: p.avatar || '🙂',
+              score: p.score,
+              connectionStatus: p.connectionStatus,
+            }));
+          }
+          io.to(roomCode).emit('answer_revealed', {
+            correctAnswer,
+            questionId,
+            leaderboard: leaderboardData,
+            automatic: true
+          });
+          logger.info('QuizEngine', roomCode, null, 'Automatic answer reveal triggered on timer expiration', { questionId });
+        } catch (revealErr) {
+          logger.error('QuizEngine', roomCode, null, 'Error in automatic answer reveal', revealErr);
+        }
       }
     }, 1000),
   };
@@ -354,12 +394,50 @@ function quizEngine(io) {
     });
 
     // Host reconnects to an existing room after a socket drop (CANONICAL)
-    const handleHostRejoin = ({ roomCode }) => {
-      if (!roomCode) return;
+    const handleHostRejoin = async ({ roomCode, sessionId }) => {
+      if (!roomCode && !sessionId) return;
       const cleanCode = (roomCode || '').replace(/\s+/g, '');
-      if (!roomSockets[cleanCode]) roomSockets[cleanCode] = {};
-      socket.join(cleanCode);
-      logger.info('QuizEngine', cleanCode, null, 'Host rejoined room after reconnect', { socketId: socket.id });
+      try {
+        let session = sessionId ? await Session.findByPk(sessionId) : null;
+        if (!session && cleanCode) {
+          session = await Session.findOne({
+            where: { roomCode: cleanCode, status: ['waiting', 'active'] },
+            order: [['createdAt', 'DESC']]
+          });
+        }
+        if (!session) return;
+
+        if (!roomSockets[cleanCode]) roomSockets[cleanCode] = {};
+        socket.join(cleanCode);
+
+        const participants = await Participant.findAll({ where: { sessionId: session.id } });
+        const participantsData = participants.map(p => ({
+          id:           p.id,
+          name:         p.name,
+          employeeId:   p.employeeId,
+          zone:         p.storeName,
+          avatar:       p.avatar || '🙂',
+          score:        p.score,
+          disconnected: p.connectionStatus === 'disconnected',
+        }));
+
+        // Send authoritative roster and status update back to host socket
+        socket.emit('host_roster_sync', {
+          roomCode: session.roomCode,
+          sessionId: session.id,
+          status: session.status,
+          currentQuestionIndex: session.current_question_index - 1,
+          participants: participantsData,
+        });
+
+        broadcastMetrics(io, cleanCode, session.id);
+        logger.info('QuizEngine', cleanCode, session.id, 'Host rejoined room and synchronized roster', {
+          socketId: socket.id,
+          count: participantsData.length
+        });
+      } catch (err) {
+        logger.error('QuizEngine', cleanCode, null, 'handleHostRejoin error', err);
+      }
     };
     socket.on('host_rejoin_room', handleHostRejoin);
     socket.on('host_reconnect', handleHostRejoin); // legacy alias
@@ -475,6 +553,8 @@ function quizEngine(io) {
         const leaderboardData = participants.map(p => ({
           id:               p.id,
           name:             p.name,
+          employeeId:       p.employeeId,
+          zone:             p.storeName,
           avatar:           p.avatar || '🙂',
           score:            p.score,
           connectionStatus: p.connectionStatus,
@@ -526,6 +606,11 @@ function quizEngine(io) {
         let participant = null;
         let isRejoin    = false;
 
+        const cleanName   = (name || '').trim();
+        const cleanEmpId  = (employeeId || '').trim();
+        const cleanMobile = (mobileNumber || '').trim();
+        const cleanZone   = (zone || '').trim();
+
         // A. Match by explicit participantId from client
         const isUuid = (str) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
         if (incomingParticipantId && isUuid(incomingParticipantId)) {
@@ -537,38 +622,31 @@ function quizEngine(io) {
           participant = await Participant.findOne({ where: { sessionId: session.id, userId } });
         }
 
-        // B. Match by deviceId (same phone / browser tab)
-        if (!participant && deviceId) {
+        // B. Match by employeeId if provided (authoritative identity per employee)
+        if (!participant && cleanEmpId) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, employeeId: cleanEmpId }
+          });
+        }
+
+        // C. Match by mobileNumber if provided
+        if (!participant && cleanMobile) {
+          participant = await Participant.findOne({
+            where: { sessionId: session.id, mobileNumber: cleanMobile }
+          });
+        }
+
+        // D. Match by deviceId (only if employeeId is not provided to prevent accidental cross-device merge)
+        if (!participant && !cleanEmpId && deviceId) {
           participant = await Participant.findOne({
             where: { sessionId: session.id, deviceId }
           });
         }
 
-        // C. Match by employeeId if provided
-        if (!participant && employeeId) {
-          participant = await Participant.findOne({
-            where: { sessionId: session.id, employeeId }
-          });
-        }
-
-        // D. Match by mobileNumber if provided
-        if (!participant && mobileNumber) {
-          participant = await Participant.findOne({
-            where: { sessionId: session.id, mobileNumber }
-          });
-        }
-
-        // E. Match by logged-in userId
-        if (!participant && userId) {
-          participant = await Participant.findOne({
-            where: { sessionId: session.id, userId }
-          });
-        }
-
-        // F. Match by name in the same session (prevent duplicate entry for same person)
-        if (!participant && name && name.trim()) {
+        // E. Match by name ONLY if no employeeId, mobile, or deviceId was provided (pure guest fallback)
+        if (!participant && !cleanEmpId && !cleanMobile && !deviceId && cleanName) {
           const sessionParticipants = await Participant.findAll({ where: { sessionId: session.id } });
-          participant = sessionParticipants.find(p => p.name && p.name.trim().toLowerCase() === name.trim().toLowerCase()) || null;
+          participant = sessionParticipants.find(p => !p.employeeId && p.name && p.name.trim().toLowerCase() === cleanName.toLowerCase()) || null;
         }
 
         // --- 2. VALIDATE OR ESTABLISH CONNECTION STATUS ---
@@ -588,21 +666,22 @@ function quizEngine(io) {
           isRejoin = true;
           participant.connectionStatus = session.status === 'active' ? 'active' : 'rejoined';
           if (avatar) participant.avatar = avatar;
-          if (name) participant.name = name;
+          if (cleanName) participant.name = cleanName;
+          if (cleanZone) participant.storeName = cleanZone;
           if (deviceId) participant.deviceId = deviceId;
           await participant.save();
         } else {
           // Fresh unique participant join
           participant = await Participant.create({
             sessionId:        session.id,
-            name:             name || 'Learner',
-            employeeId:       employeeId   || null,
-            mobileNumber:     mobileNumber || null,
+            name:             cleanName    || 'Learner',
+            employeeId:       cleanEmpId   || null,
+            mobileNumber:     cleanMobile  || null,
             avatar:           avatar       || '🙂',
             connectionStatus: session.status === 'active' ? 'active' : 'waiting',
             userId:           userId       || null,
             deviceId:         deviceId     || null,
-            storeName:        zone         || null,
+            storeName:        cleanZone    || null,
           });
         }
 
@@ -619,7 +698,15 @@ function quizEngine(io) {
           isRejoin,
           avatar:        participant.avatar,
           score:         participant.score,
-          participants:  existingParticipants.map(p => ({ id: p.id, name: p.name, avatar: p.avatar || '🙂' })),
+          zone:          participant.storeName,
+          employeeId:    participant.employeeId,
+          participants:  existingParticipants.map(p => ({
+            id:         p.id,
+            name:       p.name,
+            employeeId: p.employeeId,
+            zone:       p.storeName,
+            avatar:     p.avatar || '🙂'
+          })),
         });
 
         if (session.status === 'active' && session.Quiz && session.Quiz.questions) {
@@ -642,15 +729,18 @@ function quizEngine(io) {
         }
 
         io.to(cleanCode).emit('participant_joined', {
-          name:     participant.name,
-          id:       participant.id,
-          avatar:   participant.avatar || '🙂',
+          name:       participant.name,
+          id:         participant.id,
+          employeeId: participant.employeeId,
+          zone:       participant.storeName,
+          avatar:     participant.avatar || '🙂',
           isRejoin,
         });
 
         broadcastMetrics(io, cleanCode, session.id);
         logger.info('QuizEngine', cleanCode, session.id, isRejoin ? 'Participant rejoined' : 'Participant joined', {
           name: participant.name,
+          employeeId: participant.employeeId,
           participantId: participant.id,
         });
       } catch (error) {
@@ -666,12 +756,20 @@ function quizEngine(io) {
     socket.on('submit_answer', async ({ roomCode, participantId, questionId, answer, timeTaken }) => {
       const cleanCode = (roomCode || '').replace(/\s+/g, '');
 
+      // Resolve effective participant identity
+      const effectiveParticipantId = participantId || socketRoom[socket.id]?.participantId;
+      if (!effectiveParticipantId) {
+        logger.warn('QuizEngine', cleanCode, null, 'submit_answer rejected — no participantId', { socketId: socket.id });
+        socket.emit('answer_rejected', { reason: 'Participant session not registered' });
+        return;
+      }
+
       // ── Security Check 0: Payload size guard — reject oversized/malformed payloads ──
       const answerStr = typeof answer === 'string' ? answer : JSON.stringify(answer ?? '');
       if (answerStr.length > MAX_ANSWER_BYTES) {
         monitorStats.totalOversizedRejections++;
         logger.warn('QuizEngine', cleanCode, null, 'Oversized payload rejected', {
-          participantId, size: answerStr.length,
+          participantId: effectiveParticipantId, size: answerStr.length,
         });
         socket.emit('answer_rejected', { reason: 'Payload too large' });
         return;
@@ -686,29 +784,29 @@ function quizEngine(io) {
       if (rl.count > RATE_LIMIT_MAX) {
         monitorStats.totalFloodRejections++;
         logger.warn('QuizEngine', cleanCode, null, 'Rate limit exceeded — flooding detected', {
-          socketId: socket.id, participantId, count: rl.count,
+          socketId: socket.id, participantId: effectiveParticipantId, count: rl.count,
         });
         socket.emit('answer_rejected', { reason: 'Too many submissions' });
         return;
       }
 
-      // ── Security Check 2: Reject answers after the server timer has expired ──
-      // activeTimers[cleanCode] is deleted the moment remaining reaches 0.
-      if (!activeTimers[cleanCode]) {
+      // ── Security Check 2: Server deadline verification with 1500ms network grace period ──
+      const timer = activeTimers[cleanCode];
+      if (!timer || (timer.deadline && now > timer.deadline + 1500)) {
         monitorStats.totalLateRejections++;
-        logger.warn('QuizEngine', cleanCode, null, 'Late answer rejected — timer expired', {
-          participantId, questionId,
+        logger.warn('QuizEngine', cleanCode, null, 'Late answer rejected — deadline passed', {
+          participantId: effectiveParticipantId, questionId,
         });
         socket.emit('answer_rejected', { reason: 'Time expired' });
         return;
       }
 
       // ── Security Check 3: Reject duplicate submissions for the same question ──
-      const dedupeKey = `${participantId}:${questionId}`;
+      const dedupeKey = `${effectiveParticipantId}:${questionId}`;
       if (answeredMap[dedupeKey]) {
         monitorStats.totalDupeRejections++;
         logger.warn('QuizEngine', cleanCode, null, 'Duplicate answer rejected (memory check)', {
-          participantId, questionId,
+          participantId: effectiveParticipantId, questionId,
         });
         socket.emit('answer_rejected', { reason: 'Already answered' });
         return;
@@ -716,13 +814,13 @@ function quizEngine(io) {
 
       // DB-level deduplication: ensure participant has not already submitted for this question
       const existingResponse = await Response.findOne({
-        where: { participantId, questionId }
+        where: { participantId: effectiveParticipantId, questionId }
       });
       if (existingResponse) {
         answeredMap[dedupeKey] = true;
         monitorStats.totalDupeRejections++;
         logger.warn('QuizEngine', cleanCode, null, 'Duplicate answer rejected (DB check)', {
-          participantId, questionId,
+          participantId: effectiveParticipantId, questionId,
         });
         socket.emit('answer_rejected', { reason: 'Already answered' });
         return;
@@ -735,26 +833,41 @@ function quizEngine(io) {
         const points    = scoringEngine.calculatePoints(isCorrect, question, timeTaken);
 
         await Response.create({
-          participantId,
+          participantId:  effectiveParticipantId,
           questionId,
-          answer,
+          answer:         answerStr,
           response_time:  timeTaken,
           points_awarded: points,
         });
 
-        const participant = await Participant.findByPk(participantId);
+        const participant = await Participant.findByPk(effectiveParticipantId);
         if (participant) {
-          participant.score += points;
+          participant.score = (participant.score || 0) + points;
           await participant.save();
         }
 
-        const answerPayload = { participantId, points, answer, isCorrect, questionId };
-        // Broadcast canonical answer_received event
+        // Acknowledge submission to the submitting client
+        socket.emit('answer_confirmed', {
+          questionId,
+          answer,
+          pointsAwarded: points,
+          isCorrect,
+          totalScore: participant ? participant.score : 0,
+        });
+
+        const answerPayload = {
+          participantId: effectiveParticipantId,
+          points,
+          answer,
+          isCorrect,
+          questionId
+        };
+        // Broadcast canonical answer_received event to host and participants
         io.to(cleanCode).emit('answer_received', answerPayload);
         monitorStats.totalAnswers++;
 
-        logger.info('QuizEngine', cleanCode, null, 'Answer submitted', {
-          participantId,
+        logger.info('QuizEngine', cleanCode, null, 'Answer successfully recorded & persisted', {
+          participantId: effectiveParticipantId,
           questionId,
           isCorrect,
           points,
@@ -762,6 +875,7 @@ function quizEngine(io) {
         });
       } catch (error) {
         logger.error('QuizEngine', cleanCode, null, 'submit_answer error', error);
+        socket.emit('answer_rejected', { reason: 'Failed to persist answer' });
       }
     });
 
@@ -840,6 +954,8 @@ function quizEngine(io) {
           const leaderboard = participants.map(p => ({
             id:               p.id,
             name:             p.name,
+            employeeId:       p.employeeId,
+            zone:             p.storeName,
             avatar:           p.avatar || '🙂',
             score:            p.score,
             connectionStatus: p.connectionStatus,

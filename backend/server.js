@@ -79,7 +79,7 @@ app.use('/api/supervisor',   supervisorRoutes);
 app.use('/api/client',       clientPortalRoutes);
 app.use('/api/td',           tdRoutes);
 
-app.get('/health', async (req, res) => {
+const healthHandler = async (req, res) => {
   try {
     const sequelize = require('./config/database');
     await sequelize.authenticate();
@@ -87,7 +87,9 @@ app.get('/health', async (req, res) => {
   } catch (error) {
     res.status(500).json({ status: 'error', message: 'Database connection failed', error: error.message });
   }
-});
+};
+app.get('/health', healthHandler);
+app.get('/api/health', healthHandler);
 
 // ─── LAN IP helper ───────────────────────────────────────────────────────────
 function getLanIp() {
