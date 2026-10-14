@@ -67,7 +67,144 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
   }
 });
 
+// ─── PM INTELLIGENCE & PROJECT SCOPING ENDPOINTS ──────────────────────────────
+const intelligenceService = require('../utils/projectIntelligenceService');
 
+// GET /api/projects/my-projects - Returns projects assigned to the calling PM or Trainer
+router.get('/my-projects', requireAuth, async (req, res) => {
+  try {
+    const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+    let whereClause = {};
+    if (accessibleIds.length > 0) {
+      whereClause.id = { [require('sequelize').Op.in]: accessibleIds };
+    } else if (req.user.role === 'Trainer' || ['Admin', 'Super Admin'].includes(req.user.role)) {
+      // Trainers without strict individual project constraints can view all active projects
+      whereClause = {};
+    } else {
+      return res.json([]);
+    }
+
+    const projects = await Project.findAll({
+      where: whereClause,
+      include: [
+        { model: Project, as: 'parent', attributes: ['id', 'name'] },
+        { model: Project, as: 'subProjects', attributes: ['id', 'name', 'status'] },
+        { model: Client, attributes: ['id', 'name', 'client_code'] }
+      ],
+      order: [['name', 'ASC']]
+    });
+
+    res.json(projects);
+  } catch (error) {
+    console.error('GET /api/projects/my-projects error:', error);
+    res.status(500).json({ error: 'Failed to fetch assigned projects', details: error.message });
+  }
+});
+
+// GET /api/projects/intelligence - Unified scoped intelligence payload for PM Dashboard
+router.get('/intelligence', requireAuth, async (req, res) => {
+  try {
+    const { projectId = 'all', subProjectId = 'all', range = '7d' } = req.query;
+    
+    // Strict authorization and project resolution
+    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+
+    if (projectIds.length === 0) {
+      return res.json({
+        kpis: await intelligenceService.getProjectKPIs([]),
+        trainingPerformance: await intelligenceService.getProjectTrainingPerformance([]),
+        jitsiAttendance: await intelligenceService.getProjectJitsiAttendance([]),
+        quizIntelligence: await intelligenceService.getProjectQuizIntelligence([]),
+        certificationIntelligence: await intelligenceService.getProjectCertificationIntelligence([]),
+        projectComparison: [],
+        alerts: []
+      });
+    }
+
+    const [
+      kpis,
+      trainingPerformance,
+      jitsiAttendance,
+      quizIntelligence,
+      certificationIntelligence,
+      projectComparison,
+      alerts
+    ] = await Promise.all([
+      intelligenceService.getProjectKPIs(projectIds),
+      intelligenceService.getProjectTrainingPerformance(projectIds),
+      intelligenceService.getProjectJitsiAttendance(projectIds),
+      intelligenceService.getProjectQuizIntelligence(projectIds),
+      intelligenceService.getProjectCertificationIntelligence(projectIds),
+      projectId === 'all' ? intelligenceService.getProjectComparison(req.user) : Promise.resolve([]),
+      intelligenceService.getProjectAlerts(projectIds)
+    ]);
+
+    res.json({
+      kpis,
+      trainingPerformance,
+      jitsiAttendance,
+      quizIntelligence,
+      certificationIntelligence,
+      projectComparison,
+      alerts
+    });
+  } catch (error) {
+    console.error('GET /api/projects/intelligence error:', error);
+    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
+    res.status(status).json({ 
+      error: error.message || 'Failed to fetch project intelligence' 
+    });
+  }
+});
+
+// GET /api/projects/participant-360/:participantId - Unified Participant 360 profile
+router.get('/participant-360/:participantId', requireAuth, async (req, res) => {
+  try {
+    const { participantId } = req.params;
+    const { projectId = 'all', subProjectId = 'all' } = req.query;
+    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+
+    const participant360 = await intelligenceService.getParticipant360(participantId, projectIds, req.user);
+    res.json({ ...participant360, user: participant360.profile });
+  } catch (error) {
+    console.error('GET /api/projects/participant-360 error:', error);
+    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to fetch participant 360 profile', details: error.message });
+  }
+});
+
+// GET /api/projects/data-integrity - System data reconciliation monitor for Admin
+router.get('/data-integrity', requireAuth, async (req, res) => {
+  try {
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    if (!['Admin', 'Super Admin'].includes(userRole)) {
+      return res.status(403).json({ error: 'Forbidden: Admin access required for data integrity monitor.' });
+    }
+    const metrics = await intelligenceService.getDataIntegrityMetrics();
+    res.json(metrics);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch data integrity metrics', details: error.message });
+  }
+});
+
+// GET /api/projects/participant-360 - Support query parameter ?userId= or ?participantId=
+router.get('/participant-360', requireAuth, async (req, res) => {
+  try {
+    const participantId = req.query.userId || req.query.participantId;
+    if (!participantId) {
+      return res.status(400).json({ error: 'userId or participantId query parameter required' });
+    }
+    const { projectId = 'all', subProjectId = 'all' } = req.query;
+    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+
+    const participant360 = await intelligenceService.getParticipant360(participantId, projectIds, req.user);
+    res.json({ ...participant360, user: participant360.profile });
+  } catch (error) {
+    console.error('GET /api/projects/participant-360 error:', error);
+    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to fetch participant 360 profile', details: error.message });
+  }
+});
 
 // POST /api/projects - Create new project
 router.post('/', requireAuth, requireRole(['Admin', 'Super Admin']), upload.single('project_logo'), async (req, res) => {
@@ -222,149 +359,15 @@ router.post('/:id/executive-metrics', requireAuth, requireRole(['Admin', 'Super 
   }
 });
 
-// ─── PM INTELLIGENCE & PROJECT SCOPING ENDPOINTS ──────────────────────────────
-const intelligenceService = require('../utils/projectIntelligenceService');
-
-// GET /api/projects/my-projects - Returns projects assigned to the calling PM or Trainer
-router.get('/my-projects', requireAuth, async (req, res) => {
-  try {
-    const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-    let whereClause = {};
-    if (accessibleIds.length > 0) {
-      whereClause.id = { [require('sequelize').Op.in]: accessibleIds };
-    } else if (req.user.role === 'Trainer' || ['Admin', 'Super Admin'].includes(req.user.role)) {
-      // Trainers without strict individual project constraints can view all active projects
-      whereClause = {};
-    } else {
-      return res.json([]);
-    }
-
-    const projects = await Project.findAll({
-      where: whereClause,
-      include: [
-        { model: Project, as: 'parent', attributes: ['id', 'name'] },
-        { model: Project, as: 'subProjects', attributes: ['id', 'name', 'status'] },
-        { model: Client, attributes: ['id', 'name', 'client_code'] }
-      ],
-      order: [['name', 'ASC']]
-    });
-
-    res.json(projects);
-  } catch (error) {
-    console.error('GET /api/projects/my-projects error:', error);
-    res.status(500).json({ error: 'Failed to fetch assigned projects', details: error.message });
-  }
-});
-
-// GET /api/projects/intelligence - Unified scoped intelligence payload for PM Dashboard
-router.get('/intelligence', requireAuth, async (req, res) => {
-  try {
-    const { projectId = 'all', subProjectId = 'all', range = '7d' } = req.query;
-    
-    // Strict authorization and project resolution
-    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
-
-    if (projectIds.length === 0) {
-      return res.json({
-        kpis: await intelligenceService.getProjectKPIs([]),
-        trainingPerformance: await intelligenceService.getProjectTrainingPerformance([]),
-        jitsiAttendance: await intelligenceService.getProjectJitsiAttendance([]),
-        quizIntelligence: await intelligenceService.getProjectQuizIntelligence([]),
-        certificationIntelligence: await intelligenceService.getProjectCertificationIntelligence([]),
-        projectComparison: [],
-        alerts: []
-      });
-    }
-
-    const [
-      kpis,
-      trainingPerformance,
-      jitsiAttendance,
-      quizIntelligence,
-      certificationIntelligence,
-      projectComparison,
-      alerts
-    ] = await Promise.all([
-      intelligenceService.getProjectKPIs(projectIds),
-      intelligenceService.getProjectTrainingPerformance(projectIds),
-      intelligenceService.getProjectJitsiAttendance(projectIds),
-      intelligenceService.getProjectQuizIntelligence(projectIds),
-      intelligenceService.getProjectCertificationIntelligence(projectIds),
-      projectId === 'all' ? intelligenceService.getProjectComparison(req.user) : Promise.resolve([]),
-      intelligenceService.getProjectAlerts(projectIds)
-    ]);
-
-    res.json({
-      kpis,
-      trainingPerformance,
-      jitsiAttendance,
-      quizIntelligence,
-      certificationIntelligence,
-      projectComparison,
-      alerts
-    });
-  } catch (error) {
-    console.error('GET /api/projects/intelligence error:', error);
-    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
-    res.status(status).json({ 
-      error: error.message || 'Failed to fetch project intelligence' 
-    });
-  }
-});
-
-// GET /api/projects/participant-360/:participantId - Unified Participant 360 profile
-router.get('/participant-360/:participantId', requireAuth, async (req, res) => {
-  try {
-    const { participantId } = req.params;
-    const { projectId = 'all', subProjectId = 'all' } = req.query;
-    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
-
-    const participant360 = await intelligenceService.getParticipant360(participantId, projectIds, req.user);
-    res.json({ ...participant360, user: participant360.profile });
-  } catch (error) {
-    console.error('GET /api/projects/participant-360 error:', error);
-    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
-    res.status(status).json({ error: error.message || 'Failed to fetch participant 360 profile', details: error.message });
-  }
-});
-
-// GET /api/projects/data-integrity - System data reconciliation monitor for Admin
-router.get('/data-integrity', requireAuth, async (req, res) => {
-  try {
-    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
-    if (!['Admin', 'Super Admin'].includes(userRole)) {
-      return res.status(403).json({ error: 'Forbidden: Admin access required for data integrity monitor.' });
-    }
-    const metrics = await intelligenceService.getDataIntegrityMetrics();
-    res.json(metrics);
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to fetch data integrity metrics', details: error.message });
-  }
-});
-
-// GET /api/projects/participant-360 - Support query parameter ?userId= or ?participantId=
-router.get('/participant-360', requireAuth, async (req, res) => {
-  try {
-    const participantId = req.query.userId || req.query.participantId;
-    if (!participantId) {
-      return res.status(400).json({ error: 'userId or participantId query parameter required' });
-    }
-    const { projectId = 'all', subProjectId = 'all' } = req.query;
-    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
-
-    const participant360 = await intelligenceService.getParticipant360(participantId, projectIds, req.user);
-    res.json({ ...participant360, user: participant360.profile });
-  } catch (error) {
-    console.error('GET /api/projects/participant-360 error:', error);
-    const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
-    res.status(status).json({ error: error.message || 'Failed to fetch participant 360 profile', details: error.message });
-  }
-});
-
 // GET /api/projects/:id - Fetch single project with RBAC (must be at the end to prevent catching subroutes)
 router.get('/:id', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
+    // Guard against non-UUID route parameters to avoid Postgres type syntax errors
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
     if (req.user.role === 'Client') {
       const clientService = require('../utils/clientService');
       const accessibleIds = await clientService.getAccessibleClientProjectIds(req.user, 'all', 'all');

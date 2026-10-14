@@ -208,24 +208,24 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
 
   let totalAttendedMinutesSum = 0;
   let scheduledDurationSum = 0;
+  const uniqueJitsiAttendees = new Set();
   jitsiRecords.forEach(j => {
     totalAttendedMinutesSum += (j.totalAttendedMinutes || 0);
     scheduledDurationSum += (j.scheduledDurationMinutes || 60);
     const pKey = j.userId || j.participantName;
-    uniqueParticipantKeys.add(pKey);
+    if (pKey) uniqueJitsiAttendees.add(pKey);
   });
 
-  const participantsJoined = uniqueParticipantKeys.size;
-  const attendanceRate = totalParticipants > 0
-    ? Math.min(100, Math.round((participantsJoined / totalParticipants) * 100))
-    : 0;
+  const participantsJoined = uniqueJitsiAttendees.size;
+  const hasAttendanceData = jitsiRecords.length > 0;
+  const attendanceRate = hasAttendanceData
+    ? (totalParticipants > 0 ? Math.min(100, Math.round((participantsJoined / totalParticipants) * 100)) : 0)
+    : null;
 
-  const totalSessionCount = jitsiRecords.length + sessions.length;
-  const totalDurationMinutes = totalAttendedMinutesSum + (sessions.length * 20); // Average quiz session ~20m
-  const avgDurationMinutes = totalSessionCount > 0 ? Math.round(totalDurationMinutes / totalSessionCount) : 0;
-  const avgDurationStr = avgDurationMinutes >= 60
-    ? `${Math.floor(avgDurationMinutes / 60)}h ${avgDurationMinutes % 60}m`
-    : `${avgDurationMinutes}m`;
+  const avgDurationMinutes = hasAttendanceData ? Math.round(totalAttendedMinutesSum / jitsiRecords.length) : 0;
+  const avgDurationStr = hasAttendanceData
+    ? (avgDurationMinutes >= 60 ? `${Math.floor(avgDurationMinutes / 60)}h ${avgDurationMinutes % 60}m` : `${avgDurationMinutes}m`)
+    : 'N/A';
 
   // Exact Analytical Formulas specified by User:
   // Assigned = total participant-quiz assignments
@@ -264,6 +264,7 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
     totalParticipants: totalParticipants,
     participantsJoined: participantsJoined,
     attendanceRate: attendanceRate,
+    hasAttendanceData: hasAttendanceData,
     averageSessionDuration: avgDurationStr,
     quizzesAssigned: totalQuizAssignments,
     quizAttempts: quizAttempted,
@@ -288,8 +289,10 @@ async function getProjectTrainingPerformance(projectIds) {
     return {
       totalSessions: 0,
       trainingHoursDelivered: 0,
-      averageAttendancePct: 0,
-      averageSessionDuration: '0m',
+      telemetryStatus: 'NO_SESSIONS',
+      averageAttendancePct: null,
+      hasAttendanceData: false,
+      averageSessionDuration: 'N/A',
       statusDistribution: [],
       trends: []
     };
@@ -298,6 +301,19 @@ async function getProjectTrainingPerformance(projectIds) {
   const trainings = await Training.findAll({
     where: { projectId: { [Op.in]: projectIds } }
   });
+
+  if (trainings.length === 0) {
+    return {
+      totalSessions: 0,
+      trainingHoursDelivered: 0,
+      telemetryStatus: 'NO_SESSIONS',
+      averageAttendancePct: null,
+      hasAttendanceData: false,
+      averageSessionDuration: 'N/A',
+      statusDistribution: [],
+      trends: []
+    };
+  }
 
   const jitsiRecords = await JitsiAttendance.findAll({
     where: {
@@ -308,38 +324,64 @@ async function getProjectTrainingPerformance(projectIds) {
     }
   });
 
-  const totalMinutes = jitsiRecords.reduce((sum, j) => sum + (j.totalAttendedMinutes || 0), 0);
-  const trainingHours = Math.round((totalMinutes / 60) * 10) / 10;
-
-  const avgAttendance = jitsiRecords.length > 0
-    ? Math.round(jitsiRecords.reduce((s, j) => s + (j.attendancePercentage || 0), 0) / jitsiRecords.length)
-    : 85;
-
-  const avgMinutes = jitsiRecords.length > 0 ? Math.round(totalMinutes / jitsiRecords.length) : 45;
-  const avgDurationStr = avgMinutes >= 60 ? `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m` : `${avgMinutes}m`;
-
-  const completedCount = trainings.filter(t => t.status === 'Completed').length;
+  const completedTrainings = trainings.filter(t => t.status === 'Completed');
+  const completedCount = completedTrainings.length;
   const upcomingCount = trainings.filter(t => t.status === 'Scheduled' || !t.status).length;
   const ongoingCount = trainings.filter(t => t.status === 'Ongoing').length;
   const cancelledCount = trainings.filter(t => t.status === 'Cancelled').length;
 
+  const hasAttendance = jitsiRecords.length > 0;
+  let trainingHours = null;
+  let telemetryStatus = 'UNAVAILABLE';
+
+  if (hasAttendance) {
+    const totalMinutes = jitsiRecords.reduce((sum, j) => sum + (j.totalAttendedMinutes || 0), 0);
+    trainingHours = Math.round((totalMinutes / 60) * 10) / 10;
+
+    // Check coverage across completed training sessions
+    const sessionsWithTelemetry = new Set(jitsiRecords.map(j => j.trainingId).filter(Boolean));
+    const allCompletedCovered = completedCount > 0 && completedTrainings.every(ct => sessionsWithTelemetry.has(ct.id));
+
+    if (allCompletedCovered) {
+      telemetryStatus = 'MEASURED';
+    } else {
+      telemetryStatus = 'PARTIAL';
+    }
+  } else {
+    // Training sessions exist, but attendance telemetry has not been recorded
+    trainingHours = null;
+    telemetryStatus = 'UNAVAILABLE';
+  }
+
+  const totalMinutesSum = hasAttendance ? jitsiRecords.reduce((sum, j) => sum + (j.totalAttendedMinutes || 0), 0) : 0;
+  const avgAttendance = hasAttendance
+    ? Math.round(jitsiRecords.reduce((s, j) => s + (j.attendancePercentage || 0), 0) / jitsiRecords.length)
+    : null;
+
+  const avgMinutes = hasAttendance ? Math.round(totalMinutesSum / jitsiRecords.length) : 0;
+  const avgDurationStr = hasAttendance
+    ? (avgMinutes >= 60 ? `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m` : `${avgMinutes}m`)
+    : 'N/A';
+
   return {
-    totalSessions: trainings.length || 3,
-    trainingHoursDelivered: trainingHours || 12.5,
+    totalSessions: trainings.length,
+    trainingHoursDelivered: trainingHours,
+    telemetryStatus,
     averageAttendancePct: avgAttendance,
+    hasAttendanceData: hasAttendance,
     averageSessionDuration: avgDurationStr,
     statusDistribution: [
-      { name: 'Completed', value: completedCount || 2, color: '#10B981' },
-      { name: 'Upcoming', value: upcomingCount || 1, color: '#0284C7' },
-      { name: 'Ongoing', value: ongoingCount || 0, color: '#F59E0B' },
-      { name: 'Cancelled', value: cancelledCount || 0, color: '#EF4444' }
+      { name: 'Completed', value: completedCount, color: '#10B981' },
+      { name: 'Upcoming', value: upcomingCount, color: '#0284C7' },
+      { name: 'Ongoing', value: ongoingCount, color: '#F59E0B' },
+      { name: 'Cancelled', value: cancelledCount, color: '#EF4444' }
     ],
-    trends: [
-      { week: 'W1', hours: Math.round(trainingHours * 0.15) || 2, attendance: 78 },
-      { week: 'W2', hours: Math.round(trainingHours * 0.2) || 3, attendance: 82 },
-      { week: 'W3', hours: Math.round(trainingHours * 0.3) || 4, attendance: 85 },
-      { week: 'W4', hours: Math.round(trainingHours * 0.35) || 5, attendance: 90 }
-    ]
+    trends: hasAttendance ? [
+      { week: 'W1', hours: Math.round((trainingHours || 0) * 0.15), attendance: avgAttendance },
+      { week: 'W2', hours: Math.round((trainingHours || 0) * 0.2), attendance: avgAttendance },
+      { week: 'W3', hours: Math.round((trainingHours || 0) * 0.3), attendance: avgAttendance },
+      { week: 'W4', hours: Math.round((trainingHours || 0) * 0.35), attendance: avgAttendance }
+    ] : []
   };
 }
 
@@ -421,9 +463,9 @@ async function getProjectJitsiAttendance(projectIds) {
       totalRecorded: records.length,
       present: presentCount,
       belowThreshold: belowThresholdCount,
-      averageDuration: avgMinutes >= 60 ? `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m` : `${avgMinutes}m`,
-      minDuration: minMinutes !== Infinity ? `${minMinutes}m` : '0m',
-      maxDuration: `${maxMinutes}m`
+      averageDuration: records.length > 0 ? (avgMinutes >= 60 ? `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m` : `${avgMinutes}m`) : 'N/A',
+      minDuration: records.length > 0 && minMinutes !== Infinity ? `${minMinutes}m` : 'N/A',
+      maxDuration: records.length > 0 ? `${maxMinutes}m` : 'N/A'
     }
   };
 }
@@ -565,9 +607,13 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
  * Configurable certification eligibility evaluation.
  */
 function evaluateEligibility(attendancePct, quizCompletionPct, avgQuizScore, rules = {}) {
-  const minAttendance = rules.minAttendancePct !== undefined ? rules.minAttendancePct : 75;
-  const minQuizScore = rules.minQuizScore !== undefined ? rules.minQuizScore : 60;
+  const minAttendance = rules.minAttendancePct !== undefined ? rules.minAttendancePct : 80;
+  const minQuizScore = rules.minQuizScore !== undefined ? rules.minQuizScore : 70;
   const requiredQuizCompletion = rules.requiredQuizCompletion !== undefined ? rules.requiredQuizCompletion : 100;
+
+  if (attendancePct === null || attendancePct === undefined) {
+    return 'PENDING';
+  }
 
   if (attendancePct >= minAttendance && avgQuizScore >= minQuizScore && quizCompletionPct >= requiredQuizCompletion) {
     return 'ELIGIBLE';
@@ -827,9 +873,10 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
 
   const totalLearningMinutes = jitsiHistory.reduce((sum, j) => sum + (j.totalAttendedMinutes || 0), 0);
   const avgDuration = jitsiHistory.length > 0 ? Math.round(totalLearningMinutes / jitsiHistory.length) : 0;
-  const avgAttendance = jitsiHistory.length > 0
+  const hasAttendanceData = jitsiHistory.length > 0;
+  const avgAttendance = hasAttendanceData
     ? Math.round(jitsiHistory.reduce((s, j) => s + (j.attendancePercentage || 0), 0) / jitsiHistory.length)
-    : 85;
+    : null;
 
   let totalScoreSum = 0;
   let passedCount = 0;
@@ -839,7 +886,7 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
     const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
     totalScoreSum += pct;
-    const passed = pct >= 60;
+    const passed = pct >= 70;
     if (passed) passedCount++;
     return {
       title: qa.Session?.Quiz ? qa.Session.Quiz.title : 'Assessment',
@@ -861,11 +908,13 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
   const readinessAudit = [
     {
       requirement: 'Attendance Threshold',
-      threshold: '≥ 75%',
-      result: `${avgAttendance}%`,
-      status: avgAttendance >= 75 ? 'ELIGIBLE' : 'NOT ELIGIBLE',
-      passed: avgAttendance >= 75,
-      note: avgAttendance >= 75 ? 'Meets minimum attendance requirement' : `Requires 75% (${75 - avgAttendance}% remaining)`
+      threshold: '≥ 80%',
+      result: avgAttendance !== null ? `${avgAttendance}%` : 'No Data',
+      status: avgAttendance !== null ? (avgAttendance >= 80 ? 'ELIGIBLE' : 'NOT ELIGIBLE') : 'PENDING DATA',
+      passed: avgAttendance !== null && avgAttendance >= 80,
+      note: avgAttendance !== null
+        ? (avgAttendance >= 80 ? 'Meets minimum attendance requirement' : `Requires 80% (${80 - avgAttendance}% remaining)`)
+        : 'Authoritative attendance telemetry not yet recorded'
     },
     {
       requirement: 'Quiz Completion',
@@ -877,11 +926,11 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     },
     {
       requirement: 'Assessment Score',
-      threshold: '≥ 60%',
+      threshold: '≥ 70%',
       result: `${avgQuizScore}%`,
-      status: avgQuizScore >= 60 ? 'ELIGIBLE' : 'NOT ELIGIBLE',
-      passed: avgQuizScore >= 60,
-      note: avgQuizScore >= 60 ? 'Passing score achieved' : `Below 60% mark (${avgQuizScore}%)`
+      status: avgQuizScore >= 70 ? 'ELIGIBLE' : 'NOT ELIGIBLE',
+      passed: avgQuizScore >= 70,
+      note: avgQuizScore >= 70 ? 'Passing score achieved' : `Below 70% mark (${avgQuizScore}%)`
     }
   ];
 
@@ -902,8 +951,8 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     {
       stage: 'ATTENDED',
       label: 'Attendance Threshold',
-      status: avgAttendance >= 75 ? 'Completed' : (avgAttendance > 0 ? 'Failed' : 'Pending'),
-      detail: `${avgAttendance}% Attended (${Math.round(totalLearningMinutes)} mins)`
+      status: avgAttendance !== null ? (avgAttendance >= 80 ? 'Completed' : 'Failed') : 'Pending',
+      detail: avgAttendance !== null ? `${avgAttendance}% Attended (${Math.round(totalLearningMinutes)} mins)` : 'Attendance Pending'
     },
     {
       stage: 'QUIZ ATTEMPTED',
@@ -914,7 +963,7 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     {
       stage: 'QUIZ PASSED',
       label: 'Assessment Benchmark',
-      status: avgQuizScore >= 60 ? 'Completed' : (quizAttempts.length > 0 ? 'Failed' : 'Pending'),
+      status: avgQuizScore >= 70 ? 'Completed' : (quizAttempts.length > 0 ? 'Failed' : 'Pending'),
       detail: `Avg Score: ${avgQuizScore}%`
     },
     {
@@ -942,14 +991,15 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
       subproject: user?.Project?.parentId ? user.Project.name : 'General Subproject'
     },
     training: {
-      sessionsAssigned: Math.max(jitsiHistory.length, 3),
+      sessionsAssigned: jitsiHistory.length,
       sessionsAttended: jitsiHistory.length,
-      attendancePercentage: `${avgAttendance}%`,
-      totalLearningTime: `${Math.round(totalLearningMinutes)} mins`,
-      averageSessionDuration: `${avgDuration} mins`
+      attendancePercentage: avgAttendance !== null ? `${avgAttendance}%` : 'N/A',
+      hasAttendanceData,
+      totalLearningTime: hasAttendanceData ? `${Math.round(totalLearningMinutes)} mins` : '0 mins',
+      averageSessionDuration: hasAttendanceData ? `${avgDuration} mins` : 'N/A'
     },
     quiz: {
-      quizzesAssigned: Math.max(quizAttempts.length, 4),
+      quizzesAssigned: quizAttempts.length,
       quizzesAttempted: quizAttempts.length,
       quizzesCompleted: quizAttempts.length,
       averageScore: `${avgQuizScore}%`,
@@ -1030,19 +1080,19 @@ async function getMasterTrainingOutcomeData(projectIds) {
       participant: j.participantName,
       employeeId: j.employeeId || 'N/A',
       trainer: 'Assigned Trainer',
-      sessionDate: j.firstJoinedAt ? new Date(j.firstJoinedAt).toISOString().split('T')[0] : '2026-06-03',
+      sessionDate: j.firstJoinedAt ? new Date(j.firstJoinedAt).toISOString().split('T')[0] : '—',
       jitsiAttendance: j.status || 'Attended',
-      joinTime: j.firstJoinedAt ? new Date(j.firstJoinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '10:00 AM',
-      leaveTime: j.lastLeftAt ? new Date(j.lastLeftAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '11:00 AM',
+      joinTime: j.firstJoinedAt ? new Date(j.firstJoinedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—',
+      leaveTime: j.lastLeftAt ? new Date(j.lastLeftAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In Session',
       totalDuration: `${durationMins}m`,
       attendancePercentage: `${attPct}%`,
-      quizzesAssigned: 1,
-      quizzesAttempted: 1,
-      quizType: 'ONLINE',
-      quizScore: '85%',
-      passFail: 'Pass',
-      certificationEligibility: attPct >= 75 ? 'ELIGIBLE' : 'PENDING',
-      certificateStatus: cert ? cert.status : (attPct >= 75 ? 'ELIGIBLE - PENDING' : 'IN PROGRESS'),
+      quizzesAssigned: 0,
+      quizzesAttempted: 0,
+      quizType: 'N/A',
+      quizScore: 'N/A',
+      passFail: 'N/A',
+      certificationEligibility: cert ? 'CERTIFIED' : (attPct >= 80 ? 'PENDING ASSESSMENT' : 'NOT ELIGIBLE'),
+      certificateStatus: cert ? cert.status : (attPct >= 80 ? 'ELIGIBLE - PENDING' : 'IN PROGRESS'),
       certificateIdAndDate: cert ? `${cert.certificate_id} (${cert.issueDate || 'Issued'})` : 'N/A'
     });
   });
@@ -1058,7 +1108,7 @@ async function getMasterTrainingOutcomeData(projectIds) {
       const responses = p.Responses || [];
       const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
       const scorePct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
-      const passed = scorePct >= 60;
+      const passed = scorePct >= 70;
 
       outcomeRows.push({
         client: 'RetailEdge Client',
@@ -1068,18 +1118,18 @@ async function getMasterTrainingOutcomeData(projectIds) {
         participant: p.name,
         employeeId: p.employeeId || 'N/A',
         trainer: trainerName,
-        sessionDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '2026-06-03',
-        jitsiAttendance: 'Completed',
-        joinTime: '10:00 AM',
-        leaveTime: '10:25 AM',
-        totalDuration: '25m',
-        attendancePercentage: '100%',
+        sessionDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '—',
+        jitsiAttendance: 'No Meeting Recorded',
+        joinTime: '—',
+        leaveTime: '—',
+        totalDuration: '—',
+        attendancePercentage: '—',
         quizzesAssigned: 1,
         quizzesAttempted: 1,
         quizType: isOffline ? 'OFFLINE' : 'ONLINE',
         quizScore: `${scorePct}%`,
         passFail: passed ? 'Pass' : 'Fail',
-        certificationEligibility: passed ? 'ELIGIBLE' : 'PENDING',
+        certificationEligibility: cert ? 'CERTIFIED' : (passed ? 'PENDING ATTENDANCE' : 'NOT ELIGIBLE'),
         certificateStatus: cert ? cert.status : (passed ? 'ELIGIBLE - PENDING' : 'IN PROGRESS'),
         certificateIdAndDate: cert ? `${cert.certificate_id} (${cert.issueDate || 'Issued'})` : 'N/A'
       });
@@ -1157,7 +1207,7 @@ async function getProjectAlerts(projectIds) {
   const eligiblePendingCert = await Certificate.findAll({
     where: {
       projectId: { [Op.in]: projectIds },
-      status: { [Op.in]: ['DRAFT', 'PENDING'] }
+      status: { [Op.in]: ['DRAFT'] }
     }
   });
   if (eligiblePendingCert.length > 0) {

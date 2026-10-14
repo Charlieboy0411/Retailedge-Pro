@@ -4,7 +4,7 @@ let PptxGenJS;
 try {
   PptxGenJS = require('pptxgenjs');
 } catch (e) {
-  PptxGenJS = require('d:/Desktop/quizhive _ lms/frontend/node_modules/pptxgenjs');
+  PptxGenJS = require(path.join(__dirname, '../frontend/node_modules/pptxgenjs'));
 }
 
 const fs = require('fs');

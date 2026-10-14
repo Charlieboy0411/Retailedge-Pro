@@ -1,6 +1,11 @@
-const PptxGenJS = require('d:/Desktop/quizhive _ lms/frontend/node_modules/pptxgenjs');
-const fs = require('fs');
 const path = require('path');
+const fs = require('fs');
+let PptxGenJS;
+try {
+  PptxGenJS = require('pptxgenjs');
+} catch (e) {
+  PptxGenJS = require(path.join(__dirname, '../frontend/node_modules/pptxgenjs'));
+}
 
 const pptx = new PptxGenJS();
 pptx.layout = 'LAYOUT_WIDE'; // 16:9

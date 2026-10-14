@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import * as XLSX from 'xlsx';
 import {
   FileSpreadsheet, Presentation, Eye, Download, RefreshCw, Play,
   Sparkles, TrendingUp, TrendingDown, Calendar, Users, CheckCircle2,
   AlertTriangle, Layers, Activity, Search, ChevronRight, X, Clock,
   ArrowUpRight, ArrowDownRight, ShieldCheck, Check, Info, FileText
 } from 'lucide-react';
+import PageHeader from './ui/PageHeader';
+import EmptyState from './ui/EmptyState';
 
 export default function ReportCenterView({ token, user, defaultProjectId = 'all' }) {
   const [reports, setReports] = useState([]);
@@ -23,6 +26,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
   const [closingRunning, setClosingRunning] = useState(false);
   const [downloadingId, setDownloadingId] = useState(null);
   const [downloadType, setDownloadType] = useState(null); // 'excel' | 'ppt'
+  const [downloadingMaster, setDownloadingMaster] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState('');
 
   // Form State for Generate Report
@@ -182,6 +186,34 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
     }
   };
 
+  // Download Master Training Outcome (21-Column authoritative dataset)
+  const handleExportMasterOutcome = async () => {
+    try {
+      setDownloadingMaster(true);
+      const res = await axios.get('/api/reports/master-outcome', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: {
+          projectId: defaultProjectId !== 'all' ? defaultProjectId : undefined
+        }
+      });
+      const data = res.data || [];
+      if (data.length === 0) {
+        alert('No training outcome records found for export.');
+        return;
+      }
+      
+      const ws = XLSX.utils.json_to_sheet(data);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'Master Training Outcomes');
+      XLSX.writeFile(wb, `RetailEdge_PRO_Master_Outcome_${new Date().toISOString().split('T')[0]}.xlsx`);
+    } catch (err) {
+      console.error('Failed to export Master Training Outcome', err);
+      alert(err.response?.data?.error || 'Failed to export Master Training Outcome');
+    } finally {
+      setDownloadingMaster(false);
+    }
+  };
+
   // Filtered reports list based on search
   const displayedReports = reports.filter(r => {
     if (!searchQuery) return true;
@@ -196,72 +228,59 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       
-      {/* ─── HEADER BANNER & ACTION TOOLBAR ─── */}
-      <div style={{
-        background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-        padding: '24px 28px',
-        borderRadius: '16px',
-        border: '1px solid #334155',
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px',
-        boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.4)'
-      }}>
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span style={{
-              background: '#2563EB', color: '#FFFFFF', fontSize: '0.7rem', fontWeight: 800,
-              padding: '3px 8px', borderRadius: '6px', letterSpacing: '0.05em'
-            }}>
-              ANALYTICS ENGINE v2.5
-            </span>
-            <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
-              Automatic Monthly Closing Active (1st of Every Month)
-            </span>
-          </div>
-          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
-            Reports & Analytics Command Center
-          </h2>
-          <p style={{ margin: '4px 0 0 0', color: '#94A3B8', fontSize: '0.85rem' }}>
-            Authoritative multi-cohort intelligence, 10-Sheet Excel Workbooks, and 14-Slide Executive PowerPoint presentations.
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Generate Report Now Button */}
+      {/* ─── HEADER BANNER & ACTION TOOLBAR (LIGHT CORPORATE) ─── */}
+      <PageHeader
+        eyebrow="RETAILEDGE PRO INTELLIGENCE"
+        title="Reports & Analytics Command Center"
+        description="Multi-cohort intelligence, 10-Sheet Excel Workbooks, 14-Slide PowerPoint decks, and Master Training Outcomes."
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          {/* Master Training Outcome Export */}
           <button
-            onClick={() => setShowGenerateModal(true)}
+            onClick={handleExportMasterOutcome}
+            disabled={downloadingMaster}
             style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
-              color: '#FFFFFF', border: 'none', padding: '10px 18px',
-              borderRadius: '10px', fontWeight: 700, fontSize: '0.82rem',
-              cursor: 'pointer', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
-              transition: 'all 0.15s'
+              display: 'flex', alignItems: 'center', gap: '6px',
+              background: '#FFFFFF', color: '#16A34A', border: '1px solid #BBF7D0',
+              padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem',
+              cursor: downloadingMaster ? 'not-allowed' : 'pointer'
             }}
+            title="Download authoritative 21-column Master Training Outcome dataset"
           >
-            <Sparkles size={16} />
-            Generate Report Now
+            <FileSpreadsheet size={15} />
+            {downloadingMaster ? 'Exporting...' : 'Master Outcome (21 Cols)'}
           </button>
 
-          {/* Automatic Monthly Closing Button */}
-          {['Admin', 'Super Admin', 'T&D Manager', 'Program Manager'].includes(user?.role) && (
+          {/* Generate Report Now Button - Admin, PM, T&D */}
+          {['Admin', 'Super Admin', 'Program Manager', 'T&D Manager'].includes(user?.role) && (
+            <button
+              onClick={() => setShowGenerateModal(true)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: '#1E40AF', color: '#FFFFFF', border: 'none',
+                padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem',
+                cursor: 'pointer'
+              }}
+            >
+              <Sparkles size={15} />
+              Generate Report
+            </button>
+          )}
+
+          {/* Automatic Monthly Closing Button - Admin / Super Admin ONLY */}
+          {['Admin', 'Super Admin'].includes(user?.role) && (
             <button
               onClick={handleMonthlyClosing}
               disabled={closingRunning}
               style={{
-                display: 'flex', alignItems: 'center', gap: '8px',
-                background: '#0F172A', color: '#38BDF8',
-                border: '1px solid #0284C7', padding: '10px 18px',
-                borderRadius: '10px', fontWeight: 700, fontSize: '0.82rem',
-                cursor: closingRunning ? 'not-allowed' : 'pointer',
-                transition: 'all 0.15s'
+                display: 'flex', alignItems: 'center', gap: '6px',
+                background: '#FFFFFF', color: '#0284C7', border: '1px solid #BAE6FD',
+                padding: '8px 14px', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem',
+                cursor: closingRunning ? 'not-allowed' : 'pointer'
               }}
             >
-              <RefreshCw size={15} style={{ animation: closingRunning ? 'spin 1s linear infinite' : 'none' }} />
-              {closingRunning ? 'Running Closing...' : 'Run Monthly Closing'}
+              <RefreshCw size={14} style={{ animation: closingRunning ? 'spin 1s linear infinite' : 'none' }} />
+              {closingRunning ? 'Running...' : 'Run Monthly Closing'}
             </button>
           )}
 
@@ -270,47 +289,48 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
             onClick={fetchAvailableReports}
             disabled={loading}
             style={{
-              background: '#1E293B', color: '#CBD5E1', border: '1px solid #475569',
-              padding: '10px', borderRadius: '10px', cursor: 'pointer'
+              background: '#FFFFFF', color: '#475569', border: '1px solid #E2E8F0',
+              padding: '8px 12px', borderRadius: '8px', cursor: 'pointer'
             }}
             title="Refresh reports"
           >
-            <RefreshCw size={16} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+            <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
           </button>
         </div>
-      </div>
+      </PageHeader>
 
       {/* ─── FILTER CONTROL BAR ─── */}
       <div style={{
-        background: 'var(--bg-glass)',
+        background: '#FFFFFF',
         padding: '14px 20px',
-        borderRadius: '14px',
-        border: '1px solid var(--border-color)',
+        borderRadius: '12px',
+        border: '1px solid #E2E8F0',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         flexWrap: 'wrap',
-        gap: '14px'
+        gap: '14px',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
       }}>
         {/* Level Tabs */}
-        <div style={{ display: 'flex', gap: '6px', background: 'var(--bg-tertiary)', padding: '4px', borderRadius: '10px' }}>
+        <div style={{ display: 'flex', gap: '6px', background: '#F1F5F9', padding: '4px', borderRadius: '8px' }}>
           {[
             { id: 'all', label: 'All Levels' },
             { id: 'LEVEL_1_QUIZ', label: 'Level 1: Quiz' },
             { id: 'LEVEL_2_PROJECT_MONTHLY', label: 'Level 2: Project' },
-            { id: 'LEVEL_3_MASTER_MONTHLY', label: 'Level 3: Master' }
+            ...(['Admin', 'Super Admin'].includes(user?.role) ? [{ id: 'LEVEL_3_MASTER_MONTHLY', label: 'Level 3: Master' }] : [])
           ].map(lvl => (
             <button
               key={lvl.id}
               onClick={() => setLevelFilter(lvl.id)}
               style={{
                 border: 'none',
-                background: levelFilter === lvl.id ? '#2563EB' : 'transparent',
-                color: levelFilter === lvl.id ? '#FFFFFF' : 'var(--text-secondary)',
+                background: levelFilter === lvl.id ? '#1E40AF' : 'transparent',
+                color: levelFilter === lvl.id ? '#FFFFFF' : '#475569',
                 fontWeight: 700,
                 fontSize: '0.78rem',
                 padding: '6px 14px',
-                borderRadius: '8px',
+                borderRadius: '6px',
                 cursor: 'pointer',
                 transition: 'all 0.15s'
               }}
@@ -376,33 +396,18 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
 
       {/* ─── REPORTS CARDS GRID ─── */}
       {loading ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-secondary)' }}>
+        <div style={{ padding: '60px', textAlign: 'center', color: '#64748B' }}>
           <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
           <p style={{ fontWeight: 600, fontSize: '0.9rem' }}>Loading verified analytical reports...</p>
         </div>
       ) : displayedReports.length === 0 ? (
-        <div style={{
-          padding: '60px 20px', textAlign: 'center', background: 'var(--bg-glass)',
-          borderRadius: '16px', border: '1px dashed var(--border-color)'
-        }}>
-          <FileSpreadsheet size={42} color="#94A3B8" style={{ marginBottom: '12px' }} />
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '6px' }}>
-            No Reports Found for this Filter
-          </h3>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', maxWidth: '400px', margin: '0 auto 16px auto' }}>
-            Generate a new report on-demand or trigger Monthly Closing to compile recent performance datasets.
-          </p>
-          <button
-            onClick={() => setShowGenerateModal(true)}
-            style={{
-              background: '#2563EB', color: '#FFFFFF', border: 'none',
-              padding: '8px 18px', borderRadius: '8px', fontWeight: 700, fontSize: '0.8rem',
-              cursor: 'pointer'
-            }}
-          >
-            Generate Report Now
-          </button>
-        </div>
+        <EmptyState
+          icon={FileSpreadsheet}
+          title="No Reports Found for this Filter"
+          description="Generate a new report on-demand or select a different reporting period/level to inspect records."
+          actionText={['Admin', 'Super Admin', 'Program Manager', 'T&D Manager'].includes(user?.role) ? "Generate Report Now" : undefined}
+          onAction={() => setShowGenerateModal(true)}
+        />
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', gap: '18px' }}>
           {displayedReports.map(rpt => {
@@ -421,14 +426,14 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
               <div
                 key={rpt.id}
                 style={{
-                  background: 'var(--bg-glass)',
-                  borderRadius: '14px',
-                  border: '1px solid var(--border-color)',
+                  background: '#FFFFFF',
+                  borderRadius: '12px',
+                  border: '1px solid #E2E8F0',
                   padding: '20px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'space-between',
-                  boxShadow: '0 4px 15px rgba(0, 0, 0, 0.04)',
+                  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
                   transition: 'transform 0.15s ease, border-color 0.15s ease'
                 }}
               >
@@ -443,27 +448,27 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                       {levelLabel}
                     </span>
 
-                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                      Period: <strong style={{ color: 'var(--text-primary)' }}>{rpt.period || '2026-08'}</strong>
+                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#64748B' }}>
+                      Period: <strong style={{ color: '#0F172A' }}>{rpt.period || '2026-08'}</strong>
                     </span>
                   </div>
 
                   {/* Title & Code */}
                   <h3 style={{
-                    fontSize: '1.02rem', fontWeight: 800, color: 'var(--text-primary)',
+                    fontSize: '1.02rem', fontWeight: 800, color: '#0F172A',
                     marginBottom: '4px', lineHeight: 1.3
                   }}>
                     {rpt.title}
                   </h3>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '14px' }}>
                     <code style={{
-                      fontSize: '0.72rem', background: 'var(--bg-tertiary)', color: 'var(--text-secondary)',
+                      fontSize: '0.72rem', background: '#F1F5F9', color: '#475569',
                       padding: '2px 6px', borderRadius: '4px'
                     }}>
                       {rpt.reportCode}
                     </code>
                     {snap.health && (
-                      <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: snap.health.includes('🟢') ? '#16A34A' : '#D97706' }}>
                         {snap.health}
                       </span>
                     )}
@@ -472,12 +477,12 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                   {/* KPI Grid */}
                   <div style={{
                     display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px',
-                    background: 'var(--bg-primary)', padding: '12px', borderRadius: '10px',
-                    border: '1px solid var(--border-color)', marginBottom: '16px'
+                    background: '#F8FAFC', padding: '12px', borderRadius: '10px',
+                    border: '1px solid #E2E8F0', marginBottom: '16px'
                   }}>
                     <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600 }}>ATTENDANCE</div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600 }}>ATTENDANCE %</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
                         {kpis.attendanceRate || '100%'}
                       </div>
                       {mom.attendance && (
@@ -488,8 +493,8 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600 }}>COMPLETION</div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600 }}>COMPLETION %</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
                         {kpis.completionRate || '85%'}
                       </div>
                       {mom.completion && (
@@ -500,8 +505,8 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                     </div>
 
                     <div>
-                      <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600 }}>PASS RATE</div>
-                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600 }}>PASS RATE %</div>
+                      <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
                         {kpis.passRate || '80%'}
                       </div>
                       {mom.passRate && (
@@ -514,13 +519,13 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                 </div>
 
                 {/* Card Action Buttons */}
-                <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid var(--border-color)' }}>
+                <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
                   {/* View Modal */}
                   <button
                     onClick={() => setSelectedReport(snap.title ? snap : rpt)}
                     style={{
                       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
-                      background: 'var(--bg-tertiary)', color: 'var(--text-primary)', border: '1px solid var(--border-color)',
+                      background: '#F1F5F9', color: '#334155', border: '1px solid #E2E8F0',
                       padding: '8px 10px', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700,
                       cursor: 'pointer'
                     }}
@@ -793,7 +798,9 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                   }}
                 >
                   <option value="2">Level 2 — Project Monthly Report (Online vs Offline)</option>
-                  <option value="3">Level 3 — Master Training Intelligence Report (All Projects)</option>
+                  {['Admin', 'Super Admin'].includes(user?.role) && (
+                    <option value="3">Level 3 — Master Training Intelligence Report (All Projects)</option>
+                  )}
                   <option value="1">Level 1 — Project / Quiz Report</option>
                 </select>
               </div>

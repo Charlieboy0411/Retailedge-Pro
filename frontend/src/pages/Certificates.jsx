@@ -14,26 +14,46 @@ import {
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import CertificateCreationWizard from '../components/CertificateCreationWizard';
+import CertificateViewer from '../components/CertificateViewer';
 import CertificateAuditModal from '../components/CertificateAuditModal';
 import CertificateShareModal from '../components/CertificateShareModal';
+import { mapCertificateStatus } from '../utils/certificateStatusHelper';
 
 export default function Certificates({ initialTab = 'ledger' }) {
   const { token, user } = useContext(AuthContext);
 
-  const isCertAuthority = ['Admin', 'Super Admin', 'Program Manager', 'T&D Manager'].includes(user?.role);
+  const isAdmin = ['Admin', 'Super Admin'].includes(user?.role);
+  const isPM = ['Program Manager', 'Manager'].includes(user?.role);
+  const isTD = user?.role === 'T&D Manager';
+  const isTrainer = user?.role === 'Trainer';
   const isSupervisor = user?.role === 'Supervisor';
-  const isEmployee = user?.role === 'Employee';
+  const isEmployee = ['Employee', 'Learner', 'Student'].includes(user?.role);
   const isClient = user?.role === 'Client';
 
+  const canManageTemplates = isAdmin; // Only Admin & Super Admin govern global templates, signatures, and seals
+  const canIssue = isAdmin || isPM || isTD || isTrainer;
+  const canRevoke = isAdmin || isPM;
+  const canViewAnalytics = isAdmin || isPM || isTD;
+  const canBulkGenerate = isAdmin || isPM || isTD || isTrainer;
+  const isCertAuthority = isAdmin || isPM || isTD;
+
   // Active Main Tab: 'ledger' | 'templates' | 'analytics' | 'bulk'
-  // Non-authorities (Supervisor, Employee) are strictly restricted to the read-only 'ledger' view
-  const [activeTab, setActiveTab] = useState(isCertAuthority ? (initialTab || 'ledger') : 'ledger');
+  // Restricted roles are constrained strictly to authorized tabs
+  const [activeTab, setActiveTab] = useState(
+    canManageTemplates ? (initialTab || 'ledger') :
+    canBulkGenerate && initialTab === 'bulk' ? 'bulk' :
+    canViewAnalytics && initialTab === 'analytics' ? 'analytics' : 'ledger'
+  );
 
   useEffect(() => {
-    if (!isCertAuthority && activeTab !== 'ledger') {
+    if (activeTab === 'templates' && !canManageTemplates) {
+      setActiveTab('ledger');
+    } else if (activeTab === 'analytics' && !canViewAnalytics) {
+      setActiveTab('ledger');
+    } else if (activeTab === 'bulk' && !canBulkGenerate) {
       setActiveTab('ledger');
     }
-  }, [isCertAuthority, activeTab]);
+  }, [activeTab, canManageTemplates, canViewAnalytics, canBulkGenerate]);
 
   // Data states
   const [certificates, setCertificates] = useState([]);
@@ -75,8 +95,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
   const [designerTitle, setDesignerTitle] = useState('CERTIFICATE OF COMPLETION');
   const [designerSignatory1, setDesignerSignatory1] = useState('Aakash Verma');
   const [designerRole1, setDesignerRole1] = useState('Lead Trainer & Facilitator');
-  const [designerSignatory2, setDesignerSignatory2] = useState('Amit Kumar');
-  const [designerDesignation2, setDesignerDesignation2] = useState('Program Manager');
+  const [designerSignatory2, setDesignerSignatory2] = useState('Mohit Tiku');
+  const [designerDesignation2, setDesignerDesignation2] = useState('Managing Director');
   const [designerOrg, setDesignerOrg] = useState('Idonneous Marketing Services Pvt. Ltd.');
   const [showTrainerSig, setShowTrainerSig] = useState(false);
   const [showAuthSig, setShowAuthSig] = useState(true);
@@ -87,9 +107,9 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
   // Signatures & Seals Asset Management State
   const [signatureAssets, setSignatureAssets] = useState([]);
-  const [activeAuthSigUrl, setActiveAuthSigUrl] = useState('/assets/signatures/amit_kumar_signature.svg');
+  const [activeAuthSigUrl, setActiveAuthSigUrl] = useState('/assets/signatures/mohit_tiku_signature.svg');
   const [activeTrainerSigUrl, setActiveTrainerSigUrl] = useState('/assets/signatures/aakash_verma_signature.svg');
-  const [activeSealUrl, setActiveSealUrl] = useState('/assets/seals/retailedge_pro_gold_seal.svg');
+  const [activeSealUrl, setActiveSealUrl] = useState('/assets/seals/idonneous_official_seal.svg');
 
   // Company Seal Manual Placement & Draggable State
   const [sealPosition, setSealPosition] = useState({
@@ -531,7 +551,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
         projectId: bulkProjectId,
         batchName: bulkBatchName,
         minAttendance: 80,
-        minScore: 60,
+        minScore: 70,
         minCompletion: 100
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -628,15 +648,15 @@ export default function Certificates({ initialTab = 'ledger' }) {
     link.remove();
   };
 
-  // KPI Items
+  // KPI Items - Computed strictly from real backend records
   const kpis = analytics?.kpis || {
-    totalCertificates: 145,
-    issued: 120,
-    pending: 18,
-    expired: 5,
-    revoked: 2,
-    verified: 342,
-    thisMonth: 28
+    totalCertificates: certificates.length,
+    issued: certificates.filter(c => ['ISSUED', 'VALID'].includes(c.status)).length,
+    pending: 0,
+    expired: certificates.filter(c => c.status === 'EXPIRED').length,
+    revoked: certificates.filter(c => c.status === 'REVOKED').length,
+    verified: 0,
+    thisMonth: 0
   };
 
   return (
@@ -674,7 +694,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-          {(isCertAuthority || user?.role === 'Trainer') && (
+          {canIssue && (
             <button
               onClick={() => setIsWizardOpen(true)}
               className="btn btn-primary"
@@ -684,24 +704,24 @@ export default function Certificates({ initialTab = 'ledger' }) {
             </button>
           )}
 
-          {isCertAuthority && (
-            <>
-              <button
-                onClick={() => setActiveTab('bulk')}
-                className="btn btn-secondary"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
-              >
-                <Layers size={16} /> Generate Certificates
-              </button>
+          {canBulkGenerate && (
+            <button
+              onClick={() => setActiveTab('bulk')}
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
+            >
+              <Layers size={16} /> Generate Certificates
+            </button>
+          )}
 
-              <button
-                onClick={() => setActiveTab('templates')}
-                className="btn btn-secondary"
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
-              >
-                <Sparkles size={16} /> Certificate Templates
-              </button>
-            </>
+          {canManageTemplates && (
+            <button
+              onClick={() => setActiveTab('templates')}
+              className="btn btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.84rem', padding: '10px 16px', borderRadius: '10px', fontWeight: 700 }}
+            >
+              <Sparkles size={16} /> Certificate Templates
+            </button>
           )}
 
           <button
@@ -815,15 +835,15 @@ export default function Certificates({ initialTab = 'ledger' }) {
       </div>
       )}
 
-      {/* ─── 3. MAIN NAVIGATION TABS (Certificate Authority Only) ─── */}
-      {isCertAuthority && (
+      {/* ─── 3. MAIN NAVIGATION TABS ─── */}
+      {(canManageTemplates || canViewAnalytics || canBulkGenerate) && (
       <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid #E2E8F0', paddingBottom: '2px' }}>
         {[
-          { key: 'ledger', label: 'Certificates Ledger', icon: <FileText size={16} /> },
-          { key: 'templates', label: 'Templates & Designer', icon: <Sparkles size={16} /> },
-          { key: 'analytics', label: 'Certification Analytics', icon: <TrendingUp size={16} /> },
-          { key: 'bulk', label: 'Batch Eligibility & Bulk Generator', icon: <Layers size={16} /> }
-        ].map(t => (
+          { key: 'ledger', label: 'Certificates Ledger', icon: <FileText size={16} />, visible: true },
+          { key: 'templates', label: 'Templates & Designer', icon: <Sparkles size={16} />, visible: canManageTemplates },
+          { key: 'analytics', label: 'Certification Analytics', icon: <TrendingUp size={16} />, visible: canViewAnalytics },
+          { key: 'bulk', label: 'Batch Eligibility & Bulk Generator', icon: <Layers size={16} />, visible: canBulkGenerate }
+        ].filter(t => t.visible).map(t => (
           <button
             key={t.key}
             onClick={() => setActiveTab(t.key)}
@@ -926,10 +946,12 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   </tr>
                 ) : (
                   certificates.map(cert => {
-                    const statusClass =
-                      cert.status === 'ISSUED' || cert.status === 'VALID' ? 'badge-success' :
-                      cert.status === 'REVOKED' ? 'badge-danger' :
-                      cert.status === 'PENDING' ? 'badge-warning' : 'badge-info';
+                    const statusInfo = mapCertificateStatus(cert.status);
+                    const badgeClass =
+                      statusInfo.variant === 'success' ? 'badge-success' :
+                      statusInfo.variant === 'danger' ? 'badge-danger' :
+                      statusInfo.variant === 'warning' ? 'badge-warning' :
+                      statusInfo.variant === 'info' ? 'badge-info' : 'badge-secondary';
 
                     return (
                       <tr key={cert.id}>
@@ -969,8 +991,8 @@ export default function Certificates({ initialTab = 'ledger' }) {
                           </span>
                         </td>
                         <td>
-                          <span className={`badge ${statusClass}`}>
-                            {cert.status}
+                          <span className={`badge ${badgeClass}`}>
+                            {statusInfo.label}
                           </span>
                         </td>
                         <td style={{ textAlign: 'right' }}>
@@ -1013,7 +1035,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                             </button>
 
                             {/* Reissue */}
-                            {isCertAuthority && cert.status !== 'REVOKED' && cert.status !== 'REPLACED' && (
+                            {canIssue && cert.status !== 'REVOKED' && cert.status !== 'REPLACED' && (
                               <button
                                 title="Reissue Certificate"
                                 onClick={() => setReissueCert(cert)}
@@ -1024,7 +1046,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                             )}
 
                             {/* Revoke */}
-                            {isCertAuthority && cert.status !== 'REVOKED' && (
+                            {canRevoke && cert.status !== 'REVOKED' && (
                               <button
                                 title="Revoke Certificate"
                                 onClick={() => setRevokeCert(cert)}
@@ -1059,7 +1081,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── TAB 2: TEMPLATES & DESIGNER ─── */}
-      {isCertAuthority && activeTab === 'templates' && (
+      {canManageTemplates && activeTab === 'templates' && (
         <div style={{ display: 'grid', gridTemplateColumns: '360px 1fr', gap: '20px' }}>
 
           {/* Left Properties Panel */}
@@ -1523,7 +1545,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                   <div style={{ textAlign: 'left', marginTop: '2px' }}>
                     <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748B', letterSpacing: '1px' }}>THIS IS TO CERTIFY THAT</div>
                     <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: '2.5rem', color: '#081226', lineHeight: 1.1, margin: '2px 0 2px 0' }}>
-                      Rahul Sharma
+                      Participant Name
                     </div>
                     <div style={{ width: '320px', height: '1.5px', background: 'linear-gradient(90deg, #C5A059 0%, #E5C07B 60%, transparent 100%)', marginBottom: '6px' }}></div>
                   </div>
@@ -1533,7 +1555,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                     <div style={{ fontSize: '0.75rem', color: '#475569', lineHeight: 1.4 }}>
                       <div>has successfully completed the training program</div>
                       <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1D4ED8', margin: '2px 0 4px 0' }}>
-                        Product Knowledge – Cetaphil
+                        Retail Excellence Training Program
                       </div>
                       <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
                         and has demonstrated the required knowledge and skills through training, assessment and evaluation.
@@ -1626,7 +1648,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── TAB 3: CERTIFICATION ANALYTICS ─── */}
-      {isCertAuthority && activeTab === 'analytics' && (
+      {canViewAnalytics && activeTab === 'analytics' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
           {/* Charts Row */}
@@ -1716,7 +1738,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── TAB 4: BATCH ELIGIBILITY & BULK GENERATOR ─── */}
-      {isCertAuthority && activeTab === 'bulk' && (
+      {canBulkGenerate && activeTab === 'bulk' && (
         <div className="glass-card" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '18px' }}>
 
           {/* Header Bar */}
@@ -1808,7 +1830,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
                       <td style={{ fontWeight: 700, color: p.attendancePercentage >= 80 ? '#10B981' : '#EF4444' }}>
                         {p.attendancePercentage}%
                       </td>
-                      <td style={{ fontWeight: 700, color: p.assessmentScore >= 60 ? '#10B981' : '#EF4444' }}>
+                      <td style={{ fontWeight: 700, color: p.assessmentScore >= 70 ? '#10B981' : '#EF4444' }}>
                         {p.assessmentScore}%
                       </td>
                       <td style={{ fontWeight: 700, color: p.completionPercentage >= 100 ? '#10B981' : '#EF4444' }}>
@@ -1893,225 +1915,19 @@ export default function Certificates({ initialTab = 'ledger' }) {
         />
       )}
 
-      {/* ─── MODAL: CERTIFICATE PREVIEW MODAL ─── */}
+      {/* ─── MODAL: CERTIFICATE VIEWER ─── */}
       {previewCert && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050, backdropFilter: 'blur(6px)' }}>
-          <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '820px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)', overflow: 'hidden' }}>
-
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#F8FAFC' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
-                  Certificate Preview: {previewCert.certificate_id}
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>
-                  {previewCert.User?.name || 'Participant'} • Status: {previewCert.status}
-                </span>
-              </div>
-              <button onClick={() => setPreviewCert(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: '4px' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div style={{ padding: '24px', background: '#0B132B', display: 'flex', justifyContent: 'center' }}>
-              <div style={{
-                width: '100%', maxWidth: '760px', aspectRatio: '1.414 / 1',
-                background: '#081226', padding: '10px', borderRadius: '14px', position: 'relative', overflow: 'hidden',
-                boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
-              }}>
-
-                {/* Inner White Canvas with Gold Border */}
-                <div style={{
-                  width: '100%', height: '100%', background: '#FFFFFF', borderRadius: '10px',
-                  border: '1.5px solid #C5A059', position: 'relative', overflow: 'hidden',
-                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between'
-                }}>
-
-                  {/* Top-Right Polygon Geometry */}
-                  <svg viewBox="0 0 300 300" style={{ position: 'absolute', top: 0, right: 0, width: '250px', height: '250px', pointerEvents: 'none', zIndex: 1 }} fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M 80 0 L 300 0 L 300 220 Z" fill="#0B1A38" opacity="0.95"/>
-                    <path d="M 140 0 L 300 0 L 300 160 Z" fill="#142C54" opacity="0.85"/>
-                    <path d="M 200 0 L 300 0 L 300 100 Z" fill="#1E3A8A" opacity="0.75"/>
-                    <line x1="80" y1="0" x2="300" y2="220" stroke="#C5A059" strokeWidth="2"/>
-                  </svg>
-
-                  {/* 3D Gold Ribbon Medallion Seal Badge */}
-                  {previewCert.includeCompanySeal !== false && (
-                    <div style={{
-                      ...getSealPlacementStyle(previewCert.sealPosition || previewCert.certificateSnapshot?.companySeal?.position || { preset: 'top-right', x: 84, y: 6, scale: 100 }),
-                      zIndex: 10
-                    }}>
-                      <img
-                        src={previewCert.companySealUrl || '/assets/seals/retailedge_pro_gold_seal.svg'}
-                        alt="Gold Seal Medallion"
-                        style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                        onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
-                      />
-                    </div>
-                  )}
-
-                  {/* Canvas Body Content */}
-                  <div style={{ padding: '18px 26px 6px 26px', position: 'relative', zIndex: 2, height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-
-                    {/* Top Bar: Brand & Certificate ID */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '28px', height: '28px', borderRadius: '6px', background: 'linear-gradient(135deg, #00D2FF 0%, #0072FF 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFFFFF', fontWeight: 900, fontSize: '15px' }}>
-                          R
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '1rem', fontWeight: 800, color: '#081226', lineHeight: 1.1 }}>
-                            RetailEdge <span style={{ color: '#0072FF', fontWeight: 900 }}>PRO</span>
-                          </div>
-                          <div style={{ fontSize: '0.58rem', fontWeight: 700, color: '#64748B' }}>
-                            Trainer-Led Learning & Performance Platform
-                          </div>
-                        </div>
-                      </div>
-
-                      <div style={{ textAlign: 'right', marginRight: '115px' }}>
-                        <div style={{ fontSize: '0.55rem', fontWeight: 800, color: '#64748B', letterSpacing: '0.8px' }}>CERTIFICATE ID</div>
-                        <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#081226' }}>{previewCert.certificate_id}</div>
-                        <div style={{ width: '24px', height: '2px', background: '#0072FF', marginLeft: 'auto', marginTop: '2px' }}></div>
-                      </div>
-                    </div>
-
-                    {/* Center Title Block */}
-                    <div style={{ textAlign: 'center', margin: '2px 0' }}>
-                      <h1 style={{ fontFamily: "'Cinzel', Georgia, serif", fontSize: '1.75rem', fontWeight: 900, color: '#081226', letterSpacing: '2.5px', margin: 0, textTransform: 'uppercase' }}>
-                        CERTIFICATE
-                      </h1>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', margin: '2px 0 0 0' }}>
-                        <div style={{ width: '40px', height: '1px', background: '#C5A059' }}></div>
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#C5A059', letterSpacing: '2px' }}>OF COMPLETION</div>
-                        <div style={{ width: '40px', height: '1px', background: '#C5A059' }}></div>
-                      </div>
-                    </div>
-
-                    {/* Recipient Block */}
-                    <div style={{ textAlign: 'left', marginTop: '2px' }}>
-                      <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#64748B', letterSpacing: '1px' }}>THIS IS TO CERTIFY THAT</div>
-                      <div style={{ fontFamily: "'Great Vibes', cursive", fontSize: '2.5rem', color: '#081226', lineHeight: 1.1, margin: '2px 0 2px 0' }}>
-                        {previewCert.User?.name || 'Rahul Sharma'}
-                      </div>
-                      <div style={{ width: '320px', height: '1.5px', background: 'linear-gradient(90deg, #C5A059 0%, #E5C07B 60%, transparent 100%)', marginBottom: '6px' }}></div>
-                    </div>
-
-                    {/* Mid Section: Statement & Side Details Grid */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '14px', alignItems: 'center' }}>
-                      <div style={{ fontSize: '0.75rem', color: '#475569', lineHeight: 1.4 }}>
-                        <div>has successfully completed the training program</div>
-                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#1D4ED8', margin: '2px 0 4px 0' }}>
-                          {previewCert.Training?.title || previewCert.Project?.name || 'Product Knowledge – Cetaphil'}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: '#64748B' }}>
-                          and has demonstrated the required knowledge and skills through training, assessment and evaluation.
-                        </div>
-                      </div>
-
-                      {/* Right-Side Metrics Stack */}
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', borderLeft: '1px solid #E2E8F0', paddingLeft: '14px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#081226', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px' }}>📖</div>
-                          <div>
-                            <div style={{ fontSize: '0.52rem', fontWeight: 800, color: '#64748B' }}>PROGRAM</div>
-                            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#081226' }}>{previewCert.Training?.category || 'Product Knowledge'}</div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#081226', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px' }}>📅</div>
-                          <div>
-                            <div style={{ fontSize: '0.52rem', fontWeight: 800, color: '#64748B' }}>COMPLETION DATE</div>
-                            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#081226' }}>
-                              {previewCert.issueDate ? new Date(previewCert.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'May 31, 2025'}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '18px', height: '18px', borderRadius: '50%', background: '#081226', color: 'white', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px' }}>🏆</div>
-                          <div>
-                            <div style={{ fontSize: '0.52rem', fontWeight: 800, color: '#64748B' }}>SCORE / GRADE</div>
-                            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#081226' }}>
-                              {previewCert.assessmentScore ? `${previewCert.assessmentScore}%` : '92%'} ({parseFloat(previewCert.assessmentScore || 92) >= 90 ? 'Excellent' : 'Passed'})
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Lower Section: Signatures & QR Code */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: '6px' }}>
-
-                      {/* Authorized Signatory Block */}
-                      <div style={{ width: '190px' }}>
-                        <div style={{ height: '36px', display: 'flex', alignItems: 'center' }}>
-                          <img
-                            src={previewCert.authorizedSignatureUrl || '/assets/signatures/amit_kumar_signature.svg'}
-                            alt="Signature"
-                            style={{ maxHeight: '32px', maxWidth: '135px', objectFit: 'contain' }}
-                            onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
-                          />
-                        </div>
-                        <div style={{ borderTop: '1px solid #081226', width: '140px', margin: '2px 0 3px 0' }}></div>
-                        <div style={{ fontSize: '0.8rem', fontWeight: 900, color: '#081226', margin: '1px 0 0 0' }}>{previewCert.signatoryName || 'Amit Kumar'}</div>
-                        <div style={{ fontSize: '0.62rem', fontWeight: 600, color: '#475569' }}>{previewCert.signatoryDesignation || 'Program Manager'}</div>
-                        <div style={{ fontSize: '0.56rem', color: '#64748B' }}>Idonneous Marketing Services Pvt. Ltd.</div>
-                      </div>
-
-                      {/* QR Code Block */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <div style={{ width: '48px', height: '48px', background: '#FFFFFF', border: '1px solid #CBD5E1', borderRadius: '6px', padding: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          <QrCode size={40} color="#081226" />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: '0.6rem', fontWeight: 800, color: '#081226' }}>VERIFY CERTIFICATE</div>
-                          <div style={{ fontSize: '0.52rem', color: '#64748B' }}>Scan QR code or visit</div>
-                          <div style={{ fontSize: '0.56rem', fontWeight: 700, color: '#0072FF' }}>retailedgepro.com/verify</div>
-                        </div>
-                      </div>
-
-                    </div>
-
-                  </div>
-
-                  {/* Bottom Ribbon Footer Bar */}
-                  <div style={{ width: '100%', height: '32px', background: '#081226', borderTop: '1px solid #C5A059', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px' }}>
-                    <div style={{ display: 'flex', gap: '10px', fontSize: '0.52rem', fontWeight: 700, color: '#E2E8F0', textTransform: 'uppercase' }}>
-                      <span>👥 TRAINER CONTROLLED</span>
-                      <span>▶️ LIVE TRAINING</span>
-                      <span>📋 ASSESSMENTS</span>
-                      <span>🎖️ CERTIFICATION</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <div style={{ fontSize: '0.62rem', fontWeight: 900, color: '#FFFFFF', letterSpacing: '0.5px' }}>IDONNEOUS</div>
-                      <div style={{ fontSize: '0.48rem', color: '#00D2FF' }}>www.idonneous.com</div>
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </div>
-
-            <div style={{ padding: '14px 24px', borderTop: '1px solid #E2E8F0', display: 'flex', justifyContent: 'flex-end', gap: '10px', background: '#F8FAFC' }}>
-              <button
-                onClick={() => handleDownloadPDF(previewCert.id, previewCert.User?.name)}
-                style={{ padding: '8px 16px', background: '#2563EB', color: '#FFFFFF', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}
-              >
-                <Download size={14} /> Download PDF
-              </button>
-              <button
-                onClick={() => setPreviewCert(null)}
-                style={{ padding: '8px 16px', background: '#E2E8F0', color: '#0F172A', border: 'none', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer' }}
-              >
-                Close
-              </button>
-            </div>
-
-          </div>
-        </div>
+        <CertificateViewer
+          isOpen={Boolean(previewCert)}
+          onClose={() => setPreviewCert(null)}
+          certificateId={previewCert?.certificate_id}
+          token={token}
+          initialData={previewCert}
+        />
       )}
 
       {/* ─── MODAL: REVOKE CERTIFICATE ─── */}
-      {isCertAuthority && revokeCert && (
+      {canRevoke && revokeCert && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050, backdropFilter: 'blur(6px)' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '480px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2161,7 +1977,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── MODAL: REISSUE CERTIFICATE ─── */}
-      {isCertAuthority && reissueCert && (
+      {canIssue && reissueCert && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1050, backdropFilter: 'blur(6px)' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '480px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2211,7 +2027,7 @@ export default function Certificates({ initialTab = 'ledger' }) {
       )}
 
       {/* ─── MODAL: UPLOAD / DRAW SIGNATURE & SEAL ASSET ─── */}
-      {isCertAuthority && isAssetModalOpen && (
+      {canManageTemplates && isAssetModalOpen && (
         <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(11,18,32,0.82)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, backdropFilter: 'blur(6px)' }}>
           <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', width: '92%', maxWidth: '580px', display: 'flex', flexDirection: 'column', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.3)', overflow: 'hidden' }}>
 

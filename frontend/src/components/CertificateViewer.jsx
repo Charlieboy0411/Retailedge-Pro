@@ -134,8 +134,8 @@ export default function CertificateViewer({
   const trainerName = certData?.trainerName || certData?.Trainer?.name || 'Aakash Verma';
   const signatoryName = certData?.signatoryName || certData?.certificateSnapshot?.authorizedSignatory?.name || 'Mohit Tiku';
   const signatoryDesignation = certData?.signatoryDesignation || certData?.certificateSnapshot?.authorizedSignatory?.designation || 'Managing Director';
-  const sealUrl = certData?.companySealUrl || certData?.certificateSnapshot?.companySeal?.asset || '/assets/seals/retailedge_pro_gold_seal.svg';
-  const authSigUrl = certData?.authorizedSignatureUrl || certData?.certificateSnapshot?.authorizedSignatory?.signatureAsset || '/assets/signatures/amit_kumar_signature.svg';
+  const sealUrl = certData?.companySealUrl || certData?.certificateSnapshot?.companySeal?.asset || '/assets/seals/idonneous_official_seal.svg';
+  const authSigUrl = certData?.authorizedSignatureUrl || certData?.certificateSnapshot?.authorizedSignatory?.signatureAsset || '/assets/signatures/mohit_tiku_signature.svg';
   const issueDateStr = certData?.issueDate 
     ? new Date(certData.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : 'Recent';
@@ -498,7 +498,7 @@ export default function CertificateViewer({
                           <div>
                             <div style={{ fontSize: '0.48rem', fontWeight: 800, color: '#64748B' }}>SCORE / GRADE</div>
                             <div style={{ fontSize: '0.62rem', fontWeight: 800, color: '#081226' }}>
-                              {certData.assessmentScore ? `${certData.assessmentScore}%` : '88%'} (Passed)
+                              {certData.assessmentScore != null ? `${certData.assessmentScore}%` : '—'} (Passed)
                             </div>
                           </div>
                         </div>
@@ -512,7 +512,7 @@ export default function CertificateViewer({
                               src={authSigUrl} 
                               alt="Signature" 
                               style={{ maxHeight: '28px', maxWidth: '120px', objectFit: 'contain' }}
-                              onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
+                              onError={e => { e.target.src = '/assets/signatures/mohit_tiku_signature.svg'; }}
                             />
                           </div>
                           <div style={{ borderTop: '1px solid #081226', width: '130px', margin: '1px 0 2px 0' }}></div>
@@ -590,11 +590,11 @@ export default function CertificateViewer({
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#64748B' }}>Attendance %:</span>
-                    <strong style={{ color: '#10B981' }}>{certData.attendancePercentage ? `${certData.attendancePercentage}%` : '95%'}</strong>
+                    <strong style={{ color: '#10B981' }}>{certData.attendancePercentage != null ? `${certData.attendancePercentage}%` : '—'}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#64748B' }}>Assessment Score:</span>
-                    <strong style={{ color: '#8B5CF6' }}>{certData.assessmentScore ? `${certData.assessmentScore}%` : '88%'}</strong>
+                    <strong style={{ color: '#8B5CF6' }}>{certData.assessmentScore != null ? `${certData.assessmentScore}%` : '—'}</strong>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ color: '#64748B' }}>Status:</span>

@@ -26,7 +26,7 @@ export default function CertificateShareModal({ isOpen, onClose, certificate, to
   const handleWhatsAppShare = () => {
     const text = encodeURIComponent(
       `🎓 *Official Training Certification Conferred*\n\n` +
-      `I have successfully completed the *${programName}* on RetailEdge Pro!\n\n` +
+      `I have successfully completed the *${programName}* on RetailEdge PRO!\n\n` +
       `● *Certificate ID:* ${certId}\n` +
       `● *Recipient:* ${participantName}\n` +
       `● *Verify Credential:* ${verificationUrl}\n\n` +

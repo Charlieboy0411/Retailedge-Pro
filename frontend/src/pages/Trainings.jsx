@@ -5,6 +5,8 @@ import { Navigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Play, FileText, Presentation, Image as ImageIcon, Music, CheckCircle2, Circle, Plus, Trash2, ShieldAlert, Video, ExternalLink } from 'lucide-react';
 import CalendarWidget from '../components/CalendarWidget';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { JitsiMeeting } from '@jitsi/react-sdk';
+import { createJitsiTelemetrySession } from '../utils/jitsiTelemetry';
 
 export default function Trainings() {
   const { token, user } = useContext(AuthContext);
@@ -21,10 +23,25 @@ export default function Trainings() {
   const trainingIdParam = searchParams.get('id');
   const autoJoinParam = searchParams.get('autoJoin');
 
-  // Meeting Attendance States
+  // Meeting Attendance & Jitsi Telemetry States
   const [isAttendingMeeting, setIsAttendingMeeting] = useState(false);
   const [meetingStartTime, setMeetingStartTime] = useState(null);
   const [meetingElapsed, setMeetingElapsed] = useState(0);
+  const [jitsiConnected, setJitsiConnected] = useState(false);
+  const telemetrySessionRef = useRef(null);
+  const jitsiApiRef = useRef(null);
+
+  const parseMeetingUrl = (urlStr) => {
+    try {
+      if (!urlStr) return { domain: 'meet.jit.si', roomName: '', isJitsi: false };
+      const parsed = new URL(urlStr);
+      const isJitsi = parsed.hostname.includes('jit.si') || parsed.hostname.includes('jitsi');
+      const roomName = parsed.pathname.replace(/^\/+/, '');
+      return { domain: parsed.host || 'meet.jit.si', roomName, isJitsi };
+    } catch {
+      return { domain: 'meet.jit.si', roomName: '', isJitsi: false };
+    }
+  };
 
   // New Training Form
   const [newTraining, setNewTraining] = useState({
@@ -199,69 +216,57 @@ export default function Trainings() {
   };
 
   const lastSyncTimeRef = useRef(Date.now());
-  const jitsiHeartbeatRef = useRef(null);
 
-  const handleStartMeeting = async (trainingId, url) => {
-    const startTime = Date.now();
-    lastSyncTimeRef.current = startTime;
-    setIsAttendingMeeting(true);
-    setMeetingStartTime(startTime);
-    setMeetingElapsed(0);
-    localStorage.setItem(`meeting_start_${trainingId}`, String(startTime));
-
-    // Open URL in new window/tab immediately (mobile-friendly, supports Google Meet / Jitsi)
-    if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-
-    // 1. Dispatch Jitsi Telemetry Join Event
-    const participantPayload = {
-      event: 'join',
-      participantName: user?.name || 'Learner',
-      employeeId: user?.employee_id || 'EMP',
-      userId: user?.id,
-      scheduledDurationMinutes: 60
-    };
-    axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, participantPayload, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(err => console.error('Jitsi join event error:', err));
-
-    // 2. Setup periodic Jitsi Heartbeat every 30 seconds
-    if (jitsiHeartbeatRef.current) clearInterval(jitsiHeartbeatRef.current);
-    jitsiHeartbeatRef.current = setInterval(() => {
-      axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, {
-        ...participantPayload,
-        event: 'heartbeat'
-      }, {
-        headers: { Authorization: `Bearer ${token}` }
-      }).catch(err => console.error('Jitsi heartbeat error:', err));
-    }, 30000);
-
-    const sendProgress = async (lat, lng) => {
-      try {
-        await axios.post(`${backendUrl}/api/trainings/${trainingId}/progress`,
-          { completed: false, timeSpent: 1, latitude: lat, longitude: lng },
-          { headers: { Authorization: `Bearer ${token}` } }
-        );
-      } catch (e) {
-        console.error('Could not record meeting join:', e);
+  // Cleanup telemetry and Jitsi external API on component unmount
+  useEffect(() => {
+    return () => {
+      if (telemetrySessionRef.current) {
+        telemetrySessionRef.current.cleanup();
+        telemetrySessionRef.current = null;
+      }
+      if (jitsiApiRef.current) {
+        try {
+          jitsiApiRef.current.dispose();
+        } catch {}
+        jitsiApiRef.current = null;
       }
     };
+  }, []);
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          sendProgress(position.coords.latitude, position.coords.longitude);
-        },
-        (error) => {
-          console.warn('Geolocation failed or denied, recording default location check-in:', error);
-          sendProgress(null, null);
-        },
-        { timeout: 5000 }
-      );
-    } else {
-      sendProgress(null, null);
+  const handleStartMeeting = (trainingId, url) => {
+    const meetingInfo = parseMeetingUrl(url);
+
+    if (!meetingInfo.isJitsi) {
+      // Non-Jitsi external link: open tab, but do NOT fabricate Jitsi attendance telemetry
+      if (url) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      }
+      return;
     }
+
+    // For Jitsi: mount in-app meeting player; DO NOT emit join event yet.
+    // Genuine join event will only emit when Jitsi fires videoConferenceJoined.
+    setIsAttendingMeeting(true);
+    setJitsiConnected(false);
+
+    if (telemetrySessionRef.current) {
+      telemetrySessionRef.current.cleanup();
+    }
+
+    telemetrySessionRef.current = createJitsiTelemetrySession({
+      trainingId,
+      scheduledDurationMinutes: selectedTraining?.duration || 60,
+      token,
+      userId: user?.id,
+      participantName: user?.name || 'Learner',
+      employeeId: user?.employee_id || 'EMP',
+      backendUrl,
+      onStatusChange: ({ isJoined }) => {
+        if (isJoined) {
+          setJitsiConnected(true);
+        }
+      }
+    });
   };
 
   const handleEndMeeting = async (trainingId) => {
@@ -272,40 +277,51 @@ export default function Trainings() {
     const finalDelta = Math.max(Math.floor((now - lastSyncTimeRef.current) / 1000), 0);
     const totalElapsed = startTime ? Math.floor((now - startTime) / 1000) : 0;
 
+    // Dispose Jitsi API
+    if (jitsiApiRef.current) {
+      try {
+        jitsiApiRef.current.executeCommand('hangup');
+      } catch {}
+      try {
+        jitsiApiRef.current.dispose();
+      } catch {}
+      jitsiApiRef.current = null;
+    }
+
+    // Dispatch leave event via telemetry session
+    let leaveResult = { success: true };
+    if (telemetrySessionRef.current) {
+      leaveResult = await telemetrySessionRef.current.handleMeetingLeft();
+      telemetrySessionRef.current.cleanup();
+      telemetrySessionRef.current = null;
+    }
+
     setIsAttendingMeeting(false);
+    setJitsiConnected(false);
     setMeetingStartTime(null);
     setMeetingElapsed(0);
     localStorage.removeItem(`meeting_start_${trainingId}`);
 
-    // Clear heartbeat
-    if (jitsiHeartbeatRef.current) {
-      clearInterval(jitsiHeartbeatRef.current);
-      jitsiHeartbeatRef.current = null;
-    }
-
-    // 3. Dispatch Jitsi Telemetry Leave Event
-    axios.post(`${backendUrl}/api/trainings/${trainingId}/jitsi-event`, {
-      event: 'leave',
-      participantName: user?.name || 'Learner',
-      employeeId: user?.employee_id || 'EMP',
-      userId: user?.id,
-      scheduledDurationMinutes: 60
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch(err => console.error('Jitsi leave event error:', err));
-
-    try {
-      await axios.post(`${backendUrl}/api/trainings/${trainingId}/progress`,
-        { completed: true, timeSpent: finalDelta },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+    if (startTime && totalElapsed > 0) {
+      if (leaveResult && leaveResult.success === false) {
+        alert(`⚠️ Warning: Meeting attendance could not be verified on the server (${leaveResult.error || 'Network error'}). Attendance was not persisted.`);
+        fetchTrainings();
+      } else {
+        try {
+          await axios.post(`${backendUrl}/api/trainings/${trainingId}/progress`,
+            { completed: true, timeSpent: finalDelta },
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          fetchTrainings();
+          const mins = Math.floor(totalElapsed / 60);
+          const secs = totalElapsed % 60;
+          alert(`✅ Attendance recorded! You attended for ${mins > 0 ? `${mins}m ` : ''}${secs}s.`);
+        } catch (error) {
+          console.error('Failed to save meeting progress', error);
+        }
+      }
+    } else {
       fetchTrainings();
-      const mins = Math.floor(totalElapsed / 60);
-      const secs = totalElapsed % 60;
-      alert(`✅ Attendance recorded! You attended for ${mins > 0 ? `${mins}m ` : ''}${secs}s.`);
-    } catch (error) {
-      console.error('Failed to save meeting progress', error);
-      alert('⚠️ Could not save attendance. Please try again.');
     }
   };
 
@@ -549,43 +565,21 @@ export default function Trainings() {
                     )}
 
                     {/* Attendance status / Join meeting */}
-                    {isAttendingMeeting ? (
-                      <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '20px', padding: '24px', background: 'rgba(30,41,59,0.7)', border: '1px solid var(--border-glass)', borderRadius: '12px', alignItems: 'center', textAlign: 'center' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ display: 'inline-block', width: '10px', height: '10px', background: '#10B981', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
-                            <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px' }}>Meeting Session Active</span>
+                    {isAttendingMeeting && parseMeetingUrl(selectedTraining.url).isJitsi ? (
+                      <div className="glass-card" style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '16px', background: 'rgba(15,23,42,0.85)', border: '1px solid var(--border-glass)', borderRadius: '12px', width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <span style={{ display: 'inline-block', width: '10px', height: '10px', background: jitsiConnected ? '#10B981' : '#F59E0B', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} />
+                            <span style={{ fontSize: '0.85rem', color: jitsiConnected ? '#10B981' : '#F59E0B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px' }}>
+                              {jitsiConnected ? 'Live Attendance Verified' : 'Connecting to Jitsi Meeting Room...'}
+                            </span>
+                            {jitsiConnected && (
+                              <span style={{ fontSize: '1.1rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'white', marginLeft: '12px' }}>
+                                ⏱️ {Math.floor(meetingElapsed / 60).toString().padStart(2, '0')}:{(meetingElapsed % 60).toString().padStart(2, '0')}
+                              </span>
+                            )}
                           </div>
-                          <div style={{ fontSize: '2.5rem', fontWeight: 'bold', fontFamily: 'monospace', color: 'white', letterSpacing: '1px', marginTop: '6px' }}>
-                            {Math.floor(meetingElapsed / 60).toString().padStart(2, '0')}:{(meetingElapsed % 60).toString().padStart(2, '0')}
-                          </div>
-                        </div>
 
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '480px', margin: 0, lineHeight: '1.5' }}>
-                          The live training meeting is running in another browser tab. Feel free to switch to it and participate. We are tracking your attendance automatically in the background.
-                        </p>
-
-                        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', marginTop: '8px' }}>
-                          <button
-                            type="button"
-                            onClick={() => window.open(selectedTraining.url, '_blank', 'noopener,noreferrer')}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px',
-                              background: 'var(--bg-tertiary)',
-                              color: 'var(--text-primary)',
-                              border: '1px solid var(--border-glass)',
-                              borderRadius: '8px',
-                              padding: '10px 20px',
-                              fontSize: '0.9rem',
-                              cursor: 'pointer',
-                              fontWeight: 600,
-                              transition: 'all 0.2s'
-                            }}
-                          >
-                            <ExternalLink size={16} /> Re-open Meeting Link
-                          </button>
                           <button
                             type="button"
                             onClick={() => handleEndMeeting(selectedTraining.id)}
@@ -597,15 +591,65 @@ export default function Trainings() {
                               color: 'white',
                               border: 'none',
                               borderRadius: '8px',
-                              padding: '10px 24px',
-                              fontSize: '0.9rem',
+                              padding: '8px 18px',
+                              fontSize: '0.85rem',
                               cursor: 'pointer',
                               fontWeight: 600,
                               transition: 'all 0.2s'
                             }}
                           >
-                            ■ Leave Meeting & Save Attendance
+                            ■ Leave Meeting Room
                           </button>
+                        </div>
+
+                        <div style={{ width: '100%', minHeight: '560px', borderRadius: '8px', overflow: 'hidden', background: '#000' }}>
+                          <JitsiMeeting
+                            domain={parseMeetingUrl(selectedTraining.url).domain}
+                            roomName={parseMeetingUrl(selectedTraining.url).roomName}
+                            userInfo={{
+                              displayName: user?.name || 'Learner',
+                              email: user?.email || ''
+                            }}
+                            configOverwrite={{
+                              prejoinPageEnabled: false,
+                              startWithAudioMuted: false,
+                              disableDeepLinking: true
+                            }}
+                            interfaceConfigOverwrite={{
+                              SHOW_JITSI_WATERMARK: false,
+                              TOOLBAR_BUTTONS: [
+                                'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
+                                'fodeviceselection', 'hangup', 'chat', 'raisehand',
+                                'videoquality', 'filmstrip', 'tileview'
+                              ]
+                            }}
+                            onApiReady={(externalApi) => {
+                              jitsiApiRef.current = externalApi;
+                              externalApi.addListener('videoConferenceJoined', (participant) => {
+                                const startTime = Date.now();
+                                setMeetingStartTime(startTime);
+                                setMeetingElapsed(0);
+                                lastSyncTimeRef.current = startTime;
+                                setJitsiConnected(true);
+                                localStorage.setItem(`meeting_start_${selectedTraining.id}`, String(startTime));
+                                telemetrySessionRef.current?.handleMeetingJoined(participant);
+                              });
+                              externalApi.addListener('videoConferenceLeft', () => {
+                                handleEndMeeting(selectedTraining.id);
+                              });
+                              externalApi.addListener('readyToClose', () => {
+                                handleEndMeeting(selectedTraining.id);
+                              });
+                            }}
+                            onReadyToClose={() => handleEndMeeting(selectedTraining.id)}
+                            getIFrameRef={(iframeRef) => {
+                              if (iframeRef) {
+                                iframeRef.style.height = '560px';
+                                iframeRef.style.width = '100%';
+                                iframeRef.style.border = 'none';
+                              }
+                            }}
+                          />
                         </div>
                       </div>
                     ) : (
@@ -615,9 +659,17 @@ export default function Trainings() {
                           <span style={{ fontFamily: 'monospace', fontSize: '0.95rem', color: '#10B981', wordBreak: 'break-all' }}>{selectedTraining.url}</span>
                         </div>
 
-                        <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '440px', margin: 0, lineHeight: '1.5' }}>
-                          Click the join button below to open Google Meet in a new tab. Your attendance duration will be tracked in real-time until you complete the session.
-                        </p>
+                        {parseMeetingUrl(selectedTraining.url).isJitsi ? (
+                          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: '460px', margin: 0, lineHeight: '1.5' }}>
+                            Join the interactive in-app meeting room. Your authenticated attendance telemetry will begin recording automatically once you join the session.
+                          </p>
+                        ) : (
+                          <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', padding: '12px 16px', maxWidth: '520px' }}>
+                            <p style={{ color: '#F59E0B', fontSize: '0.85rem', margin: 0, lineHeight: '1.4' }}>
+                              ⚠️ <strong>External Meeting Notice:</strong> This session uses an external meeting link. In accordance with RetailEdge PRO attendance security standards, automated telemetry is only recorded within interactive Jitsi rooms.
+                            </p>
+                          </div>
+                        )}
 
                         <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', justifyContent: 'center', width: '100%', marginTop: '8px' }}>
                           <button
@@ -639,7 +691,7 @@ export default function Trainings() {
                               transition: 'all 0.2s'
                             }}
                           >
-                            Copy Link
+                            Copy Guest Link
                           </button>
                           <button
                             type="button"
@@ -659,7 +711,7 @@ export default function Trainings() {
                               transition: 'all 0.2s'
                             }}
                           >
-                            📹 Join Meeting & Start Track
+                            {parseMeetingUrl(selectedTraining.url).isJitsi ? '📹 Launch Meeting Room & Track' : '↗ Open External Link'}
                           </button>
                         </div>
                       </div>

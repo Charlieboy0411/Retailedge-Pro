@@ -10,6 +10,11 @@ import { useNavigate } from 'react-router-dom';
 import { generate15SlidePPT } from '../utils/pptHelper';
 import { generateExcelReport } from '../utils/excelHelper';
 import { downloadWorkbook, downloadPPT } from '../utils/downloadWorkbook';
+import PageHeader from './ui/PageHeader';
+import KpiCard from './ui/KpiCard';
+import StatusBadge from './ui/StatusBadge';
+import EmptyState from './ui/EmptyState';
+import { mapCertificateStatus } from '../utils/certificateStatusHelper';
 
 export default function TrainerReportCenter({ token, user }) {
   const navigate = useNavigate();
@@ -244,94 +249,56 @@ export default function TrainerReportCenter({ token, user }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+    <div style={{ padding: '24px 32px', minHeight: '100vh', background: '#F6F8FC', display: 'flex', flexDirection: 'column', gap: '20px' }}>
 
-      {/* ─── BANNER & OPERATIONAL HEADER ─── */}
-      <div
-        style={{
-          background: 'linear-gradient(135deg, #0F172A 0%, #1E293B 100%)',
-          padding: '24px 28px',
-          borderRadius: '16px',
-          border: '1px solid #334155',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '16px',
-          boxShadow: '0 10px 25px -5px rgba(15, 23, 42, 0.4)'
-        }}
+      {/* ─── PAGE HEADER & OPERATIONAL ACTIONS ─── */}
+      <PageHeader
+        eyebrow="TRAINER REPORTS"
+        title="Training Outcome & Assessment Center"
+        description="Hierarchical analytics across your assigned projects, training cohorts, and participant certifications."
       >
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-            <span
-              style={{
-                background: '#2563EB',
-                color: '#FFFFFF',
-                fontSize: '0.7rem',
-                fontWeight: 800,
-                padding: '3px 8px',
-                borderRadius: '6px',
-                letterSpacing: '0.05em'
-              }}
-            >
-              TRAINER INTELLIGENCE
-            </span>
-            <span style={{ color: '#94A3B8', fontSize: '0.8rem', fontWeight: 600 }}>
-              Live Scoped Operational Analytics
-            </span>
-          </div>
-          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, color: '#FFFFFF', margin: 0 }}>
-            Training Outcome & Assessment Center
-          </h2>
-          <p style={{ margin: '4px 0 0 0', color: '#94A3B8', fontSize: '0.85rem' }}>
-            Hierarchical analytics across assigned projects, training cohorts, and participant certifications.
-          </p>
-        </div>
+        <button
+          onClick={() => fetchTrainerReportData(false)}
+          disabled={syncing}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            border: '1px solid #E2E8F0',
+            background: '#FFFFFF',
+            color: '#475569',
+            fontSize: '0.8rem',
+            fontWeight: 600,
+            cursor: 'pointer'
+          }}
+        >
+          <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
+          Sync
+        </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => fetchTrainerReportData(false)}
-            disabled={syncing}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: '1px solid #475569',
-              background: 'rgba(255, 255, 255, 0.05)',
-              color: '#F8FAFC',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              cursor: 'pointer'
-            }}
-          >
-            <RefreshCw size={14} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-            Sync
-          </button>
-
-          <button
-            onClick={handleExportAllExcel}
-            disabled={exporting || filteredReports.length === 0}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '9px 16px',
-              borderRadius: '8px',
-              border: 'none',
-              background: '#16A34A',
-              color: '#FFFFFF',
-              fontSize: '0.8rem',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            <FileSpreadsheet size={14} />
-            Export Scoped Excel
-          </button>
-        </div>
-      </div>
+        <button
+          onClick={handleExportAllExcel}
+          disabled={exporting || filteredReports.length === 0}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 16px',
+            borderRadius: '8px',
+            border: 'none',
+            background: '#16A34A',
+            color: '#FFFFFF',
+            fontSize: '0.8rem',
+            fontWeight: 700,
+            cursor: 'pointer'
+          }}
+        >
+          <FileSpreadsheet size={14} />
+          Export Scoped Excel
+        </button>
+      </PageHeader>
 
       {/* ─── AUTHORITATIVE HIERARCHY FILTER BAR ─── */}
       <div
@@ -339,15 +306,16 @@ export default function TrainerReportCenter({ token, user }) {
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          background: 'var(--bg-glass)',
+          background: '#FFFFFF',
           padding: '16px 20px',
-          borderRadius: '14px',
-          border: '1px solid #B7BEC7',
+          borderRadius: '12px',
+          border: '1px solid #E2E8F0',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
           flexWrap: 'wrap'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 700 }}>
-          <Filter size={15} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#475569', fontSize: '0.8rem', fontWeight: 700 }}>
+          <Filter size={15} color="#1E40AF" />
           <span>Hierarchy:</span>
         </div>
 
@@ -358,9 +326,9 @@ export default function TrainerReportCenter({ token, user }) {
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
-            border: '1px solid #B7BEC7',
-            background: 'var(--bg-tertiary)',
-            color: 'var(--text-primary)',
+            border: '1px solid #E2E8F0',
+            background: '#F8FAFC',
+            color: '#0F172A',
             fontSize: '0.82rem',
             fontWeight: 600,
             outline: 'none',
@@ -381,9 +349,9 @@ export default function TrainerReportCenter({ token, user }) {
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
-            border: '1px solid #B7BEC7',
-            background: availableSubprojects.length === 0 ? 'rgba(0,0,0,0.03)' : 'var(--bg-tertiary)',
-            color: 'var(--text-primary)',
+            border: '1px solid #E2E8F0',
+            background: availableSubprojects.length === 0 ? '#F1F5F9' : '#F8FAFC',
+            color: availableSubprojects.length === 0 ? '#94A3B8' : '#0F172A',
             fontSize: '0.82rem',
             fontWeight: 600,
             outline: 'none',
@@ -403,9 +371,9 @@ export default function TrainerReportCenter({ token, user }) {
           style={{
             padding: '8px 12px',
             borderRadius: '8px',
-            border: '1px solid #B7BEC7',
-            background: 'var(--bg-tertiary)',
-            color: 'var(--text-primary)',
+            border: '1px solid #E2E8F0',
+            background: '#F8FAFC',
+            color: '#0F172A',
             fontSize: '0.82rem',
             fontWeight: 600,
             outline: 'none',
@@ -419,7 +387,7 @@ export default function TrainerReportCenter({ token, user }) {
         </select>
 
         {/* Date Filter */}
-        <div style={{ display: 'flex', background: 'var(--bg-tertiary)', borderRadius: '8px', padding: '3px', marginLeft: 'auto' }}>
+        <div style={{ display: 'flex', background: '#F1F5F9', borderRadius: '8px', padding: '3px', marginLeft: 'auto' }}>
           {['All', '30d', '7d', 'Today'].map(df => (
             <button
               key={df}
@@ -428,8 +396,8 @@ export default function TrainerReportCenter({ token, user }) {
                 padding: '5px 12px',
                 borderRadius: '6px',
                 border: 'none',
-                background: dateFilter === df ? 'var(--primary)' : 'transparent',
-                color: dateFilter === df ? '#FFFFFF' : 'var(--text-secondary)',
+                background: dateFilter === df ? '#1E40AF' : 'transparent',
+                color: dateFilter === df ? '#FFFFFF' : '#64748B',
                 fontSize: '0.76rem',
                 fontWeight: 700,
                 cursor: 'pointer'
@@ -451,34 +419,32 @@ export default function TrainerReportCenter({ token, user }) {
       >
         {/* Card 1: Quiz Performance */}
         <div
-          className="glass-card"
           onClick={() => setActiveModal('quiz')}
           style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid #B7BEC7',
-            borderRadius: '16px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
             padding: '20px',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            position: 'relative',
-            overflow: 'hidden'
+            transition: 'all 0.15s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}
-          onMouseEnter={e => e.currentTarget.style.borderColor = '#2563EB'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = '#B7BEC7'}
+          onMouseEnter={e => e.currentTarget.style.borderColor = '#1E40AF'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Quiz Performance</span>
-              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
-                {avgQuizScore}%
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Quiz Assessment Score</span>
+              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: '4px 0 0 0' }}>
+                {avgQuizScore > 0 ? `${avgQuizScore}%` : '—'}
               </h3>
             </div>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(37,99,235,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#2563EB' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#EFF6FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1E40AF' }}>
               <Award size={20} />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px', fontSize: '0.76rem', color: '#64748B' }}>
             <span><strong>{totalQuizzesCount}</strong> Quizzes</span>
             <span>•</span>
             <span><strong>{totalQuizParticipants}</strong> Submissions</span>
@@ -486,7 +452,7 @@ export default function TrainerReportCenter({ token, user }) {
             <span style={{ color: '#16A34A', fontWeight: 700 }}>{quizPassRate}% Pass</span>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', color: '#2563EB', fontSize: '0.76rem', fontWeight: 700 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: '12px', color: '#1E40AF', fontSize: '0.76rem', fontWeight: 700 }}>
             <span>View Quiz Drilldown</span>
             <ChevronRight size={14} />
           </div>
@@ -494,34 +460,32 @@ export default function TrainerReportCenter({ token, user }) {
 
         {/* Card 2: Training Outcome */}
         <div
-          className="glass-card"
           onClick={() => setActiveModal('training')}
           style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid #B7BEC7',
-            borderRadius: '16px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
             padding: '20px',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            position: 'relative',
-            overflow: 'hidden'
+            transition: 'all 0.15s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = '#7C3AED'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = '#B7BEC7'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Training Outcome</span>
-              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Training Outcome</span>
+              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: '4px 0 0 0' }}>
                 {completedTrainingsCount} / {totalTrainingsCount}
               </h3>
             </div>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(124,58,237,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#F5F3FF', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7C3AED' }}>
               <BookOpen size={20} />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px', fontSize: '0.76rem', color: '#64748B' }}>
             <span><strong>{totalEnrolledLearners}</strong> Enrolled</span>
             <span>•</span>
             <span style={{ color: '#7C3AED', fontWeight: 700 }}>
@@ -537,34 +501,32 @@ export default function TrainerReportCenter({ token, user }) {
 
         {/* Card 3: Participant Intelligence */}
         <div
-          className="glass-card"
           onClick={() => setActiveModal('participant')}
           style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid #B7BEC7',
-            borderRadius: '16px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
             padding: '20px',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            position: 'relative',
-            overflow: 'hidden'
+            transition: 'all 0.15s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = '#059669'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = '#B7BEC7'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Participant Intelligence</span>
-              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Participant Roster</span>
+              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: '4px 0 0 0' }}>
                 {totalEnrolledLearners}
               </h3>
             </div>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(5,150,105,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#ECFDF5', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#059669' }}>
               <Users size={20} />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px', fontSize: '0.76rem', color: '#64748B' }}>
             <span><strong>{attendanceLogs.length}</strong> Attendance Logs</span>
             <span>•</span>
             <span style={{ color: '#16A34A', fontWeight: 700 }}>Active Roster</span>
@@ -578,34 +540,32 @@ export default function TrainerReportCenter({ token, user }) {
 
         {/* Card 4: Certification Status */}
         <div
-          className="glass-card"
           onClick={() => setActiveModal('cert')}
           style={{
-            background: 'var(--bg-glass)',
-            border: '1px solid #B7BEC7',
-            borderRadius: '16px',
+            background: '#FFFFFF',
+            border: '1px solid #E2E8F0',
+            borderRadius: '12px',
             padding: '20px',
             cursor: 'pointer',
-            transition: 'all 0.2s ease',
-            position: 'relative',
-            overflow: 'hidden'
+            transition: 'all 0.15s ease',
+            boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
           }}
           onMouseEnter={e => e.currentTarget.style.borderColor = '#D97706'}
-          onMouseLeave={e => e.currentTarget.style.borderColor = '#B7BEC7'}
+          onMouseLeave={e => e.currentTarget.style.borderColor = '#E2E8F0'}
         >
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <div>
-              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)' }}>Certification Status</span>
-              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: 'var(--text-primary)', margin: '4px 0 0 0' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Certification Readiness</span>
+              <h3 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: '4px 0 0 0' }}>
                 {certIssuedCount} / {certEligibleCount}
               </h3>
             </div>
-            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'rgba(217,119,6,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
+            <div style={{ width: '38px', height: '38px', borderRadius: '8px', background: '#FFFBEB', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#D97706' }}>
               <Sparkles size={20} />
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '14px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '14px', fontSize: '0.76rem', color: '#64748B' }}>
             <span><strong>{certPendingCount}</strong> Pending Issue</span>
             <span>•</span>
             <span style={{ color: '#D97706', fontWeight: 700 }}>
@@ -622,27 +582,27 @@ export default function TrainerReportCenter({ token, user }) {
 
       {/* ─── OPERATIONAL REPORTS TABLE (SCOPED REAL DATA) ─── */}
       <div
-        className="glass-card"
         style={{
-          background: 'var(--bg-glass)',
-          border: '1px solid #B7BEC7',
-          borderRadius: '16px',
-          padding: '24px'
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
+          borderRadius: '12px',
+          padding: '24px',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
         }}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', flexWrap: 'wrap', gap: '12px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#0F172A' }}>
               Completed Quiz Assessment Reports
             </h3>
-            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>
               Authoritative quiz session outcomes and exportable intelligence decks
             </p>
           </div>
 
           {/* Search Input */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--bg-tertiary)', border: '1px solid #B7BEC7', padding: '6px 12px', borderRadius: '8px', width: '240px' }}>
-            <Search size={14} color="var(--text-secondary)" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0', padding: '6px 12px', borderRadius: '8px', width: '240px' }}>
+            <Search size={14} color="#94A3B8" />
             <input
               type="text"
               placeholder="Search reports..."
@@ -671,67 +631,65 @@ export default function TrainerReportCenter({ token, user }) {
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
               <thead>
-                <tr style={{ borderBottom: '2px solid var(--border-glass)', textAlign: 'left', color: 'var(--text-secondary)' }}>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Assessment Title</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Project / Hierarchy</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Date</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Participants</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Avg Score</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700 }}>Status</th>
-                  <th style={{ padding: '12px 14px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Assessment Title</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Project / Hierarchy</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Date</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Participants</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Assessment Score (%)</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700 }}>Status</th>
+                  <th style={{ padding: '12px 16px', fontWeight: 700, textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {filteredReports.map((report, idx) => {
                   const score = parseInt(report.avgScore) || 0;
                   const badgeColor = score >= 80 ? '#15803D' : (score >= 60 ? '#A16207' : '#DC2626');
-                  const badgeBg = score >= 80 ? 'rgba(34, 197, 94, 0.15)' : (score >= 60 ? '#FEF08A' : '#FEE2E2');
+                  const badgeBg = score >= 80 ? '#DCFCE7' : (score >= 60 ? '#FEF08A' : '#FEE2E2');
 
                   return (
                     <tr
                       key={report.id || idx}
-                      style={{ borderBottom: '1px solid var(--bg-tertiary)', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-tertiary)'}
+                      style={{ borderBottom: '1px solid #F1F5F9', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 700, color: '#0F172A' }}>
                         {report.title || report.quizTitle || 'Quiz Assessment'}
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{report.projectName || 'Assigned Project'}</div>
+                      <td style={{ padding: '14px 16px' }}>
+                        <div style={{ fontWeight: 600, color: '#0F172A' }}>{report.projectName || 'Assigned Project'}</div>
                         {report.subProjectName && (
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>{report.subProjectName}</div>
+                          <div style={{ fontSize: '0.72rem', color: '#64748B' }}>{report.subProjectName}</div>
                         )}
                       </td>
-                      <td style={{ padding: '12px 14px', color: 'var(--text-secondary)' }}>
+                      <td style={{ padding: '14px 16px', color: '#64748B' }}>
                         {report.date ? new Date(report.date).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td style={{ padding: '12px 14px', fontWeight: 600 }}>
+                      <td style={{ padding: '14px 16px', fontWeight: 600, color: '#0F172A' }}>
                         {report.participants || 0}
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '12px', background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: '0.76rem' }}>
+                      <td style={{ padding: '14px 16px' }}>
+                        <span style={{ padding: '3px 8px', borderRadius: '6px', background: badgeBg, color: badgeColor, fontWeight: 700, fontSize: '0.78rem' }}>
                           {score}%
                         </span>
                       </td>
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{ padding: '3px 8px', borderRadius: '4px', background: 'rgba(34, 197, 94, 0.15)', color: '#16A34A', fontWeight: 700, fontSize: '0.72rem' }}>
-                          {report.status || 'Finished'}
-                        </span>
+                      <td style={{ padding: '14px 16px' }}>
+                        <StatusBadge status={report.status || 'Finished'} />
                       </td>
-                      <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end', alignItems: 'center' }}>
                           <button
                             onClick={() => handleViewReportDetail(report)}
                             style={{
                               padding: '5px 10px',
                               borderRadius: '6px',
-                              border: '1px solid #B7BEC7',
-                              background: 'var(--bg-glass)',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.74rem',
+                              border: '1px solid #E2E8F0',
+                              background: '#F8FAFC',
+                              color: '#1E40AF',
+                              fontSize: '0.75rem',
                               fontWeight: 600,
                               cursor: 'pointer',
                               display: 'flex',
@@ -949,40 +907,40 @@ export default function TrainerReportCenter({ token, user }) {
 
       {/* ─── REPORT DETAIL INSPECTOR MODAL ─── */}
       {activeModal === 'detail' && selectedReportDetail && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, backdropFilter: 'blur(4px)' }}>
-          <div className="glass-card" style={{ width: '850px', maxWidth: '95vw', background: 'var(--bg-glass)', maxHeight: '88vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', border: '1px solid #B7BEC7' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1200, backdropFilter: 'blur(4px)' }}>
+          <div style={{ width: '850px', maxWidth: '95vw', background: '#FFFFFF', maxHeight: '88vh', overflowY: 'auto', padding: '28px', borderRadius: '16px', border: '1px solid #E2E8F0', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.15)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
               <div>
-                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0F172A' }}>
                   {selectedReportDetail.title || selectedReportDetail.quizTitle}
                 </h3>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '4px' }}>
                   {selectedReportDetail.projectName} • {selectedReportDetail.date}
                 </div>
               </div>
-              <button onClick={() => setActiveModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}><X size={20} /></button>
+              <button onClick={() => setActiveModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748B' }}><X size={20} /></button>
             </div>
 
             {/* Metric Summary */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginBottom: '20px' }}>
-              <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Participants</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Participants</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
                   {selectedReportDetail.participantsCount || (Array.isArray(selectedReportDetail.participants) ? selectedReportDetail.participants.length : selectedReportDetail.participants) || 0}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Average Score</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563EB' }}>{selectedReportDetail.avgScore || '0%'}</div>
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Assessment Score (%)</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#166534' }}>{selectedReportDetail.avgScore || '0%'}</div>
               </div>
-              <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Questions</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Questions</div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
                   {selectedReportDetail.totalQuestions || (selectedReportDetail.questions ? selectedReportDetail.questions.length : 0)}
                 </div>
               </div>
-              <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
-                <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontWeight: 600 }}>Status</div>
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0', textAlign: 'center' }}>
+                <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Status</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#16A34A' }}>{selectedReportDetail.status || 'Finished'}</div>
               </div>
             </div>
@@ -990,19 +948,19 @@ export default function TrainerReportCenter({ token, user }) {
             {/* Learner Roster Table */}
             {Array.isArray(selectedReportDetail.participants) && selectedReportDetail.participants.length > 0 && typeof selectedReportDetail.participants[0] === 'object' && (
               <div style={{ marginBottom: '20px' }}>
-                <h4 style={{ margin: '0 0 10px 0', fontSize: '0.92rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                <h4 style={{ margin: '0 0 10px 0', fontSize: '0.92rem', fontWeight: 700, color: '#0F172A' }}>
                   Learner Roster ({selectedReportDetail.participants.length})
                 </h4>
-                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
+                <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem', textAlign: 'left' }}>
                     <thead>
-                      <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-glass)' }}>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Learner</th>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Assessment Score</th>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Assessment %</th>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Arena Points</th>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Completion</th>
-                        <th style={{ padding: '10px 12px', fontWeight: 700, color: 'var(--text-secondary)' }}>Time Spent</th>
+                      <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Learner</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Correct / Total</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Assessment Score (%)</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Arena Speed Points (pts)</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Completion</th>
+                        <th style={{ padding: '10px 12px', fontWeight: 700, color: '#475569' }}>Time Spent</th>
                       </tr>
                     </thead>
                     <tbody>

@@ -62,24 +62,14 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     { id: 'q3', text: 'Technical Parameters & Brand Compliance', correct_answer: 'Option C' }
   ];
 
-  // Mock regional details mapping
-  const getMockDetails = (name) => {
-    const safeName = typeof name === 'string' ? name : 'Guest';
-    let hash = 0;
-    for (let i = 0; i < safeName.length; i++) {
-      hash = safeName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    hash = Math.abs(hash);
-    const regions = ['North Region', 'South Region', 'East Region', 'West Region'];
-    const states = ['Delhi NCR', 'Maharashtra', 'Karnataka', 'West Bengal'];
-    const locations = ['Store #101 (Delhi)', 'Store #205 (Mumbai)', 'Store #312 (Bangalore)', 'Store #418 (Kolkata)'];
-    
-    return {
-      region: regions[hash % regions.length],
-      state: states[hash % states.length],
-      location: locations[hash % locations.length]
-    };
+  // Real regional details helper fallback if not explicitly provided
+  const getParticipantRegion = (p) => {
+    return p.region || p.zone || '—';
   };
+  const getParticipantStore = (p) => {
+    return p.storeName || p.location || p.store || '—';
+  };
+
 
   // ----------------------------------------------------
   // CELL STYLING CONFIGURATIONS
@@ -421,7 +411,6 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     ];
 
     const dataRows = participants.map(p => {
-      const details = getMockDetails(p.name);
       const passText = (parseInt(p.percentage) || 0) >= passMarkPercent ? 'Pass' : 'Fail';
       const certText = passText === 'Pass' ? 'Certified' : 'Pending';
 
@@ -429,13 +418,13 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         p.employeeId || 'N/A',
         p.name,
         sessionData.projectName || 'General',
-        p.storeName || details.location,
+        getParticipantStore(p),
         sessionData.hostName || 'Trainer',
         p.score,
         p.completion || '100%',
         passText,
         certText,
-        '100%'
+        p.attendancePercentage || '100%'
       ];
     });
 
@@ -480,25 +469,20 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     const tableHeader = ['Rank', 'Participant Name', 'Project', 'Score', 'Completion Time', 'Region'];
 
     const dataRows = sortedParticipants.map((p, idx) => {
-      const details = getMockDetails(p.name);
       return [
         idx + 1,
         p.name,
         sessionData.projectName || 'General',
         p.score,
-        p.timeSpent,
-        details.region
+        p.timeSpent || '—',
+        getParticipantRegion(p)
       ];
     });
 
     if (dataRows.length === 0) {
-      dataRows.push(
-        [1, 'Rahul Sharma', 'Galderma', '3 / 3', '45s', 'North Region'],
-        [2, 'Neha Singh', 'Galderma', '3 / 3', '52s', 'South Region'],
-        [3, 'Amit Kumar', 'Galderma', '2 / 3', '60s', 'East Region'],
-        [4, 'Priya Patel', 'Galderma', '2 / 3', '58s', 'West Region'],
-        [5, 'Suresh Yadav', 'Galderma', '2 / 3', '64s', 'North Region']
-      );
+      dataRows.push([
+        1, 'No participants recorded', sessionData.projectName || '—', '0%', '—', '—'
+      ]);
     }
 
     const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
@@ -579,13 +563,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     });
 
     if (dataRows.length === 0) {
-      dataRows.push(
-        ['Rahul Sharma', 'Galderma', 'Launchpad Session 1', 'Present', '100%', 'Present', 'Present'],
-        ['Neha Singh', 'Galderma', 'Launchpad Session 1', 'Present', '100%', 'Present', 'Present'],
-        ['Amit Kumar', 'Galderma', 'Launchpad Session 1', 'Present', '100%', 'Present', 'Present'],
-        ['Priya Patel', 'Galderma', 'Launchpad Session 1', 'Present', '100%', 'Present', 'Present'],
-        ['Suresh Yadav', 'Galderma', 'Launchpad Session 1', 'Present', '100%', 'Present', 'Present']
-      );
+      dataRows.push(['No attendance records found', '—', '—', '—', '—', '—', '—']);
     }
 
     const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
@@ -619,13 +597,9 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         e.status       || ''
       ]);
     } else {
-      // Fallback mock data so the sheet is never empty
+      // Empty state row when no attendance logs exist
       dataRows = [
-        ['Galderma', 'EMP101', 'Rahul Sharma', 'North', '2025-06-10', 'Product Onboarding Session', '45m 12s', 'Completed'],
-        ['Galderma', 'EMP102', 'Neha Singh',   'West',  '2025-06-10', 'Product Onboarding Session', '38m 50s', 'Completed'],
-        ['Galderma', 'EMP103', 'Amit Kumar',   'East',  '2025-06-11', 'SOP Compliance Training',    '1h 2m 5s','Attended'],
-        ['Idonneous', 'EMP201','Priya Patel',  'South', '2025-06-11', 'SOP Compliance Training',    '55m 30s', 'Completed'],
-        ['Idonneous', 'EMP202','Suresh Yadav', 'North', '2025-06-12', 'Brand Awareness Workshop',   '1h 15m',  'Attended']
+        ['No attendance records found for this training session', '—', '—', '—', '—', '—', '—', '—']
       ];
     }
 
@@ -691,13 +665,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     });
 
     if (dataRows.length === 0) {
-      dataRows.push(
-        ['Rahul Sharma', 'RetailEdge Pro Operations Cert', 'Certified', reportDate, '06/05/2027', '100%'],
-        ['Neha Singh', 'RetailEdge Pro Operations Cert', 'Certified', reportDate, '06/05/2027', '100%'],
-        ['Amit Kumar', 'RetailEdge Pro Operations Cert', 'Certified', reportDate, '06/05/2027', '66%'],
-        ['Priya Patel', 'RetailEdge Pro Operations Cert', 'Certified', reportDate, '06/05/2027', '66%'],
-        ['Suresh Yadav', 'RetailEdge Pro Operations Cert', 'Certified', reportDate, '06/05/2027', '66%']
-      );
+      dataRows.push(['No certification records found', '—', '—', '—', '—', '—']);
     }
 
     const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
@@ -767,13 +735,8 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         ]);
       });
     } else {
-      // Fallback mock data
       summaryRows.push(
-        ['Rahul Sharma', 'EMP101', 'Galderma', 'Employee', 3, '91%', '2025-01-15, 2025-02-10, 2025-03-05'],
-        ['Neha Singh', 'EMP102', 'Galderma', 'Employee', 2, '88%', '2025-01-15, 2025-02-10'],
-        ['Amit Kumar', 'EMP103', 'Galderma', 'Employee', 4, '75%', '2025-01-15, 2025-02-10, 2025-02-25, 2025-03-05'],
-        ['Priya Patel', 'EMP104', 'Galderma', 'Employee', 1, '100%', '2025-03-05'],
-        ['Suresh Yadav', 'EMP105', 'Galderma', 'Employee', 2, '83%', '2025-02-10, 2025-03-05']
+        ['No quiz attendance records found', '—', sessionData.projectName || '—', '—', 0, '0%', '—']
       );
     }
 
@@ -790,11 +753,10 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     ];
 
     // Expand dates into per-row breakdown
-    const sourceData = attendanceSummary.length > 0 ? attendanceSummary : [
-      { name: 'Rahul Sharma', employeeId: 'EMP101', projectName: 'Galderma', dates: '2025-01-15, 2025-02-10, 2025-03-05' },
-      { name: 'Neha Singh', employeeId: 'EMP102', projectName: 'Galderma', dates: '2025-01-15, 2025-02-10' },
-      { name: 'Amit Kumar', employeeId: 'EMP103', projectName: 'Galderma', dates: '2025-01-15, 2025-02-10, 2025-02-25, 2025-03-05' }
-    ];
+    const sourceData = attendanceSummary.length > 0 ? attendanceSummary : [];
+    if (sourceData.length === 0) {
+      rows.push(['No date breakdown records found', '—', '—', '—', '—', '—', '—']);
+    } else {
 
     sourceData.forEach(u => {
       const datesArr = (u.dates || '').split(',').map(d => d.trim()).filter(Boolean);
@@ -813,6 +775,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         rows.push([u.name || 'N/A', u.employeeId || 'N/A', u.projectName || 'N/A', 'N/A', '—', '—', 'No Records']);
       }
     });
+  }
 
     const ws = XLSX.utils.aoa_to_sheet(rows);
 
@@ -890,9 +853,8 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     });
 
     const dataRows = (sessionData.participants || []).map(p => {
-      const details = getMockDetails(p.name);
-      const zoneStr = (details.region || '').replace(' Region', ' Zone');
-      const storeStr = details.location || details.store || '';
+      const zoneStr = getParticipantRegion(p);
+      const storeStr = getParticipantStore(p);
 
       const rawScore = typeof p.score === 'string' && p.score.includes('/')
         ? parseInt(p.score.split('/')[0].trim())
@@ -903,8 +865,8 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         rawScore,
         zoneStr,
         p.employeeId || 'N/A',
-        p.name,
-        p.storeName || storeStr
+        p.name || 'Participant',
+        storeStr
       ];
 
       questions.forEach(q => {
@@ -918,11 +880,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     // Fallback data if empty
     if (dataRows.length === 0) {
       dataRows.push(
-        [sessionData.date || reportDate, 3, 'North Zone', 'EMP101', 'Rahul Sharma', 'Store #101 (Delhi)', 'Consistent brand elements', 'Verify hex values in editor', 'Apply standard 10px spacing'],
-        [sessionData.date || reportDate, 3, 'South Zone', 'EMP102', 'Neha Singh', 'Store #205 (Mumbai)', 'Consistent brand elements', 'Verify hex values in editor', 'Apply standard 10px spacing'],
-        [sessionData.date || reportDate, 2, 'East Zone', 'EMP103', 'Amit Kumar', 'Store #312 (Bangalore)', 'Consistent brand elements', 'Verify hex values in editor', 'Unregulated margins'],
-        [sessionData.date || reportDate, 2, 'West Zone', 'EMP104', 'Priya Patel', 'Store #418 (Kolkata)', 'Consistent brand elements', 'Verify hex values in editor', 'Use default padding presets'],
-        [sessionData.date || reportDate, 2, 'North Zone', 'EMP105', 'Suresh Yadav', 'Store #101 (Delhi)', 'Flexible sizing guidelines', 'Verify hex values in editor', 'Apply standard 10px spacing']
+        [sessionData.date || reportDate, 0, '—', '—', 'No question responses recorded', '—']
       );
     }
 

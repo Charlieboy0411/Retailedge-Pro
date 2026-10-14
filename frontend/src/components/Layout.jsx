@@ -128,36 +128,39 @@ export default function Layout() {
 
   return (
     <div className="app-container">
-      {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
+      {/* ─── LEFT SIDEBAR (White Enterprise System) ─── */}
       <nav className="sidebar">
         {/* Brand Area */}
-        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '20px 18px', borderBottom: '1px solid #1E293B', background: '#0B1220' }}>
+        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '18px 20px', borderBottom: '1px solid #E2E8F0', background: '#FFFFFF' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
             <div style={{
               width: '36px', height: '36px', borderRadius: '8px',
-              background: 'linear-gradient(135deg, #2563EB 0%, #06B6D4 100%)',
+              background: '#EFF6FF',
+              border: '1px solid rgba(37, 99, 235, 0.2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 10px rgba(37, 99, 235, 0.4)', flexShrink: 0
+              flexShrink: 0
             }}>
-              <Sparkles size={20} color="#FFFFFF" />
+              {/* RetailEdge PRO 3-bar corporate icon */}
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <rect x="3" y="12" width="4" height="9" rx="1.5" fill="#2563EB" />
+                <rect x="10" y="7" width="4" height="14" rx="1.5" fill="#3B82F6" />
+                <rect x="17" y="3" width="4" height="18" rx="1.5" fill="#06B6D4" />
+              </svg>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
+                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
                   RETAILEDGE
                 </span>
                 <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 900, fontSize: '1.05rem', color: '#2563EB', letterSpacing: '0.02em' }}>
                   PRO
                 </span>
               </div>
-              <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 500, letterSpacing: '0.04em' }}>
-                by Idonneous Marketing
+              <span style={{ fontSize: '0.62rem', color: '#94A3B8', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                by Idonneous Marketing Services
               </span>
             </div>
           </div>
-          
-          {/* Subtle Cyan Indicator Line */}
-          <div style={{ width: '100%', height: '2px', background: 'linear-gradient(90deg, #06B6D4 0%, #2563EB 60%, transparent 100%)', marginTop: '14px', borderRadius: '1px' }} />
         </div>
 
         {/* Navigation Items */}
@@ -184,8 +187,8 @@ export default function Layout() {
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === myProjectId ? '#2563EB' : '#94A3B8',
-                        background: searchParams.get('projectId') === myProjectId ? 'rgba(37, 99, 235, 0.12)' : 'transparent',
+                        color: searchParams.get('projectId') === myProjectId ? '#2563EB' : '#475569',
+                        background: searchParams.get('projectId') === myProjectId ? '#EFF6FF' : 'transparent',
                         fontWeight: searchParams.get('projectId') === myProjectId ? 700 : 500,
                         borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? '#2563EB' : 'transparent'}`
                       }}
@@ -203,8 +206,8 @@ export default function Layout() {
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '6px 12px', marginLeft: '10px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === cp.id ? '#2563EB' : '#94A3B8',
-                        background: searchParams.get('projectId') === cp.id ? 'rgba(37, 99, 235, 0.12)' : 'transparent',
+                        color: searchParams.get('projectId') === cp.id ? '#2563EB' : '#475569',
+                        background: searchParams.get('projectId') === cp.id ? '#EFF6FF' : 'transparent',
                         fontWeight: searchParams.get('projectId') === cp.id ? 700 : 500,
                         borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? '#2563EB' : 'transparent'}`
                       }}
@@ -539,6 +542,13 @@ export default function Layout() {
           )}
         </div>
 
+        {/* Sidebar Brand Watermark */}
+        <div className="sidebar-watermark">
+          <span className="sidebar-watermark-text">People.</span>
+          <span className="sidebar-watermark-text">Power.</span>
+          <span className="sidebar-watermark-text">Progress.</span>
+        </div>
+
         {/* Sidebar Footer User Card */}
         <div className="sidebar-profile">
           <div style={{ position: 'relative' }}>
@@ -549,7 +559,7 @@ export default function Layout() {
             <div 
               style={{
                 position: 'absolute', bottom: -1, right: -1, width: '10px', height: '10px',
-                backgroundColor: '#10B981', border: '2px solid #0F172A',
+                backgroundColor: '#10B981', border: '2px solid #FFFFFF',
                 borderRadius: '50%'
               }} 
               title="Active Session"
@@ -564,9 +574,10 @@ export default function Layout() {
             style={{ 
               color: '#94A3B8', background: 'none', border: 'none', 
               cursor: 'pointer', padding: '6px', borderRadius: '6px',
-              display: 'flex', alignItems: 'center', justifyContent: 'center'
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.15s ease'
             }}
-            onMouseOver={e => { e.currentTarget.style.color = '#FFFFFF'; e.currentTarget.style.background = '#1E293B'; }}
+            onMouseOver={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = '#F8FAFC'; }}
             onMouseOut={e => { e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.background = 'none'; }}
             title="Log Out"
           >
@@ -599,12 +610,12 @@ export default function Layout() {
               style={{
                 display: 'flex', alignItems: 'center', gap: '6px',
                 padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem',
-                fontWeight: 600, color: '#EF4444', background: 'rgba(239, 68, 68, 0.08)',
-                border: '1px solid rgba(239, 68, 68, 0.2)', cursor: 'pointer',
-                transition: 'all 0.15s'
+                fontWeight: 600, color: '#EF4444', background: '#FEF2F2',
+                border: '1px solid rgba(239, 68, 68, 0.25)', cursor: 'pointer',
+                transition: 'all 0.15s ease'
               }}
-              onMouseOver={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'; }}
-              onMouseOut={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
+              onMouseOver={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; }}
+              onMouseOut={e => { e.currentTarget.style.background = '#FEF2F2'; }}
             >
               <AlertTriangle size={14} />
               <span>Raise Query</span>
@@ -619,12 +630,37 @@ export default function Layout() {
             {/* Enterprise Brand Pill */}
             <div style={{
               display: 'flex', alignItems: 'center', gap: '8px',
-              background: '#EFF6FF', border: '1px solid rgba(37, 99, 235, 0.15)',
+              background: '#EFF6FF', border: '1px solid rgba(37, 99, 235, 0.2)',
               borderRadius: '20px', padding: '5px 12px', fontSize: '0.8rem',
               fontWeight: 700, color: '#2563EB'
             }}>
               <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB', display: 'inline-block' }} />
-              RetailEdge Pro Enterprise
+              <span>RetailEdge Pro Enterprise</span>
+              <ChevronDown size={14} style={{ opacity: 0.7 }} />
+            </div>
+
+            {/* User Profile Context in Top Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '10px',
+              paddingLeft: '6px', borderLeft: '1px solid #E2E8F0'
+            }}>
+              <div style={{
+                width: '36px', height: '36px', borderRadius: '50%',
+                background: '#EFF6FF', border: '1.5px solid rgba(37, 99, 235, 0.25)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '0.86rem',
+                color: '#2563EB', flexShrink: 0
+              }}>
+                {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap' }}>
+                  {user?.name || 'Authorized User'}
+                </span>
+                <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 500 }}>
+                  {user?.role || 'Enterprise User'}
+                </span>
+              </div>
             </div>
           </div>
         </header>

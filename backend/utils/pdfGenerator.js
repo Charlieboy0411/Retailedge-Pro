@@ -82,16 +82,16 @@ const generateCertificateHtml = async (cert, qrDataUrl) => {
 
   const trainerName = trainerSnap.name || cert.trainerName || cert.Trainer?.name || 'Aakash Verma';
   const trainerRole = trainerSnap.designation || 'Lead Trainer & Facilitator';
-  const trainerOrg = trainerSnap.organization || 'RetailEdge Pro';
+  const trainerOrg = trainerSnap.organization || 'RetailEdge PRO';
 
-  const signatoryName = authSnap.name || cert.signatoryName || 'Amit Kumar';
-  const signatoryDesignation = authSnap.designation || cert.signatoryDesignation || 'Program Manager';
+  const signatoryName = authSnap.name || cert.signatoryName || 'Mohit Tiku';
+  const signatoryDesignation = authSnap.designation || cert.signatoryDesignation || 'Managing Director';
   const signatoryOrg = authSnap.organization || 'Idonneous Marketing Services Pvt. Ltd.';
 
   // Signatures and Seal Base64 / Data URIs
-  const authSigDataUri = getAssetBase64(authSnap.signatureAsset || cert.authorizedSignatureUrl || '/assets/signatures/amit_kumar_signature.svg');
+  const authSigDataUri = getAssetBase64(authSnap.signatureAsset || cert.authorizedSignatureUrl || '/assets/signatures/mohit_tiku_signature.svg');
   const trainerSigDataUri = getAssetBase64(trainerSnap.signatureAsset || cert.trainerSignatureUrl || '/assets/signatures/aakash_verma_signature.svg');
-  const sealDataUri = getAssetBase64(sealSnap.asset || cert.companySealUrl || '/assets/seals/retailedge_pro_gold_seal.svg');
+  const sealDataUri = getAssetBase64(sealSnap.asset || cert.companySealUrl || '/assets/seals/idonneous_official_seal.svg');
   const logoBase64 = getAssetBase64('/logo.png');
 
   // Manual seal placement extraction
@@ -113,15 +113,16 @@ const generateCertificateHtml = async (cert, qrDataUrl) => {
     sealPositionStyle = `left: ${sealPos.x}%; top: ${sealPos.y}%; transform: translate(-50%, -50%); width: ${sealW}px; height: ${sealH}px;`;
   }
 
-  const participantName = cert.User?.name || cert.participantName || 'Rahul Sharma';
-  const programName = cert.Training?.title || cert.trainingTitle || cert.Project?.name || 'Product Knowledge – Cetaphil';
+  const isRevoked = String(cert.status).toUpperCase() === 'REVOKED';
+  const participantName = cert.User?.name || cert.participantName || 'Participant';
+  const programName = cert.Training?.title || cert.trainingTitle || cert.Project?.name || 'Retail Excellence Training Program';
   const programCategory = cert.Training?.category || 'Product Knowledge';
   const projectName = cert.Project?.name || 'Retail Training Initiative';
   const clientName = cert.Client?.name || (cert.Project?.Client ? cert.Project.Client.name : 'Enterprise Client');
   const issueDateFormatted = cert.issueDate 
     ? new Date(cert.issueDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-    : 'May 31, 2025';
-  const certId = cert.certificate_id || cert.id || 'RETP-2025-05-000245';
+    : new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const certId = cert.certificate_id || cert.id || 'REP-2026-CERT';
   
   const scoreNum = parseFloat(cert.assessmentScore) || 92;
   const score = `${scoreNum}%`;
@@ -133,7 +134,7 @@ const generateCertificateHtml = async (cert, qrDataUrl) => {
     <html lang="en">
     <head>
       <meta charset="UTF-8">
-      <title>RetailEdge Pro Certificate</title>
+      <title>RetailEdge PRO Certificate</title>
       <link rel="preconnect" href="https://fonts.googleapis.com">
       <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
       <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;800;900&family=Great+Vibes&family=Inter:wght@400;500;600;700;800;900&family=Montserrat:wght@500;600;700;800;900&display=swap" rel="stylesheet">
@@ -391,6 +392,13 @@ const generateCertificateHtml = async (cert, qrDataUrl) => {
           ${showSeal && sealDataUri ? `
             <div class="seal-medallion-badge" style="position: absolute; ${sealPositionStyle} z-index: 10; filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));">
               <img src="${sealDataUri}" style="width: 100%; height: 100%; object-fit: contain;" alt="Official Seal" />
+            </div>
+          ` : ''}
+
+          <!-- Revoked Historical Watermark -->
+          ${isRevoked ? `
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-28deg); font-family: 'Montserrat', 'Inter', sans-serif; font-size: 88px; font-weight: 900; color: rgba(239, 68, 68, 0.22); border: 7px solid rgba(239, 68, 68, 0.32); padding: 12px 64px; border-radius: 18px; text-transform: uppercase; letter-spacing: 12px; pointer-events: none; z-index: 25;">
+              REVOKED
             </div>
           ` : ''}
 

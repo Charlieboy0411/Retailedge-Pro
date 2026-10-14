@@ -24,7 +24,7 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, user
 
   // Step 2: Participants & Rules State
   const [minAttendance, setMinAttendance] = useState(80);
-  const [minScore, setMinScore] = useState(60);
+  const [minScore, setMinScore] = useState(70);
   const [minCompletion, setMinCompletion] = useState(100);
   const [evaluatedParticipants, setEvaluatedParticipants] = useState([]);
   const [selectedParticipantIds, setSelectedParticipantIds] = useState([]);
@@ -593,14 +593,14 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, user
                       <line x1="80" y1="0" x2="300" y2="220" stroke="#C5A059" strokeWidth="2"/>
                     </svg>
 
-                    {/* 3D Gold Ribbon Medallion Seal Badge */}
+                    {/* Official Idonneous Seal Badge */}
                     {includeCompanySeal && (
                       <div style={{ position: 'absolute', top: '14px', right: '44px', width: '80px', height: '96px', zIndex: 10, filter: 'drop-shadow(0 6px 12px rgba(0,0,0,0.35))' }}>
                         <img 
-                          src="/assets/seals/retailedge_pro_gold_seal.svg" 
-                          alt="Gold Seal Medallion" 
+                          src="/assets/seals/idonneous_official_seal.svg" 
+                          alt="Official Company Seal" 
                           style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                          onError={e => { e.target.src = '/assets/seals/idonneous_official_seal.svg'; }}
+                          onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
                         />
                       </div>
                     )}
@@ -697,14 +697,14 @@ export default function CertificateCreationWizard({ isOpen, onClose, token, user
                         <div style={{ width: '150px' }}>
                           <div style={{ height: '28px', display: 'flex', alignItems: 'center' }}>
                             <img 
-                              src="/assets/signatures/amit_kumar_signature.svg" 
+                              src="/assets/signatures/mohit_tiku_signature.svg" 
                               alt="Signature" 
                               style={{ maxHeight: '26px', maxWidth: '110px', objectFit: 'contain' }}
-                              onError={e => { e.target.src = '/assets/signatures/mohit_tiku_signature.svg'; }}
+                              onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
                             />
                           </div>
-                          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#081226', margin: '1px 0 0 0' }}>{signatoryName || 'Amit Kumar'}</div>
-                          <div style={{ fontSize: '0.56rem', fontWeight: 600, color: '#475569' }}>{signatoryDesignation || 'Program Manager'}</div>
+                          <div style={{ fontSize: '0.72rem', fontWeight: 800, color: '#081226', margin: '1px 0 0 0' }}>{signatoryName || 'Mohit Tiku'}</div>
+                          <div style={{ fontSize: '0.56rem', fontWeight: 600, color: '#475569' }}>{signatoryDesignation || 'Managing Director'}</div>
                           <div style={{ fontSize: '0.52rem', color: '#64748B' }}>Idonneous Marketing Services Pvt. Ltd.</div>
                         </div>
 

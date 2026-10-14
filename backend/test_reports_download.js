@@ -1,6 +1,9 @@
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 
+const path = require('path');
+const DOWNLOADS_DIR = path.join(__dirname, 'downloads');
+
 async function testReports() {
   const browser = await puppeteer.launch({ headless: true });
   const page = await browser.newPage();
@@ -9,7 +12,7 @@ async function testReports() {
   const client = await page.target().createCDPSession();
   await client.send('Page.setDownloadBehavior', {
     behavior: 'allow',
-    downloadPath: 'D:\\Desktop\\quizhive _ lms\\backend\\downloads',
+    downloadPath: DOWNLOADS_DIR,
   });
 
   // Track console errors
@@ -85,8 +88,8 @@ async function testReports() {
   await new Promise(r => setTimeout(r, 5000));
 
   // Check downloads directory
-  if (fs.existsSync('D:\\Desktop\\quizhive _ lms\\backend\\downloads')) {
-    const files = fs.readdirSync('D:\\Desktop\\quizhive _ lms\\backend\\downloads');
+  if (fs.existsSync(DOWNLOADS_DIR)) {
+    const files = fs.readdirSync(DOWNLOADS_DIR);
     console.log('Downloaded files in downloads directory:', files);
   } else {
     console.log('Downloads directory was not created.');

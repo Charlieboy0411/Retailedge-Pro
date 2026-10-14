@@ -222,7 +222,7 @@ router.get('/verify/:certificateId', verifyRateLimiter, async (req, res) => {
       expiryDate: cert.expiryDate,
       score: cert.assessmentScore ? `${cert.assessmentScore}%` : null,
       attendance: cert.attendancePercentage ? `${cert.attendancePercentage}%` : null,
-      issuingOrganization: 'Idonneous Marketing Services Pvt. Ltd. / RetailEdge Pro',
+      issuingOrganization: 'Idonneous Marketing Services Pvt. Ltd. / RetailEdge PRO',
       revocationReason: computedStatus === 'REVOKED' ? cert.revocationReason : null,
       revokedAt: computedStatus === 'REVOKED' ? cert.revokedAt : null,
       replacedById: computedStatus === 'REPLACED' ? cert.replacedById : null
@@ -674,7 +674,7 @@ router.put('/signatures-and-seals/:id/status', requireAuth, async (req, res) => 
 });
 
 // POST /api/certificates/generate - Issue an individual certificate with immutable snapshot
-router.post('/generate', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post(['/generate', '/'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const {
       userId,
@@ -700,8 +700,8 @@ router.post('/generate', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
       companySealUrl
     } = req.body;
 
-    if (!userId) {
-      return res.status(400).json({ error: 'Participant User ID is required.' });
+    if (!userId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(userId))) {
+      return res.status(400).json({ error: 'Valid Participant User UUID is required.' });
     }
 
     const user = await User.findByPk(userId);
@@ -735,7 +735,7 @@ router.post('/generate', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
       trainer: {
         name: trainerName || 'Aakash Verma',
         designation: 'Lead Trainer & Facilitator',
-        organization: 'RetailEdge Pro',
+        organization: 'RetailEdge PRO',
         signatureAsset: trainerSignatureUrl || '/assets/signatures/aakash_verma_signature.svg',
         enabled: includeTrainerSignature !== false
       },
@@ -814,7 +814,7 @@ router.post('/generate', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
 });
 
 // POST /api/certificates/bulk-generate - Issue certificates in bulk with immutable snapshots
-router.post('/bulk-generate', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const {
       participantIds,
@@ -874,7 +874,7 @@ router.post('/bulk-generate', requireAuth, requireRole(['Admin', 'Super Admin', 
         trainer: {
           name: trainerName || 'Aakash Verma',
           designation: 'Lead Trainer & Facilitator',
-          organization: 'RetailEdge Pro',
+          organization: 'RetailEdge PRO',
           signatureAsset: '/assets/signatures/aakash_verma_signature.svg',
           enabled: includeTrainerSignature !== false
         },
@@ -1096,8 +1096,58 @@ router.get('/:id', requireAuth, async (req, res) => {
       order: [['createdAt', 'ASC']]
     });
 
+    const certJson = cert.toJSON ? cert.toJSON() : cert;
+    if (!certJson.certificateSnapshot) {
+      certJson.certificateSnapshot = {
+        template: {
+          id: certJson.templateId || 'corporate',
+          version: certJson.templateVersion || '1.0',
+          name: certJson.templateId === 'retail_excellence' ? 'Retail Excellence' : (certJson.templateId === 'premium_achievement' ? 'Premium Achievement' : 'Corporate Excellence')
+        },
+        trainer: {
+          name: certJson.trainerName || 'Aakash Verma',
+          designation: 'Lead Trainer & Facilitator',
+          organization: 'RetailEdge PRO',
+          signatureAsset: certJson.trainerSignatureUrl || '/assets/signatures/aakash_verma_signature.svg',
+          enabled: certJson.includeTrainerSignature !== false
+        },
+        authorizedSignatory: {
+          name: certJson.signatoryName || 'Mohit Tiku',
+          designation: certJson.signatoryDesignation || 'Managing Director',
+          organization: 'Idonneous Marketing Services Pvt. Ltd.',
+          signatureAsset: certJson.authorizedSignatureUrl || '/assets/signatures/mohit_tiku_signature.svg',
+          version: 'V1',
+          enabled: true
+        },
+        companySeal: {
+          name: 'Idonneous Official Corporate Seal',
+          position: certJson.sealPosition || 'bottom-right',
+          asset: certJson.companySealUrl || '/assets/seals/idonneous_official_seal.svg',
+          enabled: certJson.includeCompanySeal !== false
+        },
+        companyLogo: {
+          asset: '/logo.png',
+          enabled: true
+        },
+        recipient: {
+          name: cert.User ? cert.User.name : 'Learner',
+          email: cert.User ? cert.User.email : 'learner@example.com',
+          employeeId: cert.User?.employee_id || 'N/A',
+          designation: cert.User?.designation || 'Learner'
+        },
+        metadata: {
+          generatedAt: certJson.createdAt,
+          score: certJson.assessmentScore,
+          attendance: certJson.attendancePercentage,
+          completion: certJson.completionPercentage,
+          batchName: certJson.batchName || 'Batch-01'
+        }
+      };
+    }
+
     res.json({
-      certificate: cert,
+      ...certJson,
+      certificate: certJson,
       auditLogs
     });
   } catch (error) {
@@ -1179,7 +1229,7 @@ router.get('/:id/download', async (req, res) => {
     }
 
     // 3. Security: If revoked, only admins/managers with valid tokens can download
-    if (cert.status === 'Revoked') {
+    if (['REVOKED', 'Revoked'].includes(cert.status)) {
       const isPrivileged = user && ['Admin', 'Super Admin', 'Program Manager', 'T&D Manager'].includes(user.role);
       if (!isPrivileged) {
         return res.status(403).json({ error: 'This certificate has been revoked and cannot be downloaded.' });
@@ -1221,6 +1271,14 @@ router.post('/:id/revoke', requireAuth, requireRole(['Admin', 'Super Admin', 'Pr
       return res.status(404).json({ error: 'Certificate not found' });
     }
 
+    if (req.user.role === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!cert.projectId || !accessibleProjectIds.includes(cert.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to revoke certificates outside your assigned projects.' });
+      }
+    }
+
     cert.status = 'REVOKED';
     cert.revocationReason = reason;
     cert.revokedAt = new Date();
@@ -1255,6 +1313,14 @@ router.post('/:id/reissue', requireAuth, requireRole(['Admin', 'Super Admin', 'P
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (!oldCert.projectId || !tdProjectIds.includes(oldCert.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to reissue certificates outside your capability portfolio.' });
+      }
+    }
+
+    if (req.user.role === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!oldCert.projectId || !accessibleProjectIds.includes(oldCert.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to reissue certificates outside your assigned projects.' });
       }
     }
 
@@ -1331,6 +1397,25 @@ router.post('/:id/email', requireAuth, async (req, res) => {
       return res.status(404).json({ error: 'Certificate not found' });
     }
 
+    // Strict Authorization check for email dispatch
+    const userRole = req.user.role;
+    if (!['Admin', 'Super Admin'].includes(userRole)) {
+      const isOwner = cert.userId === req.user.id;
+      if (['Employee', 'Learner', 'Student', 'Supervisor'].includes(userRole)) {
+        if (!isOwner) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to email this certificate.' });
+        }
+      } else {
+        const intelligenceService = require('../utils/projectIntelligenceService');
+        const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+        const isProjectAuthorized = cert.projectId && accessibleProjectIds.includes(cert.projectId);
+        const isTrainer = cert.trainerId === req.user.id;
+        if (!isOwner && !isProjectAuthorized && !isTrainer) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission to email this certificate.' });
+        }
+      }
+    }
+
     const recipientEmail = cert.User?.email;
     if (!recipientEmail) {
       return res.status(400).json({ error: 'Participant does not have a valid email address.' });
@@ -1359,14 +1444,14 @@ router.post('/:id/email', requireAuth, async (req, res) => {
     const verificationUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/verify/${certId}`;
 
     await transporter.sendMail({
-      from: '"RetailEdge Pro Certifications" <certifications@retailedgepro.com>',
+      from: '"RetailEdge PRO Certifications" <certifications@retailedgepro.com>',
       to: recipientEmail,
-      subject: `Congratulations! Your RetailEdge Pro Training Certificate (${certId})`,
+      subject: `Congratulations! Your RetailEdge PRO Training Certificate (${certId})`,
       html: `
         <div style="font-family: 'Inter', sans-serif; padding: 24px; background: #F8FAFC; color: #0F172A; max-width: 600px; margin: 0 auto; border-radius: 12px; border: 1px solid #E2E8F0;">
           <h2 style="color: #2563EB; margin-top: 0;">🎓 Official Certification Conferred</h2>
           <p>Hi <strong>${cert.User?.name || 'Participant'}</strong>,</p>
-          <p>Congratulations on successfully completing the training program requirements for <strong>${cert.Project?.name || 'RetailEdge Pro Training'}</strong>.</p>
+          <p>Congratulations on successfully completing the training program requirements for <strong>${cert.Project?.name || 'RetailEdge PRO Training'}</strong>.</p>
           <div style="background: #FFFFFF; padding: 18px; border-radius: 8px; border: 1px solid #E2E8F0; margin: 20px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Certificate Details:</strong></p>
             <p style="margin: 4px 0;">● <strong>Certificate ID:</strong> ${certId}</p>
@@ -1375,7 +1460,7 @@ router.post('/:id/email', requireAuth, async (req, res) => {
           </div>
           <p>Your official high-resolution PDF certificate is attached to this email.</p>
           <hr style="border: 0; border-top: 1px solid #E2E8F0; margin: 20px 0;" />
-          <p style="font-size: 0.75rem; color: #94A3B8;">RetailEdge Pro by Idonneous Marketing Services Pvt. Ltd.</p>
+          <p style="font-size: 0.75rem; color: #94A3B8;">RetailEdge PRO by Idonneous Marketing Services Pvt. Ltd.</p>
         </div>
       `,
       attachments: [

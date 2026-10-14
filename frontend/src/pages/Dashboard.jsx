@@ -10,6 +10,7 @@ import AdminDashboard from '../components/AdminDashboard';
 import TrainerDashboard from '../components/TrainerDashboard';
 import SupervisorDashboard from '../components/SupervisorDashboard';
 import ClientCockpit from '../components/ClientCockpit';
+import EmployeeDashboard from '../components/EmployeeDashboard';
 import CalendarWidget from '../components/CalendarWidget';
 import { copyTextToClipboard } from '../utils/clipboard';
 
@@ -372,50 +373,14 @@ export default function Dashboard() {
 
   if (['Admin', 'Super Admin'].includes(user?.role)) {
     return (
-      <div className="view-section active">
-        <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0', gap: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-            <div style={{ background: 'var(--bg-glass)', padding: '4px 10px', borderRadius: '8px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', alignItems: 'center', height: '38px', flexShrink: 0 }}>
-              <img src="/logo.png" alt="Idonneous Logo" style={{ height: '22px', objectFit: 'contain' }} />
-            </div>
-            <div>
-              <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>
-                ⚙️ Admin Control Center
-              </h2>
-              <p className="section-desc" style={{ margin: '4px 0 0' }}>
-                Welcome, <strong>{user?.name || 'Admin'}</strong>! Full platform management and analytics.
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={async () => {
-              setSyncing(true);
-              await fetchAllData(true);
-              setSyncing(false);
-            }}
-            disabled={syncing || loading}
-            className="btn btn-secondary"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '8px 16px',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              fontWeight: 600,
-              fontSize: '0.82rem',
-              height: '38px',
-            }}
-          >
-            <RefreshCw size={15} style={{ animation: syncing ? 'spin 1s linear infinite' : 'none' }} />
-            Sync Live Data
-          </button>
-        </div>
+      <div className="view-section active" style={{ padding: 0, background: 'transparent' }}>
         <AdminDashboard
+          token={token}
           allUsers={usersList}
           projectsList={projects}
           reports={quizzes}
           syncTrigger={syncTrigger}
+          onSync={() => fetchAllData(true)}
         />
       </div>
     );
@@ -448,6 +413,14 @@ export default function Dashboard() {
     return (
       <div className="view-section active">
         <ClientCockpit />
+      </div>
+    );
+  }
+
+  if (user?.role === 'Employee') {
+    return (
+      <div className="view-section active" style={{ padding: 0, background: 'transparent' }}>
+        <EmployeeDashboard />
       </div>
     );
   }

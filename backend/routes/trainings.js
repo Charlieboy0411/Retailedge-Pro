@@ -658,51 +658,78 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
 const JitsiAttendance = require('../models/JitsiAttendance');
 const JitsiInterval = require('../models/JitsiInterval');
 
-// POST /api/trainings/:id/jitsi-event - Handle join/leave/heartbeat events
-router.post('/:id/jitsi-event', async (req, res) => {
+// POST /api/trainings/:id/jitsi-event - Securely handle join/leave/heartbeat events
+router.post('/:id/jitsi-event', requireAuth, async (req, res) => {
   try {
     const trainingId = req.params.id;
     const {
       event, // 'join' | 'leave' | 'heartbeat'
-      participantName,
-      employeeId,
-      userId,
       jitsiParticipantId,
       scheduledDurationMinutes = 60
     } = req.body;
+
+    if (!['join', 'leave', 'heartbeat'].includes(event)) {
+      return res.status(400).json({ error: 'Invalid telemetry event type. Supported events: join, leave, heartbeat' });
+    }
 
     const training = await Training.findByPk(trainingId);
     if (!training) {
       return res.status(404).json({ error: 'Training not found' });
     }
 
-    // Non-authoritative Observer Mode for Supervisor & Client:
-    // Observer presence must NEVER create, alter, or inflate participant attendance records
-    if (userId || ['Supervisor', 'Client'].includes(req.body.role)) {
-      const User = require('../models/User');
-      const Role = require('../models/Role');
-      let userRole = req.body.role;
-      if (!userRole && userId) {
-        const u = await User.findByPk(userId, { include: [Role] });
-        userRole = u?.Role?.role_name;
+    // 1. Authoritative Identity Resolution from Authenticated Token
+    const User = require('../models/User');
+    const Role = require('../models/Role');
+    const authUser = await User.findByPk(req.user.id, {
+      include: [{ model: Role, attributes: ['id', 'role_name'] }]
+    });
+
+    if (!authUser) {
+      return res.status(401).json({ error: 'Unauthorized: Authenticated user not found' });
+    }
+
+    const rawRole = req.user.role || authUser.Role?.role_name || '';
+    const userRole = String(rawRole).trim();
+    const normalizedRole = userRole.toLowerCase();
+    const isAdmin = ['admin', 'super admin', 'superadmin'].includes(normalizedRole);
+    const isObserver = ['supervisor', 'client'].includes(normalizedRole);
+
+    // Prevent identity impersonation: Client payload cannot forge a different userId
+    if (req.body.userId && String(req.body.userId) !== String(req.user.id)) {
+      return res.status(403).json({ error: 'Forbidden: You cannot submit attendance telemetry for another user' });
+    }
+
+    // 2. Strict Project Scoping / Authorization
+    if (!isAdmin) {
+      if (!training.projectId) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission for this training session' });
       }
-      if (['Supervisor', 'Client'].includes(userRole)) {
-        return res.json({
-          message: `${userRole} observer presence recorded (non-authoritative; zero attendance mutation)`,
-          observer: true,
-          attendancePercentage: 0
-        });
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!Array.isArray(accessibleProjectIds) || !accessibleProjectIds.includes(training.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission for this training session' });
       }
     }
+
+    // 3. Non-authoritative Observer Mode for Supervisor & Client:
+    // Observer presence must NEVER create, alter, or inflate participant attendance records
+    if (isObserver) {
+      return res.json({
+        message: `${userRole} observer presence recorded (non-authoritative; zero attendance mutation)`,
+        observer: true,
+        attendancePercentage: null
+      });
+    }
+
+    // 4. Authoritative Participant Binding
+    const userId = authUser.id;
+    const participantName = authUser.name;
+    const employeeId = authUser.employee_id || null;
 
     let attendance = await JitsiAttendance.findOne({
       where: {
         trainingId,
-        [require('sequelize').Op.or]: [
-          ...(userId ? [{ userId }] : []),
-          ...(employeeId ? [{ employeeId }] : []),
-          { participantName: participantName || 'Guest' }
-        ]
+        userId
       }
     });
 
@@ -713,9 +740,9 @@ router.post('/:id/jitsi-event', async (req, res) => {
         attendance = await JitsiAttendance.create({
           trainingId,
           projectId: training.projectId,
-          userId: userId || null,
-          participantName: participantName || 'Guest Attendee',
-          employeeId: employeeId || null,
+          userId,
+          participantName,
+          employeeId,
           jitsiParticipantId: jitsiParticipantId || null,
           scheduledDurationMinutes,
           totalAttendedMinutes: 0,
@@ -726,7 +753,21 @@ router.post('/:id/jitsi-event', async (req, res) => {
           lastHeartbeatAt: now
         });
       } else {
-        // Rejoin event
+        // Rejoin event - check if an open interval already exists (idempotency guard)
+        const openInterval = await JitsiInterval.findOne({
+          where: { jitsiAttendanceId: attendance.id, leftAt: null }
+        });
+
+        if (openInterval) {
+          // Open interval already active - treat as idempotent heartbeat refresh
+          await attendance.update({
+            status: 'Online',
+            lastHeartbeatAt: now,
+            ...(jitsiParticipantId ? { jitsiParticipantId } : {})
+          });
+          return res.json({ success: true, attendance, message: 'Already joined (idempotent)' });
+        }
+
         const rejoins = (attendance.rejoinCount || 0) + 1;
         await attendance.update({
           status: 'Online',
@@ -736,11 +777,16 @@ router.post('/:id/jitsi-event', async (req, res) => {
         });
       }
 
-      // Create new open interval
-      await JitsiInterval.create({
-        jitsiAttendanceId: attendance.id,
-        joinedAt: now
+      // Create new open interval only if no open interval exists
+      const existingOpen = await JitsiInterval.findOne({
+        where: { jitsiAttendanceId: attendance.id, leftAt: null }
       });
+      if (!existingOpen) {
+        await JitsiInterval.create({
+          jitsiAttendanceId: attendance.id,
+          joinedAt: now
+        });
+      }
 
     } else if (event === 'leave') {
       if (attendance) {

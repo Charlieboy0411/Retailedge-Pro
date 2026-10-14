@@ -243,7 +243,7 @@ async function getTDCapabilityCockpitMetrics(tdUser, targetProjectId = 'all', ta
 
   const certWhere = {
     projectId: { [Op.in]: projectIds },
-    status: { [Op.in]: ['VALID', 'ISSUED', 'Active', 'Valid'] }
+    status: { [Op.in]: ['VALID', 'ISSUED'] }
   };
   if (resolvedRange) certWhere.issueDate = resolvedRange.dateOnlyFilter;
 
@@ -696,10 +696,11 @@ async function getTDParticipants(tdUser, targetProjectId = 'all', targetSubProje
   };
 
   if (search && search.trim() !== '') {
+    const likeOp = sequelize.getDialect() === 'postgres' ? Op.iLike : Op.like;
     whereClause[Op.or] = [
-      { name: { [Op.iLike || Op.like]: `%${search.trim()}%` } },
-      { employee_id: { [Op.iLike || Op.like]: `%${search.trim()}%` } },
-      { email: { [Op.iLike || Op.like]: `%${search.trim()}%` } }
+      { name: { [likeOp]: `%${search.trim()}%` } },
+      { employee_id: { [likeOp]: `%${search.trim()}%` } },
+      { email: { [likeOp]: `%${search.trim()}%` } }
     ];
   }
 
@@ -729,7 +730,7 @@ async function getTDParticipants(tdUser, targetProjectId = 'all', targetSubProje
     const certWhere = {
       userId: { [Op.in]: userIds },
       projectId: { [Op.in]: projectIds },
-      status: { [Op.in]: ['VALID', 'ISSUED', 'Active', 'Valid'] }
+      status: { [Op.in]: ['VALID', 'ISSUED'] }
     };
     if (resolvedRange) certWhere.issueDate = resolvedRange.dateOnlyFilter;
 

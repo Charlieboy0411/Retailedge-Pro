@@ -323,14 +323,8 @@ export default function PMDashboard() {
         headers: { Authorization: `Bearer ${token}` }
       });
       const details = res.data;
-      if (!details.participants || details.participants.length === 0) {
-        details.participants = [
-          { id: 'mp1', name: 'Rahul Sharma', employeeId: 'EMP101', score: `${Math.round(details.totalQuestions * 0.8)} / ${details.totalQuestions}`, percentage: '80%', timeSpent: '45s', storeName: 'Store #101 (Delhi)' },
-          { id: 'mp2', name: 'Neha Singh', employeeId: 'EMP102', score: `${details.totalQuestions} / ${details.totalQuestions}`, percentage: '100%', timeSpent: '38s', storeName: 'Store #205 (Mumbai)' },
-          { id: 'mp3', name: 'Amit Kumar', employeeId: 'EMP103', score: `${Math.round(details.totalQuestions * 0.6)} / ${details.totalQuestions}`, percentage: '60%', timeSpent: '50s', storeName: 'Store #312 (Bangalore)' },
-          { id: 'mp4', name: 'Priya Patel', employeeId: 'EMP104', score: `${Math.round(details.totalQuestions * 0.8)} / ${details.totalQuestions}`, percentage: '80%', timeSpent: '42s', storeName: 'Store #418 (Kolkata)' },
-          { id: 'mp5', name: 'Suresh Yadav', employeeId: 'EMP105', score: `${Math.round(details.totalQuestions * 0.6)} / ${details.totalQuestions}`, percentage: '60%', timeSpent: '55s', storeName: 'Store #101 (Delhi)' }
-        ];
+      if (!details.participants) {
+        details.participants = [];
       }
       setSelectedReportDetails(details);
     } catch (err) {
@@ -373,9 +367,9 @@ export default function PMDashboard() {
         'Avg Score': e.avgScore,
         'Attendance Dates': e.dates
       }));
-      const ws1 = XLSX.utils.json_to_sheet(summaryRows.length > 0 ? summaryRows : [
-        { 'Employee ID': 'EMP101', 'Name': 'Rahul Sharma', 'Email': 'rahul@example.com', 'Project': 'General', 'Role': 'Employee', 'Total Quiz Attempts': 3, 'Avg Score': '91%', 'Attendance Dates': '2025-01-15, 2025-02-10, 2025-03-05' }
-      ]);
+      const ws1 = summaryRows.length > 0
+        ? XLSX.utils.json_to_sheet(summaryRows)
+        : XLSX.utils.json_to_sheet([{ 'Status': 'No quiz attendance records found' }]);
       XLSX.utils.book_append_sheet(wb, ws1, 'User Attendance Summary');
 
       // Sheet 2: Date-wise breakdown (one row per date per user)
@@ -394,9 +388,9 @@ export default function PMDashboard() {
           });
         });
       });
-      const ws2 = XLSX.utils.json_to_sheet(dateWiseRows.length > 0 ? dateWiseRows : [
-        { 'Employee ID': 'EMP101', 'Employee Name': 'Rahul Sharma', 'Project': 'General', 'Role': 'Employee', 'Quiz Date': '2025-01-15', 'Avg Score': '91%', 'Status': 'Present' }
-      ]);
+      const ws2 = dateWiseRows.length > 0
+        ? XLSX.utils.json_to_sheet(dateWiseRows)
+        : XLSX.utils.json_to_sheet([{ 'Status': 'No date-wise attendance records found' }]);
       XLSX.utils.book_append_sheet(wb, ws2, 'Date-wise Attendance');
 
       downloadWorkbook(XLSX, wb, `PM_Quiz_Attendance_${new Date().toISOString().split('T')[0]}.xlsx`);
@@ -1615,6 +1609,80 @@ export default function PMDashboard() {
               </button>
             )}
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (activeRole === 'Program Manager') {
+    return (
+      <div className="pm-workspace-page" style={{
+        minHeight: '100%',
+        background: 'var(--re-bg, #F6F8FC)',
+        padding: '24px 32px 56px',
+        color: 'var(--re-text, #0F172A)'
+      }}>
+        <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+          <PMDashboardView
+            projectUsers={projectUsersFiltered}
+            projectsList={projectsList}
+            reports={reportsFiltered}
+            attendanceData={{
+              quizAttendance: filteredData.quizAttendance,
+              trainingAttendance: filteredData.trainingAttendance
+            }}
+            onExportExcel={exportExcel}
+            onExportPPT={exportPPT}
+            onExportPMExcel={exportPMExecutiveExcel}
+            onExportPMPPT={exportPMExecutivePPT}
+            manualMetrics={manualMetrics}
+            selectedProjectId={selectedProjectId}
+            onSelectProject={(pId) => {
+              setSearchParams(prev => {
+                const next = new URLSearchParams(prev);
+                if (pId === 'all') next.delete('projectId');
+                else next.set('projectId', pId);
+                return next;
+              });
+              setSelectedSubProjectId('all');
+            }}
+            selectedSubProjectId={selectedSubProjectId}
+            onSelectSubProject={(spId) => setSelectedSubProjectId(spId)}
+            dateRange={dateRange}
+            onSelectDateRange={(r) => setDateRange(r)}
+            handleDownloadSessionExcel={handleDownloadSessionExcel}
+            syncTrigger={syncTrigger}
+            intelligenceData={intelligenceData}
+            token={token}
+            onSync={() => fetchAll(true)}
+            syncing={loading || syncing}
+            viewMode={viewMode}
+            setViewMode={setViewMode}
+            detailedRecordsProps={{
+              projectUsers: projectUsersFiltered,
+              projectsList,
+              reports: reportsFiltered,
+              attendanceData: {
+                quizAttendance: filteredData.quizAttendance,
+                trainingAttendance: filteredData.trainingAttendance
+              },
+              intelligenceData,
+              onExportExcel: exportExcel,
+              onExportPPT: exportPPT,
+              onExportPMExcel: exportPMExecutiveExcel,
+              onExportPMPPT: exportPMExecutivePPT,
+              selectedProjectId,
+              selectedSubProjectId,
+              dateRange,
+              token,
+              projectInfo,
+              fetchSessionDetails,
+              fetchingDetails,
+              handleDownloadSessionPPT,
+              handleDownloadSessionExcel,
+              user
+            }}
+          />
         </div>
       </div>
     );

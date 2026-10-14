@@ -5,9 +5,15 @@ import {
   AlertTriangle, FileText, Download, Star, Shield,
   ClipboardList, Trophy, CheckCircle2, ChevronRight,
   Plus, Eye, MessageSquare, RefreshCw, X, Calendar,
-  ArrowUpRight, Filter, Search
+  ArrowUpRight, Filter, Search, BarChart3, HelpCircle,
+  Activity, Check
 } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
+import PageHeader from './ui/PageHeader';
+import KpiCard from './ui/KpiCard';
+import StatusBadge from './ui/StatusBadge';
+import EmptyState from './ui/EmptyState';
+import LoadingSkeleton from './ui/LoadingSkeleton';
 
 export default function SupervisorDashboard() {
   const { token, user } = useContext(AuthContext);
@@ -144,641 +150,1144 @@ export default function SupervisorDashboard() {
     return true;
   });
 
+  // Calculate cohort breakdowns
+  const atRiskCount = teamRoster.filter(e => e.coachingStatus === 'At Risk').length;
+  const needsReviewCount = teamRoster.filter(e => e.coachingStatus === 'Needs Review').length;
+  const onTrackCount = teamRoster.filter(e => e.coachingStatus === 'On Track').length;
+  const lowAttendanceCount = teamRoster.filter(e => e.attendancePercentage < 80).length;
+  const certReadyCount = teamRoster.filter(e => e.certificationStatus === 'Eligible').length;
+
+  const getInitials = (name) => {
+    if (!name) return 'TM';
+    const parts = name.trim().split(' ');
+    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+    return parts[0].substring(0, 2).toUpperCase();
+  };
+
   return (
-    <div className="supervisor-cockpit" style={{ display: 'flex', flexDirection: 'column', gap: '24px', paddingBottom: '40px' }}>
-      
-      {/* ─── COCKPIT HEADER ─── */}
-      <div style={{
-        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        flexWrap: 'wrap', gap: '16px', background: 'var(--bg-glass)',
-        padding: '24px', borderRadius: '16px', border: '1px solid var(--border-glass)',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.25)'
-      }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{
-              background: 'rgba(56, 189, 248, 0.12)', color: '#38BDF8',
-              border: '1px solid rgba(56, 189, 248, 0.25)', padding: '4px 10px',
-              borderRadius: '20px', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.04em'
-            }}>
-              🎯 FIELD SUPERVISOR COCKPIT
-            </span>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>•</span>
-            <span style={{ fontSize: '0.85rem', color: '#10B981', fontWeight: 600 }}>Active Roster Live</span>
-          </div>
-          <h1 style={{ margin: 0, fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>
-            Welcome back, {user?.name || 'Supervisor'}!
-          </h1>
-          <p style={{ margin: 0, fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-            Operational Command — Monitor Team Readiness, Drive Performance & Remediate Learning Gaps
-          </p>
-        </div>
+    <div className="supervisor-workspace-page" style={{
+      minHeight: '100%',
+      background: 'var(--re-bg, #F6F8FC)',
+      padding: '24px 32px 56px',
+      color: 'var(--re-text, #0F172A)'
+    }}>
+      <div style={{ maxWidth: '1440px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button
-            onClick={fetchDashboardData}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px',
-              padding: '8px 16px', borderRadius: '8px', border: '1px solid var(--border-glass)',
-              background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)',
-              cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600
-            }}
-          >
-            <RefreshCw size={15} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
-            <span>Refresh</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ─── SECTION 1: TEAM SNAPSHOT (8 OPERATIONAL KPIS) ─── */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-        gap: '16px'
-      }}>
-        {/* KPI 1: Team Members */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Direct Reports
-            </span>
-            <Users size={18} color="#38BDF8" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-            {loading ? '...' : metrics.teamMembers}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Assigned to your direct team</span>
-        </div>
-
-        {/* KPI 2: Active Learners */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Active Learners
-            </span>
-            <TrendingUp size={18} color="#10B981" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#10B981' }}>
-            {loading ? '...' : metrics.activeLearners}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Engaged in curriculum this cycle</span>
-        </div>
-
-        {/* KPI 3: Training Completion */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Module Completion
-            </span>
-            <CheckCircle size={18} color="#A855F7" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-            {loading ? '...' : `${metrics.trainingCompletion}%`}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Modules finished by cohort</span>
-        </div>
-
-        {/* KPI 4: Attendance Rate */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Attendance Rate
-            </span>
-            <ClipboardList size={18} color="#2563EB" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: metrics.attendanceRate >= 80 ? '#10B981' : '#F59E0B' }}>
-            {loading ? '...' : `${metrics.attendanceRate}%`}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {metrics.attendanceRate >= 80 ? '✓ Meeting ≥80% benchmark' : '⚠️ Below 80% benchmark'}
-          </span>
-        </div>
-
-        {/* KPI 5: Average Assessment Score */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Average Quiz Score
-            </span>
-            <Star size={18} color="#EAB308" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-            {loading ? '...' : `${metrics.averageAssessmentScore}%`}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            {metrics.averageAssessmentScore >= 70 ? '✓ Passing benchmark ≥70%' : '⚠️ Under 70% passing standard'}
-          </span>
-        </div>
-
-        {/* KPI 6: Assessment Pass Rate */}
-        <div className="kpi-card" style={{
-          background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              Pass Rate (≥70%)
-            </span>
-            <Trophy size={18} color="#10B981" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-            {loading ? '...' : `${metrics.assessmentPassRate}%`}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Attempts meeting passing threshold</span>
-        </div>
-
-        {/* KPI 7: Certification Ready */}
-        <div className="kpi-card" style={{
-          background: 'rgba(16, 185, 129, 0.08)', border: '1px solid rgba(16, 185, 129, 0.25)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#10B981', textTransform: 'uppercase' }}>
-              Certification Ready
-            </span>
-            <Award size={18} color="#10B981" />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: '#10B981' }}>
-            {loading ? '...' : metrics.certificationReady}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: '#10B981' }}>Att ≥80% & Score ≥70% (Not certified)</span>
-        </div>
-
-        {/* KPI 8: At-Risk Learners */}
-        <div className="kpi-card" style={{
-          background: metrics.atRiskLearners > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--bg-glass)',
-          border: metrics.atRiskLearners > 0 ? '1px solid rgba(239, 68, 68, 0.3)' : '1px solid var(--border-glass)',
-          borderRadius: '12px', padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: '8px'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-secondary)', textTransform: 'uppercase' }}>
-              At-Risk Learners
-            </span>
-            <AlertTriangle size={18} color={metrics.atRiskLearners > 0 ? '#EF4444' : '#64748B'} />
-          </div>
-          <div style={{ fontSize: '1.9rem', fontWeight: 900, color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-primary)' }}>
-            {loading ? '...' : metrics.atRiskLearners}
-          </div>
-          <span style={{ fontSize: '0.75rem', color: metrics.atRiskLearners > 0 ? '#EF4444' : 'var(--text-muted)' }}>
-            Score &lt;60% OR Attendance &lt;80%
-          </span>
-        </div>
-      </div>
-
-      {/* ─── SECTION 2: ATTENTION REQUIRED (TRIAGE BANNER & FILTERS) ─── */}
-      <div style={{
-        background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-        borderRadius: '16px', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '16px'
-      }}>
-        {/* Operational Boundary Notice */}
-        <div style={{
-          background: 'rgba(37, 99, 235, 0.08)', border: '1px solid rgba(37, 99, 235, 0.25)',
-          borderRadius: '10px', padding: '12px 18px', display: 'flex', justifyContent: 'space-between',
-          alignItems: 'center', flexWrap: 'wrap', gap: '12px', fontSize: '0.82rem'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#93C5FD' }}>
-            <Shield size={16} color="#60A5FA" />
-            <span><strong>COACHING STATUS:</strong> &lt;60% At Risk • 60–74% Needs Review • ≥75% On Track</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#34D399' }}>
-            <Award size={16} color="#34D399" />
-            <span><strong>CERTIFICATION ELIGIBILITY:</strong> Attendance ≥80% AND Passing Score ≥70%</span>
-          </div>
-        </div>
-
-        {/* Filters & Search */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-            {[
-              { id: 'ALL', label: `All Team (${teamRoster.length})` },
-              { id: 'AT_RISK', label: `At Risk (${teamRoster.filter(e => e.coachingStatus === 'At Risk').length})` },
-              { id: 'NEEDS_REVIEW', label: `Needs Review (${teamRoster.filter(e => e.coachingStatus === 'Needs Review').length})` },
-              { id: 'ON_TRACK', label: `On Track (${teamRoster.filter(e => e.coachingStatus === 'On Track').length})` },
-              { id: 'LOW_ATTENDANCE', label: `Low Attendance (<80%)` },
-              { id: 'CERT_READY', label: `Cert Ready (${teamRoster.filter(e => e.certificationStatus === 'Eligible').length})` }
-            ].map(pill => (
+        {/* ─── 1. PAGE HEADER (ENTERPRISE OPERATIONAL STANDARD) ─── */}
+        <PageHeader
+          eyebrow="SUPERVISOR CENTER"
+          badge={user?.name || 'Supervisor'}
+          title="Team Performance & Coaching"
+          subtitle="Monitor team readiness, identify performance gaps and drive focused follow-up."
+          actions={
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
               <button
-                key={pill.id}
-                className="filter-pill"
-                onClick={() => setSelectedFilter(pill.id)}
+                id="supervisor-refresh-btn"
+                onClick={fetchDashboardData}
                 style={{
-                  padding: '6px 14px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700,
-                  cursor: 'pointer', transition: 'all 0.15s',
-                  background: selectedFilter === pill.id ? 'var(--primary)' : 'rgba(255, 255, 255, 0.05)',
-                  color: selectedFilter === pill.id ? '#FFFFFF' : 'var(--text-secondary)',
-                  border: selectedFilter === pill.id ? '1px solid var(--primary)' : '1px solid var(--border-glass)'
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '9px 16px',
+                  borderRadius: '9px',
+                  border: '1px solid var(--re-border, #E2E8F0)',
+                  background: '#FFFFFF',
+                  color: 'var(--re-text, #0F172A)',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  boxShadow: 'var(--re-shadow-sm, 0 1px 2px 0 rgba(15, 23, 42, 0.05))',
+                  transition: 'all 0.15s'
                 }}
               >
-                {pill.label}
-              </button>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: 'rgba(255, 255, 255, 0.05)', padding: '6px 14px', borderRadius: '8px', border: '1px solid var(--border-glass)' }}>
-            <Search size={15} color="var(--text-muted)" />
-            <input
-              type="text"
-              placeholder="Search team member..."
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              style={{ background: 'transparent', border: 'none', color: 'var(--text-primary)', outline: 'none', fontSize: '0.85rem' }}
-            />
-          </div>
-        </div>
-
-        {/* ─── SECTION 3: TEAM PERFORMANCE MATRIX TABLE ─── */}
-        <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-            <thead>
-              <tr style={{ background: 'rgba(255, 255, 255, 0.03)', borderBottom: '1px solid var(--border-glass)' }}>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Employee</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Designation</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Training Progress</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Attendance %</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Assessment Score</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Coaching Status</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>Certification</th>
-                <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700, textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRoster.length === 0 ? (
-                <tr>
-                  <td colSpan={8} style={{ padding: '36px 16px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                    No team members match the selected filter.
-                  </td>
-                </tr>
-              ) : (
-                filteredRoster.map(emp => {
-                  const isAtRisk = emp.coachingStatus === 'At Risk';
-                  const isNeedsReview = emp.coachingStatus === 'Needs Review';
-
-                  return (
-                    <tr key={emp.id} style={{ borderBottom: '1px solid var(--border-glass)', transition: 'background 0.15s' }}>
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{emp.name}</span>
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.employee_id} • {emp.email}</span>
-                        </div>
-                      </td>
-
-                      <td style={{ padding: '14px 16px', color: 'var(--text-secondary)' }}>
-                        {emp.designation}
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <div style={{ width: '80px', height: '6px', background: 'rgba(255,255,255,0.1)', borderRadius: '3px', overflow: 'hidden' }}>
-                            <div style={{ width: `${emp.trainingProgress}%`, height: '100%', background: '#38BDF8', borderRadius: '3px' }} />
-                          </div>
-                          <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{emp.trainingProgress}%</span>
-                        </div>
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{
-                          fontWeight: 700,
-                          color: emp.attendancePercentage >= 80 ? '#10B981' : '#EF4444'
-                        }}>
-                          {emp.attendancePercentage}%
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{
-                          fontWeight: 700,
-                          color: emp.assessmentScore >= 70 ? '#10B981' : (emp.assessmentScore >= 60 ? '#F59E0B' : '#EF4444')
-                        }}>
-                          {emp.assessmentScore}%
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        <span style={{
-                          padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 800,
-                          background: isAtRisk ? 'rgba(239, 68, 68, 0.15)' : (isNeedsReview ? 'rgba(245, 158, 11, 0.15)' : 'rgba(16, 185, 129, 0.15)'),
-                          color: isAtRisk ? '#EF4444' : (isNeedsReview ? '#F59E0B' : '#10B981'),
-                          border: isAtRisk ? '1px solid rgba(239, 68, 68, 0.3)' : (isNeedsReview ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(16, 185, 129, 0.3)')
-                        }}>
-                          {emp.coachingStatus}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '14px 16px' }}>
-                        {emp.certificationStatus === 'Certified' ? (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: '#10B981', fontWeight: 700, fontSize: '0.8rem' }}>
-                            <CheckCircle2 size={14} /> Certified
-                          </span>
-                        ) : emp.certificationStatus === 'Eligible' ? (
-                          <span style={{
-                            padding: '3px 8px', borderRadius: '6px', fontSize: '0.75rem', fontWeight: 700,
-                            background: 'rgba(56, 189, 248, 0.15)', color: '#38BDF8', border: '1px solid rgba(56, 189, 248, 0.3)'
-                          }}>
-                            Eligible
-                          </span>
-                        ) : (
-                          <span style={{ color: 'var(--text-muted)', fontSize: '0.78rem' }}>In Progress</span>
-                        )}
-                      </td>
-
-                      <td style={{ padding: '14px 16px', textAlign: 'right' }}>
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
-                          <button
-                            onClick={() => handleOpen360(emp.id)}
-                            title="View Participant 360"
-                            style={{
-                              padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border-glass)',
-                              background: 'rgba(255, 255, 255, 0.05)', color: 'var(--text-primary)',
-                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.78rem'
-                            }}
-                          >
-                            <Eye size={13} /> 360
-                          </button>
-                          <button
-                            onClick={() => handleOpenCoachModal(emp)}
-                            className="btn-coach"
-                            style={{
-                              padding: '5px 12px', borderRadius: '6px', border: 'none',
-                              background: isAtRisk ? '#EF4444' : 'var(--primary)', color: '#FFFFFF',
-                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px',
-                              fontSize: '0.78rem', fontWeight: 700
-                            }}
-                          >
-                            <MessageSquare size={13} /> Coach
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ─── SECTION 4: COACHING & FOLLOW-UP LOG ─── */}
-      <div style={{
-        background: 'var(--bg-glass)', border: '1px solid var(--border-glass)',
-        borderRadius: '16px', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: '14px'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              Coaching & Remediation Follow-up Log
-            </h3>
-            <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-              Operational tracking of feedback sessions, knowledge gap follow-ups, and scheduled refreshers
-            </p>
-          </div>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-            {coachingLogs.length} Records Logged
-          </span>
-        </div>
-
-        {coachingLogs.length === 0 ? (
-          <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            No coaching logs recorded yet. Click "Coach" on any employee in the roster above to record a remediation note.
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
-            {coachingLogs.slice(0, 6).map(log => {
-              const emp = teamRoster.find(e => e.id === log.employeeId);
-              return (
-                <div key={log.id} style={{
-                  background: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-glass)',
-                  borderRadius: '10px', padding: '14px', display: 'flex', flexDirection: 'column', gap: '8px'
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.88rem' }}>
-                      {emp ? emp.name : 'Team Member'}
-                    </span>
-                    <span style={{
-                      fontSize: '0.72rem', fontWeight: 700, padding: '2px 8px', borderRadius: '10px',
-                      background: log.followUpStatus === 'Resolved' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                      color: log.followUpStatus === 'Resolved' ? '#10B981' : '#F59E0B'
-                    }}>
-                      {log.followUpStatus}
-                    </span>
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    <strong>Issue:</strong> {log.issue}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-                    <strong>Action:</strong> {log.recommendedAction}
-                  </div>
-                  <div style={{ fontSize: '0.75rem', color: '#38BDF8', marginTop: '4px' }}>
-                    📅 Next Action: {log.nextActionDate}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* ─── MODAL: RECORD COACHING NOTE ─── */}
-      {isCoachModalOpen && coachTarget && (
-        <div className="modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
-        }}>
-          <div className="coaching-modal" style={{
-            background: '#0F172A', border: '1px solid var(--border-glass)', borderRadius: '16px',
-            width: '90%', maxWidth: '520px', padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px'
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  Record Coaching Note — {coachTarget.name}
-                </h3>
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                  {coachTarget.employee_id} • Status: {coachTarget.coachingStatus}
-                </span>
-              </div>
-              <button className="btn-modal-close" onClick={() => setIsCoachModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
-                <X size={18} />
+                <RefreshCw size={15} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} />
+                <span>Sync</span>
               </button>
             </div>
+          }
+        />
 
-            {coachSuccess ? (
-              <div style={{ padding: '30px 10px', textAlign: 'center' }}>
-                <CheckCircle2 size={48} color="#10B981" style={{ margin: '0 auto 12px auto' }} />
-                <h4 style={{ color: '#10B981', margin: '0 0 6px 0', fontSize: '1.2rem', fontWeight: 800 }}>Coaching Note Logged</h4>
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>Follow-up action registered for this team member.</p>
-              </div>
-            ) : (
-              <form onSubmit={handleSaveCoachingNote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                <div>
-                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                    Coaching Issue / Reason *
-                  </label>
-                  <input
-                    type="text"
-                    value={coachIssue}
-                    onChange={e => setCoachIssue(e.target.value)}
-                    required
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                    Observations & Gap Notes
-                  </label>
-                  <textarea
-                    rows={3}
-                    className="coaching-textarea"
-                    value={coachReason}
-                    onChange={e => setCoachReason(e.target.value)}
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none', resize: 'vertical' }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                    Recommended Action / Refresher *
-                  </label>
-                  <input
-                    type="text"
-                    value={coachAction}
-                    onChange={e => setCoachAction(e.target.value)}
-                    required
-                    style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
-                  />
-                </div>
-
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div>
-                    <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                      Status
-                    </label>
-                    <select
-                      value={coachStatus}
-                      onChange={e => setCoachStatus(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#1E293B', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="In Progress">In Progress</option>
-                      <option value="Resolved">Resolved</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', fontWeight: 700, display: 'block', marginBottom: '4px' }}>
-                      Next Follow-up Date
-                    </label>
-                    <input
-                      type="date"
-                      value={coachDate}
-                      onChange={e => setCoachDate(e.target.value)}
-                      style={{ width: '100%', padding: '8px 12px', borderRadius: '8px', background: '#1E293B', border: '1px solid var(--border-glass)', color: 'var(--text-primary)', outline: 'none' }}
-                    />
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid var(--border-glass)', paddingTop: '14px' }}>
-                  <button type="button" onClick={() => setIsCoachModalOpen(false)} style={{ padding: '8px 16px', borderRadius: '8px', background: 'transparent', border: '1px solid var(--border-glass)', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn-save-note" disabled={coachSubmitting} style={{ padding: '8px 20px', borderRadius: '8px', background: 'var(--primary)', border: 'none', color: '#FFFFFF', fontWeight: 700, cursor: 'pointer' }}>
-                    {coachSubmitting ? 'Saving...' : 'Save Coaching Note'}
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ─── MODAL: PARTICIPANT 360 DRAWER ─── */}
-      {is360ModalOpen && (
-        <div className="modal-overlay" style={{
-          position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(0, 0, 0, 0.75)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+        {/* ─── 2. SECTION 1: TEAM SNAPSHOT (8 OPERATIONAL KPIS) ─── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))',
+          gap: '16px'
         }}>
+          {/* KPI 1: Team Members */}
+          <KpiCard
+            icon={Users}
+            label="TEAM MEMBERS"
+            value={metrics.teamMembers !== undefined && metrics.teamMembers !== null ? metrics.teamMembers : '—'}
+            subtext="Assigned to your direct team"
+            variant="blue"
+            loading={loading}
+          />
+
+          {/* KPI 2: Active Learners */}
+          <KpiCard
+            icon={TrendingUp}
+            label="ACTIVE LEARNERS"
+            value={metrics.activeLearners !== undefined && metrics.activeLearners !== null ? metrics.activeLearners : '—'}
+            subtext="Engaged in curriculum this cycle"
+            variant="cyan"
+            loading={loading}
+          />
+
+          {/* KPI 3: Training Completion */}
+          <KpiCard
+            icon={CheckCircle}
+            label="MODULE COMPLETION"
+            value={metrics.trainingCompletion !== undefined && metrics.trainingCompletion !== null ? `${metrics.trainingCompletion}%` : '—'}
+            subtext="Modules finished by cohort"
+            variant="purple"
+            radialProgress={typeof metrics.trainingCompletion === 'number' ? metrics.trainingCompletion : null}
+            loading={loading}
+          />
+
+          {/* KPI 4: Attendance Rate */}
+          <KpiCard
+            icon={ClipboardList}
+            label="ATTENDANCE RATE"
+            value={metrics.attendanceRate !== undefined && metrics.attendanceRate !== null ? `${metrics.attendanceRate}%` : '—'}
+            subtext={metrics.attendanceRate >= 80 ? '✓ Meeting ≥80% benchmark' : '⚠️ Below 80% benchmark'}
+            variant={metrics.attendanceRate >= 80 ? 'green' : 'amber'}
+            radialProgress={typeof metrics.attendanceRate === 'number' ? metrics.attendanceRate : null}
+            loading={loading}
+          />
+
+          {/* KPI 5: Average Assessment Score */}
+          <KpiCard
+            icon={Star}
+            label="AVERAGE QUIZ SCORE"
+            value={metrics.averageAssessmentScore !== undefined && metrics.averageAssessmentScore !== null ? `${metrics.averageAssessmentScore}%` : '—'}
+            subtext={metrics.averageAssessmentScore >= 70 ? '✓ Passing benchmark ≥70%' : '⚠️ Under 70% passing standard'}
+            variant={metrics.averageAssessmentScore >= 70 ? 'blue' : 'amber'}
+            radialProgress={typeof metrics.averageAssessmentScore === 'number' ? metrics.averageAssessmentScore : null}
+            loading={loading}
+          />
+
+          {/* KPI 6: Pass Rate */}
+          <KpiCard
+            icon={Trophy}
+            label="PASS RATE (≥70%)"
+            value={metrics.assessmentPassRate !== undefined && metrics.assessmentPassRate !== null ? `${metrics.assessmentPassRate}%` : '—'}
+            subtext="Attempts meeting passing threshold"
+            variant="green"
+            radialProgress={typeof metrics.assessmentPassRate === 'number' ? metrics.assessmentPassRate : null}
+            loading={loading}
+          />
+
+          {/* KPI 7: Certification Ready */}
+          <KpiCard
+            icon={Award}
+            label="CERTIFICATION READY"
+            value={metrics.certificationReady !== undefined && metrics.certificationReady !== null ? metrics.certificationReady : '—'}
+            subtext="Att ≥80% & Score ≥70% (Eligible)"
+            variant="green"
+            loading={loading}
+          />
+
+          {/* KPI 8: At-Risk Learners */}
+          <KpiCard
+            icon={AlertTriangle}
+            label="AT-RISK LEARNERS"
+            value={metrics.atRiskLearners !== undefined && metrics.atRiskLearners !== null ? metrics.atRiskLearners : '—'}
+            subtext={metrics.atRiskLearners > 0 ? 'Score <60% OR Attendance <80%' : 'Cohort on track'}
+            variant={metrics.atRiskLearners > 0 ? 'red' : 'green'}
+            loading={loading}
+          />
+        </div>
+
+        {/* ─── 3. SECTION 2: ATTENTION REQUIRED & ROSTER FILTER BANNER ─── */}
+        <div style={{
+          background: '#FFFFFF',
+          border: '1px solid var(--re-border, #E2E8F0)',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          boxShadow: 'var(--re-shadow-sm, 0 1px 3px 0 rgba(15, 23, 42, 0.05))',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px'
+        }}>
+          {/* Operational Rule Notice Banner */}
           <div style={{
-            background: '#0F172A', border: '1px solid var(--border-glass)', borderRadius: '16px',
-            width: '90%', maxWidth: '640px', padding: '24px', maxHeight: '85vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px'
+            background: '#F8FAFC',
+            border: '1px solid #E2E8F0',
+            borderRadius: '10px',
+            padding: '12px 18px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '12px',
+            fontSize: '0.82rem'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Eye size={20} color="#38BDF8" />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  Participant 360 Profile
-                </h3>
-              </div>
-              <button onClick={() => setIs360ModalOpen(false)} style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer' }}>
-                <X size={18} />
-              </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#1E40AF', fontWeight: 600 }}>
+              <Shield size={16} color="#1E40AF" />
+              <span><strong>COACHING SIGNALS:</strong> &lt;60% At Risk • 60–74% Needs Review • ≥75% On Track</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#059669', fontWeight: 600 }}>
+              <Award size={16} color="#059669" />
+              <span><strong>CERTIFICATION BENCHMARK:</strong> Attendance ≥80% AND Assessment ≥70%</span>
+            </div>
+          </div>
+
+          {/* Filters & Search Controls */}
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '14px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              {[
+                { id: 'ALL', label: `All Team (${teamRoster.length})` },
+                { id: 'AT_RISK', label: `At Risk (${atRiskCount})` },
+                { id: 'NEEDS_REVIEW', label: `Needs Review (${needsReviewCount})` },
+                { id: 'ON_TRACK', label: `On Track (${onTrackCount})` },
+                { id: 'LOW_ATTENDANCE', label: `Low Attendance (${lowAttendanceCount})` },
+                { id: 'CERT_READY', label: `Cert Ready (${certReadyCount})` }
+              ].map(pill => {
+                const isActive = selectedFilter === pill.id;
+                return (
+                  <button
+                    key={pill.id}
+                    id={`filter-pill-${pill.id.toLowerCase()}`}
+                    onClick={() => setSelectedFilter(pill.id)}
+                    style={{
+                      padding: '7px 14px',
+                      borderRadius: '8px',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                      background: isActive ? '#1E40AF' : '#F8FAFC',
+                      color: isActive ? '#FFFFFF' : '#475569',
+                      border: isActive ? '1px solid #1E40AF' : '1px solid #E2E8F0',
+                      boxShadow: isActive ? '0 2px 4px rgba(30, 64, 175, 0.15)' : 'none'
+                    }}
+                  >
+                    {pill.label}
+                  </button>
+                );
+              })}
             </div>
 
-            {loading360 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-                <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
-                <span>Loading direct subordinate intelligence profile...</span>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              background: '#F8FAFC',
+              padding: '7px 14px',
+              borderRadius: '8px',
+              border: '1px solid #E2E8F0',
+              minWidth: '240px'
+            }}>
+              <Search size={15} color="#94A3B8" />
+              <input
+                id="supervisor-search-input"
+                type="text"
+                placeholder="Search team member..."
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: '#0F172A',
+                  outline: 'none',
+                  fontSize: '0.85rem',
+                  width: '100%'
+                }}
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, color: '#94A3B8' }}
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* ─── 4. MY TEAM PERFORMANCE MATRIX TABLE ─── */}
+          <div style={{
+            overflowX: 'auto',
+            borderRadius: '10px',
+            border: '1px solid #E2E8F0',
+            background: '#FFFFFF'
+          }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Employee</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Designation</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Training Progress</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Attendance</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Assessment</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Coaching Status</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Certification</th>
+                  <th style={{ padding: '12px 18px', color: '#64748B', fontWeight: 700, fontSize: '0.74rem', letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRoster.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ padding: '40px 16px', textAlign: 'center' }}>
+                      <EmptyState
+                        icon={Users}
+                        title="No Team Members Found"
+                        description={searchTerm ? `No direct reports match "${searchTerm}".` : "No team members match the selected filter criteria."}
+                      />
+                    </td>
+                  </tr>
+                ) : (
+                  filteredRoster.map(emp => {
+                    const isAtRisk = emp.coachingStatus === 'At Risk';
+                    const isNeedsReview = emp.coachingStatus === 'Needs Review';
+
+                    return (
+                      <tr
+                        key={emp.id}
+                        style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          transition: 'background 0.15s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = '#F8FAFC'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                      >
+                        {/* Employee Avatar + Info */}
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                            <div style={{
+                              width: '36px',
+                              height: '36px',
+                              borderRadius: '8px',
+                              background: '#EFF6FF',
+                              color: '#1E40AF',
+                              fontWeight: 800,
+                              fontSize: '0.78rem',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              border: '1px solid #DBEAFE'
+                            }}>
+                              {getInitials(emp.name)}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>{emp.name}</span>
+                              <span style={{ fontSize: '0.75rem', color: '#64748B' }}>{emp.employee_id || 'ID: —'} • {emp.email}</span>
+                            </div>
+                          </div>
+                        </td>
+
+                        {/* Designation */}
+                        <td style={{ padding: '14px 18px', color: '#475569', fontSize: '0.82rem' }}>
+                          {emp.designation || 'Field Representative'}
+                        </td>
+
+                        {/* Training Progress Bar */}
+                        <td style={{ padding: '14px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{
+                              width: '84px',
+                              height: '6px',
+                              background: '#E2E8F0',
+                              borderRadius: '3px',
+                              overflow: 'hidden'
+                            }}>
+                              <div style={{
+                                width: `${Math.min(emp.trainingProgress || 0, 100)}%`,
+                                height: '100%',
+                                background: '#1E40AF',
+                                borderRadius: '3px'
+                              }} />
+                            </div>
+                            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0F172A' }}>
+                              {emp.trainingProgress !== undefined ? `${emp.trainingProgress}%` : '—'}
+                            </span>
+                          </div>
+                        </td>
+
+                        {/* Attendance % */}
+                        <td style={{ padding: '14px 18px' }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: emp.attendancePercentage >= 80 ? '#10B981' : '#EF4444'
+                          }}>
+                            {emp.attendancePercentage !== undefined ? `${emp.attendancePercentage}%` : '—'}
+                          </span>
+                        </td>
+
+                        {/* Assessment Score */}
+                        <td style={{ padding: '14px 18px' }}>
+                          <span style={{
+                            fontWeight: 700,
+                            color: emp.assessmentScore >= 70 ? '#10B981' : (emp.assessmentScore >= 60 ? '#F59E0B' : '#EF4444')
+                          }}>
+                            {emp.assessmentScore !== undefined ? `${emp.assessmentScore}%` : '—'}
+                          </span>
+                        </td>
+
+                        {/* Coaching Status Badge */}
+                        <td style={{ padding: '14px 18px' }}>
+                          <StatusBadge
+                            variant={isAtRisk ? 'danger' : (isNeedsReview ? 'warning' : 'success')}
+                            label={emp.coachingStatus || 'On Track'}
+                            size="sm"
+                          />
+                        </td>
+
+                        {/* Certification Status */}
+                        <td style={{ padding: '14px 18px' }}>
+                          {emp.certificationStatus === 'Certified' ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              color: '#059669',
+                              fontWeight: 700,
+                              fontSize: '0.78rem',
+                              background: '#ECFDF5',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #A7F3D0'
+                            }}>
+                              <CheckCircle2 size={13} /> Certified
+                            </span>
+                          ) : emp.certificationStatus === 'Eligible' ? (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              fontSize: '0.75rem',
+                              fontWeight: 700,
+                              background: '#EFF6FF',
+                              color: '#1E40AF',
+                              border: '1px solid #DBEAFE'
+                            }}>
+                              <Award size={13} /> Eligible
+                            </span>
+                          ) : (
+                            <span style={{
+                              color: '#64748B',
+                              fontSize: '0.78rem',
+                              background: '#F1F5F9',
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              border: '1px solid #E2E8F0'
+                            }}>
+                              In Progress
+                            </span>
+                          )}
+                        </td>
+
+                        {/* Actions */}
+                        <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                            <button
+                              id={`view-360-${emp.id}`}
+                              onClick={() => handleOpen360(emp.id)}
+                              title="View Participant 360"
+                              style={{
+                                padding: '5px 10px',
+                                borderRadius: '6px',
+                                border: '1px solid #CBD5E1',
+                                background: '#FFFFFF',
+                                color: '#0F172A',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.78rem',
+                                fontWeight: 600,
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              <Eye size={13} /> 360
+                            </button>
+                            <button
+                              id={`btn-coach-${emp.id}`}
+                              onClick={() => handleOpenCoachModal(emp)}
+                              style={{
+                                padding: '5px 12px',
+                                borderRadius: '6px',
+                                border: 'none',
+                                background: isAtRisk ? '#EF4444' : '#1E40AF',
+                                color: '#FFFFFF',
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: '4px',
+                                fontSize: '0.78rem',
+                                fontWeight: 700,
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              <MessageSquare size={13} /> Coach
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* ─── 5. SECTION 3: TEAM TRAINING PROGRESS & DISTRIBUTION INSIGHTS ─── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+          gap: '20px'
+        }}>
+          {/* Card A: Team Training Progress Breakdown */}
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid var(--re-border, #E2E8F0)',
+            borderRadius: '14px',
+            padding: '22px 24px',
+            boxShadow: 'var(--re-shadow-sm, 0 1px 3px 0 rgba(15, 23, 42, 0.05))',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
+                  Team Training Progress
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                  Progress distribution across active curriculum modules
+                </p>
               </div>
-            ) : error360 ? (
-              <div style={{ padding: '20px', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', borderRadius: '10px', color: '#EF4444' }}>
-                <strong>Access Guard:</strong> {error360}
-              </div>
-            ) : selected360User ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* Profile Header */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '16px', borderRadius: '10px' }}>
-                  <div>
-                    <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)' }}>{selected360User.participant?.name || 'Learner'}</h4>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{selected360User.participant?.email} • {selected360User.participant?.employee_id}</span>
-                  </div>
-                  <span style={{ padding: '4px 10px', borderRadius: '10px', background: '#38BDF8', color: '#0F172A', fontWeight: 800, fontSize: '0.75rem' }}>
-                    Team Direct Report
+              <BarChart3 size={18} color="#1E40AF" />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>Completed Training (100%)</span>
+                  <span style={{ fontWeight: 700, color: '#059669' }}>
+                    {teamRoster.filter(e => e.trainingProgress >= 100).length} learners
                   </span>
                 </div>
-
-                {/* Overall Attendance & Score Meters */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Attendance Record</span>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#10B981', marginTop: '4px' }}>
-                      {selected360User.jitsiAttendance?.attendanceRate || 85}%
-                    </div>
-                  </div>
-                  <div style={{ background: 'rgba(255,255,255,0.02)', padding: '14px', borderRadius: '10px', border: '1px solid var(--border-glass)' }}>
-                    <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', fontWeight: 700, textTransform: 'uppercase' }}>Assessment Average</span>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#38BDF8', marginTop: '4px' }}>
-                      {selected360User.quizIntelligence?.averageScore || 78}%
-                    </div>
-                  </div>
-                </div>
-
-                {/* Certification Readiness Status */}
-                <div style={{ background: 'rgba(16, 185, 129, 0.08)', padding: '14px', borderRadius: '10px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 700, color: '#10B981', fontSize: '0.85rem' }}>Certification Readiness Audit</span>
-                    <span style={{ fontSize: '0.78rem', color: '#34D399', fontWeight: 800 }}>Rule: Att ≥80% & Score ≥70%</span>
-                  </div>
-                  <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    {selected360User.certificationIntelligence?.hasCertificate ? '✓ Issued official certificate on file' : 'Evaluating learner completion and attendance requirements'}
-                  </p>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (teamRoster.filter(e => e.trainingProgress >= 100).length / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#10B981',
+                    borderRadius: '4px'
+                  }} />
                 </div>
               </div>
-            ) : null}
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>In Progress (1% – 99%)</span>
+                  <span style={{ fontWeight: 700, color: '#1E40AF' }}>
+                    {teamRoster.filter(e => e.trainingProgress > 0 && e.trainingProgress < 100).length} learners
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (teamRoster.filter(e => e.trainingProgress > 0 && e.trainingProgress < 100).length / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#3B82F6',
+                    borderRadius: '4px'
+                  }} />
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>Not Started (0%)</span>
+                  <span style={{ fontWeight: 700, color: '#94A3B8' }}>
+                    {teamRoster.filter(e => (e.trainingProgress || 0) === 0).length} learners
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (teamRoster.filter(e => (e.trainingProgress || 0) === 0).length / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#CBD5E1',
+                    borderRadius: '4px'
+                  }} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card B: Coaching Priority Distribution */}
+          <div style={{
+            background: '#FFFFFF',
+            border: '1px solid var(--re-border, #E2E8F0)',
+            borderRadius: '14px',
+            padding: '22px 24px',
+            boxShadow: 'var(--re-shadow-sm, 0 1px 3px 0 rgba(15, 23, 42, 0.05))',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '16px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
+                  Coaching Priority Breakdown
+                </h3>
+                <p style={{ margin: '2px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                  Cohort segmentation based on assessment score & attendance
+                </p>
+              </div>
+              <Shield size={18} color="#1E40AF" />
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>On Track (≥75% Score)</span>
+                  <span style={{ fontWeight: 700, color: '#059669' }}>
+                    {onTrackCount} learners
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (onTrackCount / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#10B981',
+                    borderRadius: '4px'
+                  }} />
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>Needs Review (60% – 74%)</span>
+                  <span style={{ fontWeight: 700, color: '#D97706' }}>
+                    {needsReviewCount} learners
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (needsReviewCount / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#F59E0B',
+                    borderRadius: '4px'
+                  }} />
+                </div>
+              </div>
+
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '4px' }}>
+                  <span style={{ color: '#475569', fontWeight: 600 }}>At Risk (&lt;60% Score)</span>
+                  <span style={{ fontWeight: 700, color: '#DC2626' }}>
+                    {atRiskCount} learners
+                  </span>
+                </div>
+                <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{
+                    width: `${teamRoster.length > 0 ? (atRiskCount / teamRoster.length) * 100 : 0}%`,
+                    height: '100%',
+                    background: '#EF4444',
+                    borderRadius: '4px'
+                  }} />
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      )}
+
+        {/* ─── 6. SECTION 4: COACHING & REMEDIATION FOLLOW-UP LOG ─── */}
+        <div style={{
+          background: '#FFFFFF',
+          border: '1px solid var(--re-border, #E2E8F0)',
+          borderRadius: '14px',
+          padding: '20px 24px',
+          boxShadow: 'var(--re-shadow-sm, 0 1px 3px 0 rgba(15, 23, 42, 0.05))',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '16px'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                Coaching & Remediation Follow-up Log
+              </h3>
+              <p style={{ margin: '3px 0 0', fontSize: '0.8rem', color: '#64748B' }}>
+                Operational tracking of feedback sessions, knowledge gap follow-ups, and scheduled refreshers
+              </p>
+            </div>
+            <span style={{
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              color: '#1E40AF',
+              background: '#EFF6FF',
+              padding: '4px 10px',
+              borderRadius: '6px',
+              border: '1px solid #DBEAFE'
+            }}>
+              {coachingLogs.length} Records Logged
+            </span>
+          </div>
+
+          {coachingLogs.length === 0 ? (
+            <div style={{ padding: '24px', textAlign: 'center', color: '#64748B', fontSize: '0.85rem' }}>
+              No coaching logs recorded yet. Click "Coach" on any employee in the roster above to record a remediation note.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+              {coachingLogs.slice(0, 6).map(log => {
+                const emp = teamRoster.find(e => e.id === log.employeeId);
+                const isResolved = log.followUpStatus === 'Resolved';
+                return (
+                  <div
+                    key={log.id}
+                    style={{
+                      background: '#F8FAFC',
+                      border: '1px solid #E2E8F0',
+                      borderRadius: '10px',
+                      padding: '14px 16px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
+                        {emp ? emp.name : 'Team Member'}
+                      </span>
+                      <StatusBadge
+                        variant={isResolved ? 'success' : 'warning'}
+                        label={log.followUpStatus || 'Pending'}
+                        size="sm"
+                      />
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#334155' }}>
+                      <strong>Issue:</strong> {log.issue}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                      <strong>Action:</strong> {log.recommendedAction}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#1E40AF', marginTop: '4px', fontWeight: 600 }}>
+                      📅 Next Action: {log.nextActionDate || 'Pending scheduling'}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* ─── 7. MODAL: RECORD COACHING NOTE ─── */}
+        {isCoachModalOpen && coachTarget && (
+          <div className="re-modal-overlay" style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div className="coaching-modal" style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              width: '90%',
+              maxWidth: '520px',
+              padding: '28px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '14px' }}>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
+                    Record Coaching Note
+                  </h3>
+                  <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                    {coachTarget.name} ({coachTarget.employee_id || 'ID: —'}) • Status: {coachTarget.coachingStatus}
+                  </span>
+                </div>
+                <button
+                  className="btn-modal-close"
+                  onClick={() => setIsCoachModalOpen(false)}
+                  style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {coachSuccess ? (
+                <div style={{ padding: '30px 10px', textAlign: 'center' }}>
+                  <CheckCircle2 size={48} color="#10B981" style={{ margin: '0 auto 12px auto' }} />
+                  <h4 style={{ color: '#059669', margin: '0 0 6px 0', fontSize: '1.2rem', fontWeight: 800 }}>Coaching Note Logged</h4>
+                  <p style={{ color: '#64748B', fontSize: '0.85rem', margin: 0 }}>Follow-up action registered for this team member.</p>
+                </div>
+              ) : (
+                <form onSubmit={handleSaveCoachingNote} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Coaching Issue / Reason *
+                    </label>
+                    <input
+                      type="text"
+                      value={coachIssue}
+                      onChange={e => setCoachIssue(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        color: '#0F172A',
+                        outline: 'none',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Observations & Gap Notes
+                    </label>
+                    <textarea
+                      rows={3}
+                      className="coaching-textarea"
+                      value={coachReason}
+                      onChange={e => setCoachReason(e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        color: '#0F172A',
+                        outline: 'none',
+                        resize: 'vertical',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                      Recommended Action / Refresher *
+                    </label>
+                    <input
+                      type="text"
+                      value={coachAction}
+                      onChange={e => setCoachAction(e.target.value)}
+                      required
+                      style={{
+                        width: '100%',
+                        padding: '9px 12px',
+                        borderRadius: '8px',
+                        background: '#F8FAFC',
+                        border: '1px solid #CBD5E1',
+                        color: '#0F172A',
+                        outline: 'none',
+                        fontSize: '0.85rem'
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                        Status
+                      </label>
+                      <select
+                        value={coachStatus}
+                        onChange={e => setCoachStatus(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '9px 12px',
+                          borderRadius: '8px',
+                          background: '#F8FAFC',
+                          border: '1px solid #CBD5E1',
+                          color: '#0F172A',
+                          outline: 'none',
+                          fontSize: '0.85rem'
+                        }}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="In Progress">In Progress</option>
+                        <option value="Resolved">Resolved</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.78rem', color: '#334155', fontWeight: 700, display: 'block', marginBottom: '6px' }}>
+                        Next Follow-up Date
+                      </label>
+                      <input
+                        type="date"
+                        value={coachDate}
+                        onChange={e => setCoachDate(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '9px 12px',
+                          borderRadius: '8px',
+                          background: '#F8FAFC',
+                          border: '1px solid #CBD5E1',
+                          color: '#0F172A',
+                          outline: 'none',
+                          fontSize: '0.85rem'
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', borderTop: '1px solid #E2E8F0', paddingTop: '16px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsCoachModalOpen(false)}
+                      style={{
+                        padding: '9px 16px',
+                        borderRadius: '8px',
+                        background: '#FFFFFF',
+                        border: '1px solid #CBD5E1',
+                        color: '#475569',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.85rem'
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="btn-save-note"
+                      disabled={coachSubmitting}
+                      style={{
+                        padding: '9px 20px',
+                        borderRadius: '8px',
+                        background: '#1E40AF',
+                        border: 'none',
+                        color: '#FFFFFF',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        boxShadow: '0 2px 4px rgba(30, 64, 175, 0.2)'
+                      }}
+                    >
+                      {coachSubmitting ? 'Saving...' : 'Save Coaching Note'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ─── 8. MODAL: PARTICIPANT 360 DRAWER ─── */}
+        {is360ModalOpen && (
+          <div className="re-modal-overlay participant-360-modal" style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(15, 23, 42, 0.5)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000
+          }}>
+            <div style={{
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
+              borderRadius: '16px',
+              width: '90%',
+              maxWidth: '640px',
+              padding: '28px',
+              maxHeight: '85vh',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '18px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #E2E8F0', paddingBottom: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '8px',
+                    background: '#EFF6FF',
+                    color: '#1E40AF',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}>
+                    <Eye size={18} />
+                  </div>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 800, color: '#0F172A' }}>
+                      Participant 360 Profile
+                    </h3>
+                    <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+                      Comprehensive individual capability & compliance view
+                    </span>
+                  </div>
+                </div>
+                <button
+                  id="close-360-modal-btn"
+                  onClick={() => setIs360ModalOpen(false)}
+                  style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', padding: '4px' }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              {loading360 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: '#64748B' }}>
+                  <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', margin: '0 auto 10px' }} />
+                  <span>Loading direct subordinate intelligence profile...</span>
+                </div>
+              ) : error360 ? (
+                <div style={{
+                  padding: '16px',
+                  background: '#FEF2F2',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: '10px',
+                  color: '#DC2626',
+                  fontSize: '0.85rem'
+                }}>
+                  <strong>Access Guard:</strong> {error360}
+                </div>
+              ) : selected360User ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* Profile Header Card */}
+                  <div style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    background: '#F8FAFC',
+                    padding: '16px 20px',
+                    borderRadius: '12px',
+                    border: '1px solid #E2E8F0'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <div style={{
+                        width: '44px',
+                        height: '44px',
+                        borderRadius: '10px',
+                        background: '#EFF6FF',
+                        color: '#1E40AF',
+                        fontWeight: 800,
+                        fontSize: '0.95rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '1px solid #DBEAFE'
+                      }}>
+                        {getInitials(selected360User.participant?.name)}
+                      </div>
+                      <div>
+                        <h4 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
+                          {selected360User.participant?.name || 'Learner'}
+                        </h4>
+                        <span style={{ fontSize: '0.8rem', color: '#64748B' }}>
+                          {selected360User.participant?.email} • {selected360User.participant?.employee_id || 'ID: —'}
+                        </span>
+                      </div>
+                    </div>
+                    <span style={{
+                      padding: '5px 12px',
+                      borderRadius: '8px',
+                      background: '#EFF6FF',
+                      color: '#1E40AF',
+                      fontWeight: 800,
+                      fontSize: '0.75rem',
+                      border: '1px solid #DBEAFE'
+                    }}>
+                      Team Direct Report
+                    </span>
+                  </div>
+
+                  {/* Attendance & Assessment Meters */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                    <div style={{
+                      background: '#F8FAFC',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: '1px solid #E2E8F0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Attendance Record
+                      </span>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#059669' }}>
+                        {selected360User.jitsiAttendance?.attendanceRate != null ? `${selected360User.jitsiAttendance.attendanceRate}%` : 'N/A'}
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Authoritative session presence</span>
+                    </div>
+
+                    <div style={{
+                      background: '#F8FAFC',
+                      padding: '16px',
+                      borderRadius: '12px',
+                      border: '1px solid #E2E8F0',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '4px'
+                    }}>
+                      <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        Assessment Average
+                      </span>
+                      <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#1E40AF' }}>
+                        {selected360User.quizIntelligence?.averageScore != null ? `${selected360User.quizIntelligence.averageScore}%` : 'N/A'}
+                      </div>
+                      <span style={{ fontSize: '0.75rem', color: '#64748B' }}>Evaluated quiz accuracy</span>
+                    </div>
+                  </div>
+
+                  {/* Certification Readiness Audit */}
+                  <div style={{
+                    background: '#ECFDF5',
+                    padding: '16px',
+                    borderRadius: '12px',
+                    border: '1px solid #A7F3D0',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '6px'
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, color: '#065F46', fontSize: '0.88rem' }}>
+                        Certification Readiness Audit
+                      </span>
+                      <span style={{ fontSize: '0.75rem', color: '#059669', fontWeight: 700 }}>
+                        Rule: Att ≥80% & Score ≥70%
+                      </span>
+                    </div>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#047857' }}>
+                      {selected360User.certificationIntelligence?.hasCertificate
+                        ? '✓ Issued official certificate on file with digital credential validation.'
+                        : 'Evaluating learner completion and attendance requirements towards threshold.'}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }

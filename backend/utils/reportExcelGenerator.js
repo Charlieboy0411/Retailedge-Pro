@@ -88,7 +88,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     ['Quiz Completion Rate', exec.completionRate || '90.7%', deltas.completion?.formatted || '+12%'],
     ['Average Assessment Score', exec.averageScore || '78.5%', deltas.avgScore?.formatted || '+4%'],
     ['Assessment Pass Rate', exec.passRate || '84.2%', deltas.passRate?.formatted || '+5%'],
-    ['Attendance Rate', exec.attendanceRate || '88.5%', deltas.attendance?.formatted || '+6%'],
+    ['Attendance Rate', (exec.attendanceRate !== null && exec.attendanceRate !== undefined) ? `${exec.attendanceRate}%` : 'N/A', deltas.attendance?.formatted || '—'],
     ['Certificates Issued', exec.certificatesIssued || 64, deltas.certificates?.formatted || '+14%']
   ];
 
@@ -204,12 +204,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const participants = reportData.participantResults || [
-    { name: 'Rahul Sharma', employeeId: 'EMP-101', project: 'Galderma', quiz: 'Product Knowledge', mode: 'ONLINE', score: '92%', status: 'Pass', attendance: '96%', cert: 'Eligible' },
-    { name: 'Priya Patel', employeeId: 'EMP-102', project: 'Galderma', quiz: 'Product Knowledge', mode: 'ONLINE', score: '88%', status: 'Pass', attendance: '92%', cert: 'Eligible' },
-    { name: 'Amit Kumar', employeeId: 'EMP-103', project: 'Galderma', quiz: 'Product Knowledge', mode: 'ONLINE', score: '54%', status: 'Fail', attendance: '70%', cert: 'Re-test Required' },
-    { name: 'Sneha Rao', employeeId: 'EMP-104', project: 'Unilever', quiz: 'Store Operations', mode: 'OFFLINE', score: '84%', status: 'Pass', attendance: '90%', cert: 'Eligible' }
-  ];
+  const participants = reportData.participantResults || [];
 
   participants.forEach((p, rIdx) => {
     const row = [p.name, p.employeeId, p.project || 'Galderma', p.quiz || 'Assessment', p.mode || 'ONLINE', p.score, p.status, p.attendance || '90%', p.cert || 'Eligible'];
@@ -233,10 +228,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const attendanceData = reportData.recentSessions || [
-    { participant: 'Rahul Sharma', employeeId: 'EMP-101', meeting: 'Virtual Product Launch', join: '10:02 AM', leave: '11:15 AM', dur: '73m', rejoins: 1, att: '92%', status: 'Attended' },
-    { participant: 'Priya Patel', employeeId: 'EMP-102', meeting: 'Virtual Product Launch', join: '10:05 AM', leave: '11:00 AM', dur: '55m', rejoins: 0, att: '85%', status: 'Attended' }
-  ];
+  const attendanceData = reportData.recentSessions || [];
 
   attendanceData.forEach((a, rIdx) => {
     const row = [a.participant || a.participantName, a.employeeId, a.meeting || a.trainingTitle, a.join || a.joinTime, a.leave || a.leaveTime, a.dur || a.totalDuration, a.rejoins, a.att || a.attendancePercentage, a.status];
@@ -289,11 +281,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const certs = reportData.recentCertificates || [
-    { id: 'REP-2026-000001', name: 'Rahul Sharma', prog: 'Retail Certification', proj: 'Galderma', date: '2026-08-18', score: '92%', att: '96%', status: 'ISSUED' },
-    { id: 'REP-2026-000002', name: 'Priya Patel', prog: 'Retail Certification', proj: 'Galderma', date: '2026-08-18', score: '88%', att: '92%', status: 'ISSUED' },
-    { id: 'REP-2026-REVOKED-8706', name: 'Amit Kumar', prog: 'Retail Certification', proj: 'Galderma', date: '2026-07-10', score: '54%', att: '70%', status: 'REVOKED' }
-  ];
+  const certs = reportData.recentCertificates || [];
 
   certs.forEach((cItem, rIdx) => {
     const row = [cItem.id || cItem.certificateId, cItem.name || cItem.participantName, cItem.prog || cItem.program, cItem.proj || cItem.projectName, cItem.date || cItem.issueDate, cItem.score || '85%', cItem.att || '90%', cItem.status];
@@ -323,16 +311,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const rows21 = (masterOutcomeRows && masterOutcomeRows.length > 0) ? masterOutcomeRows : [
-    {
-      client: 'RetailEdge Client', project: 'Galderma', subproject: 'General Subproject', trainingSession: 'Virtual Training Meeting',
-      participant: 'Rahul Sharma', employeeId: 'EMP-101', trainer: 'Lead Trainer', sessionDate: '2026-08-18',
-      jitsiAttendance: 'Attended', joinTime: '10:02 AM', leaveTime: '11:15 AM', totalDuration: '73m',
-      attendancePercentage: '92%', quizzesAssigned: 1, quizzesAttempted: 1, quizType: 'ONLINE',
-      quizScore: '92%', passFail: 'Pass', certificationEligibility: 'ELIGIBLE',
-      certificateStatus: 'ISSUED', certificateIdAndDate: 'REP-2026-000001 (2026-08-18)'
-    }
-  ];
+  const rows21 = (masterOutcomeRows && masterOutcomeRows.length > 0) ? masterOutcomeRows : [];
 
   rows21.forEach((item, rIdx) => {
     const row = [

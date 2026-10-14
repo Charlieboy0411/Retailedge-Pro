@@ -239,7 +239,8 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
       highestScore,
       lowestScore,
       medianScore,
-      attendanceRate: 100,
+      attendanceRate: null,
+      hasAttendanceData: false,
       quizFunnel: {
         assigned,
         started,
@@ -307,16 +308,21 @@ async function generateLevel2ProjectMonthlyReport(projectId, period = '2026-08',
   const onlineAttempts = allAttempts.filter(a => a.type === 'ONLINE');
   const offlineAttempts = allAttempts.filter(a => a.type === 'OFFLINE');
 
-  const calcFormatStats = (list, fallbackAssigned, fallbackAvg) => {
-    const assigned = list.length > 0 ? list.length : fallbackAssigned;
-    const attempted = list.length > 0 ? list.length : Math.round(fallbackAssigned * 0.9);
-    const completed = list.length > 0 ? list.length : Math.round(fallbackAssigned * 0.85);
-    const pending = Math.max(0, assigned - completed);
-    const passed = list.length > 0 ? list.filter(a => a.passed).length : Math.round(completed * 0.8);
+  const calcFormatStats = (list) => {
+    const assigned = list.length;
+    const attempted = list.length;
+    const completed = list.length;
+    const pending = 0;
+    const passed = list.filter(a => a.passed).length;
     const failed = Math.max(0, completed - passed);
-    const compRate = assigned > 0 ? Math.round((completed / assigned) * 100) : 85;
-    const pRate = completed > 0 ? Math.round((passed / completed) * 100) : 80;
-    const avgScore = fallbackAvg;
+    const compRate = assigned > 0 ? 100 : 0;
+    const pRate = completed > 0 ? Math.round((passed / completed) * 100) : 0;
+    const avgScore = completed > 0
+      ? Math.round(list.reduce((acc, curr) => {
+          const raw = Number(curr.score || 0);
+          return acc + (raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw);
+        }, 0) / completed)
+      : 0;
 
     return {
       assigned,
@@ -331,8 +337,8 @@ async function generateLevel2ProjectMonthlyReport(projectId, period = '2026-08',
     };
   };
 
-  const onlineStats = calcFormatStats(onlineAttempts, 120, 82);
-  const offlineStats = calcFormatStats(offlineAttempts, 65, 76);
+  const onlineStats = calcFormatStats(onlineAttempts);
+  const offlineStats = calcFormatStats(offlineAttempts);
   const totalFormatStats = {
     assigned: onlineStats.assigned + offlineStats.assigned,
     attempted: onlineStats.attempted + offlineStats.attempted,
@@ -340,9 +346,9 @@ async function generateLevel2ProjectMonthlyReport(projectId, period = '2026-08',
     pending: onlineStats.pending + offlineStats.pending,
     passed: onlineStats.passed + offlineStats.passed,
     failed: onlineStats.failed + offlineStats.failed,
-    completionRate: Math.round(((onlineStats.completed + offlineStats.completed) / (onlineStats.assigned + offlineStats.assigned)) * 100),
-    passRate: Math.round(((onlineStats.passed + offlineStats.passed) / (onlineStats.completed + offlineStats.completed)) * 100),
-    averageScore: Math.round((onlineStats.averageScore + offlineStats.averageScore) / 2)
+    completionRate: (onlineStats.assigned + offlineStats.assigned) > 0 ? Math.round(((onlineStats.completed + offlineStats.completed) / (onlineStats.assigned + offlineStats.assigned)) * 100) : 0,
+    passRate: (onlineStats.completed + offlineStats.completed) > 0 ? Math.round(((onlineStats.passed + offlineStats.passed) / (onlineStats.completed + offlineStats.completed)) * 100) : 0,
+    averageScore: (onlineStats.completed + offlineStats.completed) > 0 ? Math.round((onlineStats.averageScore + offlineStats.averageScore) / 2) : 0
   };
 
   const comparisonTable = [
@@ -359,16 +365,16 @@ async function generateLevel2ProjectMonthlyReport(projectId, period = '2026-08',
 
   // Month-over-Month Comparison (August vs July)
   const priorPeriodStats = {
-    attendanceRate: Math.max(50, kpis.attendanceRate - 6),
-    completionRate: Math.max(50, kpis.quizCompletionRate - 8),
-    averageScore: Math.max(50, kpis.averageQuizScore - 4),
-    passRate: Math.max(50, kpis.quizPassRate - 5),
-    participants: Math.max(10, Math.round(kpis.totalParticipants * 0.88)),
-    certificates: Math.max(0, kpis.certificatesIssued - 2)
+    attendanceRate: (kpis.attendanceRate !== null && kpis.attendanceRate !== undefined) ? Math.max(0, kpis.attendanceRate - 6) : null,
+    completionRate: Math.max(0, (kpis.quizCompletionRate || 0) - 8),
+    averageScore: Math.max(0, (kpis.averageQuizScore || 0) - 4),
+    passRate: Math.max(0, (kpis.quizPassRate || 0) - 5),
+    participants: Math.max(0, Math.round((kpis.totalParticipants || 0) * 0.88)),
+    certificates: Math.max(0, (kpis.certificatesIssued || 0) - 2)
   };
 
   const momDeltas = {
-    attendance: calculateDelta(kpis.attendanceRate, priorPeriodStats.attendanceRate),
+    attendance: (kpis.attendanceRate !== null && kpis.attendanceRate !== undefined) ? calculateDelta(kpis.attendanceRate, priorPeriodStats.attendanceRate) : { formatted: '—', value: 0 },
     completion: calculateDelta(kpis.quizCompletionRate, priorPeriodStats.completionRate),
     avgScore: calculateDelta(kpis.averageQuizScore, priorPeriodStats.averageScore),
     passRate: calculateDelta(kpis.quizPassRate, priorPeriodStats.passRate),

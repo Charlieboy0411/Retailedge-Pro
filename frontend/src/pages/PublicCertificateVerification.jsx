@@ -239,7 +239,7 @@ export default function PublicCertificateVerification() {
             <ShieldCheck size={15} /> OFFICIAL CREDENTIAL VERIFICATION PORTAL
           </div>
           <h1 style={{ fontSize: '1.9rem', fontWeight: 900, color: '#FFFFFF', margin: '0 0 8px 0', letterSpacing: '-0.5px' }}>
-            Verify RetailEdge Pro Certificate
+            Verify RetailEdge PRO Certificate
           </h1>
           <p style={{ color: '#94A3B8', fontSize: '0.88rem', margin: 0, maxWidth: '600px', margin: '0 auto' }}>
             Scan the QR code printed on the certificate or enter the unique Certificate ID below to validate authenticity.
@@ -474,15 +474,15 @@ export default function PublicCertificateVerification() {
                   <div style={{ textAlign: 'center', width: '180px' }}>
                     <div style={{ height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <img 
-                        src={result.authorizedSignatureUrl || '/assets/signatures/amit_kumar_signature.svg'} 
+                        src={result.authorizedSignatureUrl || '/assets/signatures/mohit_tiku_signature.svg'} 
                         alt="Authorized Signatory" 
                         style={{ maxHeight: '36px', maxWidth: '150px', objectFit: 'contain', filter: 'invert(1) brightness(1.5)' }} 
-                        onError={e => { e.target.src = '/assets/signatures/mohit_tiku_signature.svg'; }}
+                        onError={e => { e.target.src = '/assets/signatures/amit_kumar_signature.svg'; }}
                       />
                     </div>
                     <div style={{ borderTop: '1px solid #334155', margin: '4px 0 2px 0' }}></div>
-                    <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#FFFFFF' }}>{result.signatoryName || 'Amit Kumar'}</div>
-                    <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>{result.signatoryDesignation || 'Program Manager'}</div>
+                    <div style={{ fontSize: '0.84rem', fontWeight: 800, color: '#FFFFFF' }}>{result.signatoryName || 'Mohit Tiku'}</div>
+                    <div style={{ fontSize: '0.68rem', color: '#94A3B8' }}>{result.signatoryDesignation || 'Managing Director'}</div>
                     <div style={{ fontSize: '0.62rem', color: '#64748B' }}>Idonneous Marketing Services</div>
                   </div>
 
@@ -491,10 +491,10 @@ export default function PublicCertificateVerification() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                       <div style={{ width: '68px', height: '68px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         <img 
-                          src={result.companySealUrl || '/assets/seals/retailedge_pro_gold_seal.svg'} 
+                          src={result.companySealUrl || '/assets/seals/idonneous_official_seal.svg'} 
                           alt="Official Company Seal" 
                           style={{ width: '66px', height: '66px', objectFit: 'contain', filter: 'drop-shadow(0 0 12px rgba(0,210,255,0.5))' }} 
-                          onError={e => { e.target.src = '/assets/seals/idonneous_official_seal.svg'; }}
+                          onError={e => { e.target.src = '/assets/seals/retailedge_pro_gold_seal.svg'; }}
                         />
                       </div>
                       <span style={{ fontSize: '0.64rem', color: '#00D2FF', marginTop: '2px', fontWeight: 800, letterSpacing: '0.5px' }}>OFFICIAL VERIFIED SEAL</span>

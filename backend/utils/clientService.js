@@ -175,7 +175,8 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   }
 
   // 5. Attendance Rate (from JitsiAttendance)
-  let attendanceRate = 0;
+  let attendanceRate = null;
+  let hasAttendanceData = false;
   if (participantIds.length > 0) {
     const attendanceRecords = await JitsiAttendance.findAll({
       where: { userId: { [Op.in]: participantIds } },
@@ -184,8 +185,10 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
     if (attendanceRecords.length > 0) {
       const sumAtt = attendanceRecords.reduce((acc, curr) => acc + (curr.attendancePercentage || (curr.status === 'Present' ? 100 : 0)), 0);
       attendanceRate = Math.round(sumAtt / attendanceRecords.length);
+      hasAttendanceData = true;
     } else {
-      attendanceRate = totalParticipants > 0 ? 75 : 0;
+      attendanceRate = null;
+      hasAttendanceData = false;
     }
   }
 
@@ -266,7 +269,7 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
   const validCertCount = await Certificate.count({
     where: {
       projectId: { [Op.in]: projectIds },
-      status: { [Op.in]: ['VALID', 'ISSUED', 'Active', 'Valid'] }
+      status: { [Op.in]: ['VALID', 'ISSUED'] }
     }
   });
   const certificationProgress = totalParticipants > 0
@@ -290,11 +293,12 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
     }
 
     const pAtt = await JitsiAttendance.findAll({ where: { userId: p.id }, attributes: ['attendancePercentage'] });
-    const pAttRate = pAtt.length > 0
+    const hasPAtt = pAtt.length > 0;
+    const pAttRate = hasPAtt
       ? Math.round(pAtt.reduce((acc, curr) => acc + (curr.attendancePercentage || 0), 0) / pAtt.length)
-      : 80;
+      : null;
 
-    if ((userParts.length > 0 && pAvg < 60) || pAttRate < 80) {
+    if ((userParts.length > 0 && pAvg < 60) || (hasPAtt && pAttRate < 80)) {
       atRiskCount++;
     }
   }
@@ -327,6 +331,7 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
     totalParticipants,
     trainingCompletionRate,
     attendanceRate,
+    hasAttendanceData,
     assessmentAverageScore: avgScore,
     assessmentPassRate: passRate,
     certificationProgress,
@@ -337,6 +342,7 @@ async function getClientCockpitMetrics(clientUser, targetProjectId = 'all', targ
       totalParticipants,
       trainingCompletionRate,
       attendanceRate,
+      hasAttendanceData,
       assessmentAverageScore: avgScore,
       assessmentPassRate: passRate,
       certificationProgress,
@@ -359,9 +365,10 @@ async function getClientParticipants(clientUser, targetProjectId = 'all', target
   };
 
   if (search && search.trim() !== '') {
+    const likeOp = sequelize.getDialect() === 'postgres' ? Op.iLike : Op.like;
     whereClause[Op.or] = [
-      { name: { [Op.iLike || Op.like]: `%${search.trim()}%` } },
-      { employee_id: { [Op.iLike || Op.like]: `%${search.trim()}%` } }
+      { name: { [likeOp]: `%${search.trim()}%` } },
+      { employee_id: { [likeOp]: `%${search.trim()}%` } }
     ];
   }
 
@@ -379,27 +386,29 @@ async function getClientParticipants(clientUser, targetProjectId = 'all', target
       where: { userId: u.id },
       attributes: ['attendancePercentage', 'status']
     });
-    const attRate = attRecords.length > 0
+    const hasAtt = attRecords.length > 0;
+    const attRate = hasAtt
       ? Math.round(attRecords.reduce((acc, r) => acc + (r.attendancePercentage || (r.status === 'Present' ? 100 : 0)), 0) / attRecords.length)
-      : 80;
+      : null;
 
     // 2. Average Assessment Score
     const pParts = await Participant.findAll({
       where: { userId: u.id },
       attributes: ['score']
     });
-    const avgScore = pParts.length > 0
+    const hasScore = pParts.length > 0;
+    const avgScore = hasScore
       ? Math.min(100, Math.round(pParts.reduce((acc, r) => {
           const raw = Number(r.score || 0);
           return acc + (raw > 100 ? Math.min(100, Math.round(raw / 10)) : raw);
         }, 0) / pParts.length))
-      : 75;
+      : null;
 
     // 3. Training Progress
     const progRecords = await TrainingProgress.findAll({ where: { userId: u.id } });
     const progRate = progRecords.length > 0
       ? Math.round((progRecords.filter(p => p.completed === true).length / progRecords.length) * 100)
-      : 70;
+      : 0;
 
     // 4. Certification Status
     const cert = await Certificate.findOne({
@@ -407,7 +416,7 @@ async function getClientParticipants(clientUser, targetProjectId = 'all', target
       attributes: ['certificate_id', 'status', 'issueDate']
     });
 
-    const isAtRisk = avgScore < 60 || attRate < 80;
+    const isAtRisk = (hasScore && avgScore < 60) || (hasAtt && attRate < 80);
 
     return {
       id: u.id,
@@ -417,13 +426,15 @@ async function getClientParticipants(clientUser, targetProjectId = 'all', target
       projectName: u.Project?.name || 'Unassigned',
       projectId: u.projectId,
       attendanceRate: attRate,
+      hasAttendanceData: hasAtt,
       avgScore,
+      hasAssessmentData: hasScore,
       trainingProgress: progRate,
       status: u.status,
       certified: Boolean(cert),
       certificateId: cert?.certificate_id || null,
       issueDate: cert?.issueDate || null,
-      coachingStatus: isAtRisk ? 'At Risk' : (avgScore < 75 ? 'Needs Review' : 'On Track')
+      coachingStatus: isAtRisk ? 'At Risk' : ((hasScore && avgScore < 75) ? 'Needs Review' : 'On Track')
     };
   }));
 
