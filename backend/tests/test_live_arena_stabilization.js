@@ -226,7 +226,7 @@ async function runTestSuite() {
 
   const fastPoints = scoringEngine.calculatePoints(true, testQuestion, 2000);
   const slowPoints = scoringEngine.calculatePoints(true, testQuestion, 18000);
-  assert(fastPoints > slowPoints, `Speed bonus awarded: fast response (${fastPoints} pts) > slow response (${slowPoints} pts)`);
+  assert(fastPoints === 100 && slowPoints === 100 && fastPoints === slowPoints, `Strictly no speed bonuses: fast response (${fastPoints} pts) === slow response (${slowPoints} pts)`);
 
   // Idempotency deduplication check:
   const answeredMap = {};

@@ -469,20 +469,20 @@ function createModelStubber() {
     // ========================================================================
     console.log('\n--- 6. Separation of Measures & Live Arena Contract ---');
 
-    // Test 6.1: Live Arena speed points formula remains intact and separate from score percentages
-    const testQuestion = { time_limit: 30 }; // 30 second question
+    // Test 6.1: Live Arena points strictly determined by question points without speed bonuses
+    const testQuestion = { time_limit: 30, points: 100 }; // 30 second question with 100 points
     const instantPoints = calculatePoints(true, testQuestion, 0); // 0ms response
     const midPoints = calculatePoints(true, testQuestion, 15000); // 15000ms response
     const latePoints = calculatePoints(true, testQuestion, 30000); // 30000ms response
     const wrongPoints = calculatePoints(false, testQuestion, 5000); // wrong answer
 
-    assert(instantPoints === 1000, 'Live Arena awards 1000 speed points for instant correct response');
-    assert(midPoints === 750, 'Live Arena awards 750 speed points for mid-duration response');
-    assert(latePoints === 500, 'Live Arena awards 500 base points for last-second correct response');
+    assert(instantPoints === 100, 'Live Arena awards configured points (100) for instant correct response');
+    assert(midPoints === 100, 'Live Arena awards configured points (100) for mid-duration response without speed bonus');
+    assert(latePoints === 100, 'Live Arena awards configured points (100) for last-second correct response without speed bonus');
     assert(wrongPoints === 0, 'Live Arena awards 0 points for incorrect response');
 
-    // Test 6.2: Speed points (> 100) are never confused with Assessment Score % or Attendance %
-    assert(instantPoints > 100, 'Arena points (1000) are points-scale (>100), not percentage scale');
+    // Test 6.2: Question points are distinct from Assessment Score % or Attendance %
+    assert(instantPoints === 100, 'Arena points (100) match configured points');
     const assessmentScorePct = Math.round((1 / 2) * 100); // 50%
     const attendancePct = 85; // 85%
     const meetingDurationMins = 45; // 45 mins

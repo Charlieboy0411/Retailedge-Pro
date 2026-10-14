@@ -44,6 +44,8 @@ export default function HostControlRoom() {
   
   // Quiz Flow States
   const [answerRevealed, setAnswerRevealed] = useState(false);
+  const [revealedAnswer, setRevealedAnswer] = useState(null);
+  const [revealedIndex, setRevealedIndex]   = useState(null);
   const [showQuestionLeaderboard, setShowQuestionLeaderboard] = useState(false);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [qrError, setQrError] = useState(false);
@@ -247,6 +249,8 @@ export default function HostControlRoom() {
       setTimeLeft(data.duration || data.time_limit || 20);
       setQuestionDuration(data.duration || data.time_limit || 20);
       setAnswerRevealed(false);
+      setRevealedAnswer(null);
+      setRevealedIndex(null);
       setShowQuestionLeaderboard(false);
       setLiveAnswers([]);
     };
@@ -277,6 +281,8 @@ export default function HostControlRoom() {
 
     socket.on('answer_revealed', (data) => {
       setAnswerRevealed(true);
+      if (data?.correctAnswer !== undefined) setRevealedAnswer(data.correctAnswer);
+      if (data?.correctAnswerIndex !== undefined) setRevealedIndex(data.correctAnswerIndex);
       if (data?.leaderboard && data.leaderboard.length > 0) {
         setLeaderboard(data.leaderboard);
       }
@@ -502,13 +508,20 @@ export default function HostControlRoom() {
     return [];
   };
 
-  const isCorrectOpt = (opt) => {
+  const isCorrectOpt = (opt, index) => {
     if (!activeQuestion) return false;
     if (activeQuestion.type === 'poll') return true;
-    if (Array.isArray(activeQuestion.correct_answer)) {
-      return activeQuestion.correct_answer.includes(opt);
+    if (revealedIndex !== null && revealedIndex !== undefined && index === revealedIndex) return true;
+    const authoritative = (revealedAnswer !== null && revealedAnswer !== undefined) ? revealedAnswer : activeQuestion.correct_answer;
+    if (!authoritative) return false;
+    if (Array.isArray(authoritative)) {
+      return authoritative.map(x => String(x).trim().toLowerCase()).includes(String(opt).trim().toLowerCase());
     }
-    return activeQuestion.correct_answer === opt;
+    const authStr = String(authoritative).trim().toLowerCase();
+    const optStr = String(opt).trim().toLowerCase();
+    if (authStr === optStr) return true;
+    if (authStr === String(index)) return true;
+    return false;
   };
 
   const getOptionVotes = (opt) => {
@@ -854,187 +867,182 @@ export default function HostControlRoom() {
                 </div>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(37, 99, 235, 0.12)', color: '#2563EB', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
-                  <Radio size={32} />
+              participants.length === 0 ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center', padding: '40px 20px' }}>
+                  <div style={{
+                    width: '84px',
+                    height: '84px',
+                    borderRadius: '24px',
+                    background: 'rgba(37, 99, 235, 0.1)',
+                    border: '1.5px solid rgba(37, 99, 235, 0.25)',
+                    color: '#60A5FA',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: '24px'
+                  }}>
+                    <Radio size={40} />
+                  </div>
+                  <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px', letterSpacing: '-0.02em' }}>
+                    Live Presentation Lobby
+                  </h1>
+                  <p style={{ fontSize: '1.15rem', color: '#94A3B8', maxWidth: '540px', lineHeight: 1.6, margin: '0 0 32px 0' }}>
+                    Scan the QR code on the sidebar or enter Session PIN to connect to the Live Arena.
+                  </p>
+                  <div style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                    background: '#162033',
+                    border: '1px solid #1E293B',
+                    borderRadius: '30px',
+                    padding: '8px 24px',
+                    color: '#60A5FA',
+                    fontSize: '0.9rem',
+                    fontWeight: 600
+                  }}>
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6', display: 'inline-block' }} />
+                    <span>Awaiting learner connections...</span>
+                  </div>
                 </div>
-                <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px' }}>
-                  Waiting for Participants to Connect
-                </h1>
-                {/* Interactive Learner Connect Card */}
-                <div style={{
-                  background: 'rgba(22, 32, 51, 0.75)',
-                  border: '1px solid #1E293B',
-                  backdropFilter: 'blur(8px)',
-                  borderRadius: '16px',
-                  padding: '24px 32px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: '16px',
-                  maxWidth: '680px',
-                  width: '100%',
-                  margin: '0 auto 36px',
-                  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)'
-                }}>
-                  <div style={{ color: '#94A3B8', fontSize: '0.95rem', fontWeight: 600 }}>
-                    Learners can scan the QR code on the left or open this direct link:
+              ) : (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', padding: '10px 0', boxSizing: 'border-box' }}>
+                  {/* Header status strip */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #1E293B' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFFFFF' }}>
+                        Connected Associates
+                      </span>
+                      <span style={{
+                        background: 'rgba(37, 99, 235, 0.2)',
+                        border: '1px solid #2563EB',
+                        color: '#93C5FD',
+                        fontSize: '0.9rem',
+                        fontWeight: 800,
+                        padding: '3px 12px',
+                        borderRadius: '20px'
+                      }}>
+                        {participants.length}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.9rem', color: '#94A3B8', fontWeight: 600 }}>
+                      Click <strong>Start Session</strong> below when all participants are ready
+                    </div>
                   </div>
 
-                  {/* Big Clickable Direct Join Link */}
-                  {roomCode && (
-                    <a
-                      href={fullJoinLink}
-                      target="_blank"
-                      rel="noreferrer"
-                      title="Click to directly open Live Join Page in a new tab"
-                      style={{
-                        background: '#0F172A',
-                        border: '1.5px solid #2563EB',
-                        borderRadius: '12px',
-                        padding: '12px 24px',
-                        color: '#60A5FA',
-                        fontSize: '1.15rem',
-                        fontWeight: 800,
-                        fontFamily: 'monospace',
-                        textDecoration: 'none',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '10px',
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        boxShadow: '0 4px 16px rgba(37, 99, 235, 0.25)'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#38BDF8'; e.currentTarget.style.color = '#38BDF8'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = '#2563EB'; e.currentTarget.style.color = '#60A5FA'; }}
-                    >
-                      <span>{fullJoinLink.replace(/^https?:\/\//, '')}</span>
-                      <ExternalLink size={18} />
-                    </a>
-                  )}
+                  {/* Adaptive Participant Roster Canvas */}
+                  {(() => {
+                    const count = participants.length;
+                    let gridStyle = {
+                      display: 'grid',
+                      gap: '20px',
+                      width: '100%',
+                      alignContent: 'center',
+                      justifyContent: 'center',
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))'
+                    };
+                    let nameSize = '2.4rem';
+                    let avatarSize = '3rem';
+                    let cardPadding = '24px 32px';
+                    let cardMinHeight = '110px';
 
-                  {/* Action Buttons: Direct Open + Copy */}
-                  {roomCode && (
-                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' }}>
-                      <button
-                        onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
-                        style={{
-                          background: '#2563EB',
-                          color: '#FFFFFF',
-                          border: 'none',
-                          borderRadius: '8px',
-                          padding: '8px 20px',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
-                          transition: 'all 0.15s'
-                        }}
-                      >
-                        <ExternalLink size={14} />
-                        <span>Open Join Page (New Tab) ↗</span>
-                      </button>
+                    if (count <= 3) {
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(360px, 1fr))';
+                      nameSize = '2.5rem';
+                      avatarSize = '3.4rem';
+                      cardPadding = '28px 36px';
+                      cardMinHeight = '130px';
+                    } else if (count <= 8) {
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
+                      nameSize = '1.85rem';
+                      avatarSize = '2.5rem';
+                      cardPadding = '18px 24px';
+                      cardMinHeight = '90px';
+                    } else if (count <= 20) {
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(230px, 1fr))';
+                      nameSize = '1.35rem';
+                      avatarSize = '1.8rem';
+                      cardPadding = '14px 18px';
+                      cardMinHeight = '70px';
+                    } else {
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fill, minmax(170px, 1fr))';
+                      nameSize = '1.1rem';
+                      avatarSize = '1.4rem';
+                      cardPadding = '10px 14px';
+                      cardMinHeight = '54px';
+                    }
 
-                      <button
-                        onClick={async () => {
-                          await copyTextToClipboard(fullJoinLink);
-                          setCopiedLink(true);
-                          setTimeout(() => setCopiedLink(false), 2500);
-                        }}
-                        style={{
-                          background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.15)',
-                          border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.4)'}`,
-                          borderRadius: '8px',
-                          padding: '8px 18px',
-                          color: copiedLink ? '#34D399' : '#93C5FD',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-                        <span>{copiedLink ? 'Link Copied!' : 'Copy Link'}</span>
-                      </button>
-
-                      <button
-                        onClick={async () => {
-                          await copyTextToClipboard(roomCode);
-                          setCopiedPin(true);
-                          setTimeout(() => setCopiedPin(false), 2500);
-                        }}
-                        style={{
-                          background: copiedPin ? '#065F46' : '#1E293B',
-                          border: `1px solid ${copiedPin ? '#10B981' : '#334155'}`,
-                          borderRadius: '8px',
-                          padding: '8px 18px',
-                          color: copiedPin ? '#34D399' : '#94A3B8',
-                          fontSize: '0.85rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '6px',
-                          transition: 'all 0.2s'
-                        }}
-                      >
-                        {copiedPin ? <Check size={14} /> : <Copy size={14} />}
-                        <span>{copiedPin ? 'PIN Copied!' : `Copy PIN: ${formattedRoomCode}`}</span>
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Connected Participant Chips */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px', maxWidth: '800px', justifyContent: 'center' }}>
-                  {participants.map((p, i) => (
-                    <div 
-                      key={p.id || i} 
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: '10px', 
-                        background: p.disconnected ? 'rgba(30, 41, 59, 0.6)' : '#162033', 
-                        border: `1px solid ${p.disconnected ? '#334155' : '#1E293B'}`, 
-                        padding: '8px 16px', 
-                        borderRadius: '20px', 
-                        fontSize: '0.9rem', 
-                        fontWeight: 600, 
-                        color: p.disconnected ? '#94A3B8' : '#FFFFFF',
-                        opacity: p.disconnected ? 0.75 : 1
-                      }}
-                    >
-                      <span style={{ fontSize: '1.2rem' }}>{p.avatar || getSmileyForName(p.name)}</span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', lineHeight: 1.25 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontWeight: 700 }}>{p.name}</span>
-                          {p.disconnected && (
-                            <span style={{ fontSize: '0.65rem', background: '#EF4444', color: '#FFF', padding: '1px 6px', borderRadius: '8px', fontWeight: 700 }}>
-                              Offline
+                    return (
+                      <div style={gridStyle}>
+                        {participants.map((p, i) => (
+                          <div
+                            key={p.id || i}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '16px',
+                              background: p.disconnected ? 'rgba(30, 41, 59, 0.45)' : 'rgba(22, 32, 51, 0.75)',
+                              border: `1.5px solid ${p.disconnected ? '#334155' : 'rgba(59, 130, 246, 0.25)'}`,
+                              borderRadius: '16px',
+                              padding: cardPadding,
+                              minHeight: cardMinHeight,
+                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
+                              backdropFilter: 'blur(8px)',
+                              transition: 'all 0.2s ease',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <span style={{ fontSize: avatarSize, flexShrink: 0 }}>
+                              {p.avatar || getSmileyForName(p.name)}
                             </span>
-                          )}
-                        </div>
-                        {(p.employeeId || p.zone || p.storeName) && (
-                          <span style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
-                            {[p.employeeId ? `ID: ${p.employeeId}` : '', (p.zone || p.storeName) ? `Zone: ${p.zone || p.storeName}` : ''].filter(Boolean).join(' • ')}
-                          </span>
-                        )}
+                            <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, justifyContent: 'center' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                <span style={{
+                                  fontSize: nameSize,
+                                  fontWeight: 800,
+                                  color: p.disconnected ? '#94A3B8' : '#FFFFFF',
+                                  letterSpacing: '-0.02em',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {p.name}
+                                </span>
+                                {p.disconnected && (
+                                  <span style={{
+                                    fontSize: '0.68rem',
+                                    background: '#EF4444',
+                                    color: '#FFF',
+                                    padding: '2px 8px',
+                                    borderRadius: '10px',
+                                    fontWeight: 800,
+                                    flexShrink: 0
+                                  }}>
+                                    Offline
+                                  </span>
+                                )}
+                              </div>
+                              {(p.employeeId || p.zone || p.storeName) && (
+                                <div style={{
+                                  fontSize: count <= 8 ? '0.85rem' : '0.72rem',
+                                  color: '#94A3B8',
+                                  fontWeight: 600,
+                                  marginTop: '4px',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  {[p.employeeId ? `ID: ${p.employeeId}` : '', (p.zone || p.storeName) ? `Zone: ${p.zone || p.storeName}` : ''].filter(Boolean).join(' • ')}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
-                  {participants.length === 0 && (
-                    <div style={{ color: '#64748B', fontStyle: 'italic', fontSize: '0.95rem' }}>
-                      No learners joined yet...
-                    </div>
-                  )}
+                    );
+                  })()}
                 </div>
-              </div>
+              )
             )
           )}
 
@@ -1047,18 +1055,31 @@ export default function HostControlRoom() {
                 <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: 0, lineHeight: 1.3, flex: 1 }}>
                   {activeQuestion.text}
                 </h1>
-                {activeQuestion.time_limit && !answerRevealed && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{
-                    display: 'flex', alignItems: 'center', gap: '8px',
-                    background: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                    border: `1.5px solid ${timeLeft <= 5 ? '#EF4444' : '#F59E0B'}`,
-                    color: timeLeft <= 5 ? '#EF4444' : '#F59E0B',
-                    padding: '8px 16px', borderRadius: '12px', fontSize: '1.3rem', fontWeight: 800
+                    background: 'rgba(37, 99, 235, 0.15)',
+                    border: '1.5px solid #2563EB',
+                    color: '#60A5FA',
+                    padding: '8px 16px',
+                    borderRadius: '12px',
+                    fontSize: '1.05rem',
+                    fontWeight: 800
                   }}>
-                    <Clock size={20} />
-                    <span>{timeLeft}s</span>
+                    {activeQuestion.points ?? 100} Points
                   </div>
-                )}
+                  {activeQuestion.time_limit && !answerRevealed && (
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: '8px',
+                      background: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+                      border: `1.5px solid ${timeLeft <= 5 ? '#EF4444' : '#F59E0B'}`,
+                      color: timeLeft <= 5 ? '#EF4444' : '#F59E0B',
+                      padding: '8px 16px', borderRadius: '12px', fontSize: '1.3rem', fontWeight: 800
+                    }}>
+                      <Clock size={20} />
+                      <span>{timeLeft}s</span>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Options Listing / Response Distribution */}
@@ -1066,7 +1087,7 @@ export default function HostControlRoom() {
                 {getOptions(activeQuestion).map((opt, i) => {
                   const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
                   const letter = letters[i] || '?';
-                  const isCorrect = isCorrectOpt(opt);
+                  const isCorrect = isCorrectOpt(opt, i);
                   const votes = getOptionVotes(opt);
                   const percentage = liveAnswers.length > 0 ? Math.round((votes / liveAnswers.length) * 100) : 0;
 
@@ -1075,25 +1096,26 @@ export default function HostControlRoom() {
                       key={i}
                       style={{
                         background: '#111827',
-                        border: `1.5px solid ${answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#1E293B'}`,
+                        border: `2px solid ${answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#1E293B'}`,
                         borderRadius: '12px', padding: '16px 20px',
                         display: 'flex', flexDirection: 'column', gap: '10px',
-                        boxShadow: answerRevealed && isCorrect ? '0 0 20px rgba(16, 185, 129, 0.2)' : 'none'
+                        boxShadow: answerRevealed && isCorrect ? '0 0 25px rgba(16, 185, 129, 0.25)' : 'none',
+                        transition: 'all 0.2s ease'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: '#FFFFFF' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: answerRevealed && isCorrect ? '#10B981' : '#FFFFFF' }}>
                           <span style={{
-                            width: '28px', height: '28px', borderRadius: '6px',
+                            width: '32px', height: '32px', borderRadius: '8px',
                             background: answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#2563EB',
                             color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: '0.85rem', fontWeight: 800
+                            fontSize: '0.9rem', fontWeight: 800
                           }}>
                             {letter}
                           </span>
                           <span>{opt}</span>
                           {answerRevealed && isCorrect && (
-                            <CheckCircle2 size={18} color="#10B981" />
+                            <CheckCircle2 size={22} color="#10B981" />
                           )}
                         </div>
                         {answerRevealed && (

@@ -70,6 +70,92 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     return p.storeName || p.location || p.store || '—';
   };
 
+  // Helper to resolve human-readable correct answer text from option index or text
+  const resolveCorrectAnswerText = (q) => {
+    if (!q || q.correct_answer === undefined || q.correct_answer === null) return 'N/A';
+    let opts = [];
+    if (Array.isArray(q.options)) opts = q.options;
+    else if (typeof q.options === 'string') {
+      try { opts = JSON.parse(q.options); } catch (e) { opts = []; }
+    }
+    const raw = q.correct_answer;
+    if (opts.length > 0 && !isNaN(raw) && opts[parseInt(raw)] !== undefined) {
+      return opts[parseInt(raw)];
+    }
+    return String(raw);
+  };
+
+  // Helper to check answer correctness accurately
+  const checkIsCorrect = (q, answer) => {
+    if (answer === undefined || answer === null || answer === '' || answer === 'No Answer') return false;
+    const correct = q.correct_answer;
+    if (correct === undefined || correct === null) return false;
+
+    let opts = [];
+    if (Array.isArray(q.options)) opts = q.options;
+    else if (typeof q.options === 'string') {
+      try { opts = JSON.parse(q.options); } catch (e) { opts = []; }
+    }
+
+    if (opts.length > 0) {
+      if (!isNaN(correct) && opts[parseInt(correct)] !== undefined) {
+        if (String(opts[parseInt(correct)]).trim().toLowerCase() === String(answer).trim().toLowerCase()) return true;
+      }
+      if (!isNaN(answer) && opts[parseInt(answer)] !== undefined) {
+        if (String(opts[parseInt(answer)]).trim().toLowerCase() === String(correct).trim().toLowerCase()) return true;
+      }
+    }
+
+    if (Array.isArray(correct)) {
+      return correct.map(c => String(c).trim().toLowerCase()).includes(String(answer).trim().toLowerCase());
+    }
+
+    return String(answer).trim().toLowerCase() === String(correct).trim().toLowerCase();
+  };
+
+  const totalQuestions = questionsList.length;
+  const totalConfiguredPoints = questionsList.reduce((sum, q) => sum + (q.points !== undefined && q.points !== null ? Number(q.points) : 100), 0);
+
+  // Reconciled participant scoring and metrics
+  const reconciledParticipants = participants.map(p => {
+    const responses = p.responses || [];
+    let correctCount = 0;
+    let earnedPoints = 0;
+    let answeredCount = 0;
+
+    questionsList.forEach(q => {
+      const resp = responses.find(r => r.questionId === q.id);
+      if (resp && resp.answer && resp.answer !== 'No Answer') {
+        answeredCount++;
+        const isRight = (resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) || checkIsCorrect(q, resp.answer);
+        if (isRight) {
+          correctCount++;
+          const qPoints = q.points !== undefined && q.points !== null ? Number(q.points) : 100;
+          earnedPoints += (resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) ? Number(resp.points_awarded) : qPoints;
+        }
+      }
+    });
+
+    const percent = totalConfiguredPoints > 0 ? Math.round((earnedPoints / totalConfiguredPoints) * 100) : 0;
+    const isCompleted = answeredCount === totalQuestions;
+    const statusText = isCompleted ? 'Completed' : (answeredCount > 0 ? 'Partial' : 'No Responses');
+
+    return {
+      ...p,
+      answeredCount,
+      correctCount,
+      earnedPoints,
+      percent,
+      statusText
+    };
+  });
+
+  // Authoritative leaderboard participants sorted by earnedPoints DESC, then correctCount DESC
+  const leaderboardParticipants = [...reconciledParticipants].sort((a, b) => {
+    if (b.earnedPoints !== a.earnedPoints) return b.earnedPoints - a.earnedPoints;
+    return b.correctCount - a.correctCount;
+  });
+
 
   // ----------------------------------------------------
   // CELL STYLING CONFIGURATIONS
@@ -134,15 +220,15 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
         }
 
         // Highlight coloring
-        if (val === 'Pass' || val === 'Certified' || val === 'Present' || val === 'Low' || val === 'Low Risk') {
+        if (val === 'Pass' || val === 'Certified' || val === 'Present' || val === 'Low' || val === 'Low Risk' || val === 'Correct' || val === 'Completed') {
           ws[cellRef].s.fill = { fgColor: { rgb: 'C6EFCE' } };
           ws[cellRef].s.font.color = { rgb: '006100' };
           ws[cellRef].s.font.bold = true;
-        } else if (val === 'Fail' || val === 'Expired' || val === 'Absent' || val === 'Critical' || val === 'High' || val === 'Critical Risk') {
+        } else if (val === 'Fail' || val === 'Expired' || val === 'Absent' || val === 'Critical' || val === 'High' || val === 'Critical Risk' || val === 'Incorrect') {
           ws[cellRef].s.fill = { fgColor: { rgb: 'FFC7CE' } };
           ws[cellRef].s.font.color = { rgb: '9C0006' };
           ws[cellRef].s.font.bold = true;
-        } else if (val === 'Pending' || val === 'Late' || val === 'Medium' || val === 'Medium Risk') {
+        } else if (val === 'Pending' || val === 'Late' || val === 'Medium' || val === 'Medium Risk' || val === 'Unanswered' || val === 'Partial') {
           ws[cellRef].s.fill = { fgColor: { rgb: 'FFEB9C' } };
           ws[cellRef].s.font.color = { rgb: '9C6500' };
           ws[cellRef].s.font.bold = true;
@@ -437,34 +523,167 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     XLSX.utils.book_append_sheet(wb, ws, 'Participant Performance');
   };
 
-  // Sheet 4: Question Analysis
+  // ----------------------------------------------------
+  // DEDICATED LIVE ARENA QUIZ SHEETS (5-SHEET WORKBOOK)
+  // ----------------------------------------------------
+
+  // Sheet 1: Quiz Summary
+  const addQuizSummarySheet = () => {
+    const participantsWithAnswers = reconciledParticipants.filter(p => p.answeredCount > 0);
+    const totalResponsesCount = reconciledParticipants.reduce((sum, p) => sum + p.answeredCount, 0);
+    const totalCorrectResponses = reconciledParticipants.reduce((sum, p) => sum + p.correctCount, 0);
+    const totalPossiblePoints = totalConfiguredPoints;
+    const avgScore = reconciledParticipants.length > 0
+      ? Math.round(reconciledParticipants.reduce((sum, p) => sum + p.earnedPoints, 0) / reconciledParticipants.length)
+      : 0;
+    const highestScore = reconciledParticipants.length > 0
+      ? Math.max(...reconciledParticipants.map(p => p.earnedPoints))
+      : 0;
+    const overallAccuracyPct = (participants.length * totalQuestions) > 0
+      ? Math.round((totalCorrectResponses / (participants.length * totalQuestions)) * 100)
+      : 0;
+
+    const summaryRows = [
+      ['Metric', 'Quiz Session Summary Details'],
+      ['Quiz Name', sessionData.quizTitle || 'Live Quiz Arena'],
+      ['Designated Project', sessionData.projectName || 'General'],
+      ['Session Reference / PIN', sessionData.sessionPin || sessionData.id || 'N/A'],
+      ['Trainer / Host', brandingOpts.presenterName || sessionData.trainerName || sessionData.hostName || 'Trainer'],
+      ['Session Date', sessionData.date || reportDate],
+      ['Session Status', sessionData.status || (reconciledParticipants.length > 0 ? 'Completed' : 'Active')],
+      ['Registered Participants', participants.length],
+      ['Participants with Submissions', participantsWithAnswers.length],
+      ['Total Questions', totalQuestions],
+      ['Total Possible Configured Points', totalPossiblePoints],
+      ['Total Accepted Responses', totalResponsesCount],
+      ['Overall Accuracy Rate', `${overallAccuracyPct}%`],
+      ['Average Score Achieved', `${avgScore} points`],
+      ['Top Score Achieved', `${highestScore} points`]
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(summaryRows);
+    applyTableFillsAndBorders(ws, 1, 0);
+    XLSX.utils.book_append_sheet(wb, ws, 'Quiz Summary');
+  };
+
+  // Sheet 2: Participant Results
+  const addParticipantResultsSheet = () => {
+    const tableHeader = [
+      'Rank', 'Participant Name', 'Employee ID', 'Zone',
+      'Questions Answered', 'Correct Answers', 'Points Earned',
+      'Maximum Possible Points', 'Score Percentage', 'Completion Status'
+    ];
+
+    const dataRows = leaderboardParticipants.map((p, idx) => {
+      return [
+        idx + 1,
+        p.name || 'Participant',
+        p.employeeId || 'N/A',
+        getParticipantRegion(p),
+        p.answeredCount,
+        p.correctCount,
+        p.earnedPoints,
+        totalConfiguredPoints,
+        totalConfiguredPoints > 0 ? `${p.percent}%` : 'N/A',
+        p.statusText
+      ];
+    });
+
+    if (dataRows.length === 0) {
+      dataRows.push([1, 'No participants recorded', '—', '—', 0, 0, 0, totalConfiguredPoints, '0%', 'No Responses']);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
+    applyTableFillsAndBorders(ws, 1, 0);
+    XLSX.utils.book_append_sheet(wb, ws, 'Participant Results');
+  };
+
+  // Sheet 3 (and Sheet 4 for general): Question Analysis - 100% computed from actual responses
   const addQuestionAnalysisSheet = () => {
     const tableHeader = [
-      'Question Number', 'Question Text', 'Correct %', 'Incorrect %', 'Skipped %', 'Difficulty Level'
+      'Question Number', 'Question Text', 'Configured Points', 'Correct Answer',
+      'Eligible Participants', 'Responses Submitted', 'Correct Responses',
+      'Incorrect Responses', 'Unanswered Count', 'Accuracy Rate (%)'
     ];
 
     const dataRows = questionsList.map((q, idx) => {
-      const correctVal = idx === 0 ? 92 : idx === 1 ? 48 : 31;
-      const incorrectVal = 100 - correctVal - (idx === 2 ? 5 : 0);
-      const skippedVal = idx === 2 ? 5 : 0;
-      const diffText = correctVal >= 75 ? 'Easy' : correctVal >= 45 ? 'Medium' : 'Hard';
+      const qPoints = q.points !== undefined && q.points !== null ? Number(q.points) : 100;
+      const correctAnsText = resolveCorrectAnswerText(q);
+      const eligibleCount = participants.length;
+
+      let submittedCount = 0;
+      let correctCount = 0;
+      let incorrectCount = 0;
+
+      participants.forEach(p => {
+        const resp = (p.responses || []).find(r => r.questionId === q.id);
+        if (resp && resp.answer && resp.answer !== 'No Answer') {
+          submittedCount++;
+          const isRight = (resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) || checkIsCorrect(q, resp.answer);
+          if (isRight) correctCount++;
+          else incorrectCount++;
+        }
+      });
+
+      const unansweredCount = Math.max(0, eligibleCount - submittedCount);
+      const accuracyPct = eligibleCount > 0 ? Math.round((correctCount / eligibleCount) * 100) : 0;
 
       return [
         `Q${idx + 1}`,
-        q.text,
-        `${correctVal}%`,
-        `${incorrectVal}%`,
-        `${skippedVal}%`,
-        diffText
+        q.text || `Question ${idx + 1}`,
+        qPoints,
+        correctAnsText,
+        eligibleCount,
+        submittedCount,
+        correctCount,
+        incorrectCount,
+        unansweredCount,
+        `${accuracyPct}%`
       ];
     });
+
+    if (dataRows.length === 0) {
+      dataRows.push(['Q1', 'No questions configured', 0, '—', 0, 0, 0, 0, 0, '0%']);
+    }
 
     const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
     applyTableFillsAndBorders(ws, 1, 0);
     XLSX.utils.book_append_sheet(wb, ws, 'Question Analysis');
   };
 
-  // Sheet 5: Leaderboard
+  // Sheet 4: Final Leaderboard
+  const addFinalLeaderboardSheet = () => {
+    const tableHeader = [
+      'Rank', 'Participant Name', 'Employee ID', 'Zone',
+      'Final Points', 'Correct Answers', 'Questions Answered', 'Tie Status'
+    ];
+
+    const dataRows = leaderboardParticipants.map((p, idx, arr) => {
+      const isTied = arr.some((other, oIdx) => oIdx !== idx && other.earnedPoints === p.earnedPoints && other.correctCount === p.correctCount);
+      const tieStatus = isTied ? 'Tied' : 'Distinct';
+
+      return [
+        idx + 1,
+        p.name || 'Participant',
+        p.employeeId || 'N/A',
+        getParticipantRegion(p),
+        p.earnedPoints,
+        p.correctCount,
+        p.answeredCount,
+        tieStatus
+      ];
+    });
+
+    if (dataRows.length === 0) {
+      dataRows.push([1, 'No participants recorded', '—', '—', 0, 0, 0, 'Distinct']);
+    }
+
+    const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
+    applyTableFillsAndBorders(ws, 1, 0);
+    XLSX.utils.book_append_sheet(wb, ws, 'Final Leaderboard');
+  };
+
+  // Sheet 5: General Leaderboard (kept for compatibility with legacy multi-sheet reports)
   const addLeaderboardSheet = () => {
     const tableHeader = ['Rank', 'Participant Name', 'Project', 'Score', 'Completion Time', 'Region'];
 
@@ -489,6 +708,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     applyTableFillsAndBorders(ws, 1, 0);
     XLSX.utils.book_append_sheet(wb, ws, 'Leaderboard');
   };
+
 
   // Sheet 6: Knowledge Gap Analysis
   const addKnowledgeGapSheet = () => {
@@ -840,8 +1060,52 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     XLSX.utils.book_append_sheet(wb, ws, 'Audit Trail');
   };
 
-  // Sheet 14: Quiz Responses (from the original exportQuizSessionExcel format)
+  // Sheet 5: Quiz Responses
   const addQuizResponsesSheet = () => {
+    if (workbookType === 'quiz') {
+      const tableHeader = [
+        'Participant', 'Employee ID', 'Zone', 'Question',
+        'Final Accepted Answer', 'Result', 'Configured Points',
+        'Points Earned', 'Submission Status'
+      ];
+
+      const dataRows = [];
+      participants.forEach(p => {
+        const zoneStr = getParticipantRegion(p);
+        questionsList.forEach((q, idx) => {
+          const resp = (p.responses || []).find(r => r.questionId === q.id);
+          const hasAnswer = resp && resp.answer !== undefined && resp.answer !== null && resp.answer !== '' && resp.answer !== 'No Answer';
+          const ansText = hasAnswer ? resp.answer : 'No Answer';
+          const isRight = hasAnswer && ((resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) || checkIsCorrect(q, ansText));
+          const qPoints = q.points !== undefined && q.points !== null ? Number(q.points) : 100;
+          const earned = isRight ? ((resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) ? Number(resp.points_awarded) : qPoints) : 0;
+          const result = isRight ? 'Correct' : (hasAnswer ? 'Incorrect' : 'Unanswered');
+          const subStatus = hasAnswer ? 'Submitted' : 'Unanswered';
+
+          dataRows.push([
+            p.name || 'Participant',
+            p.employeeId || 'N/A',
+            zoneStr,
+            `Q${idx + 1}: ${q.text || ''}`,
+            ansText,
+            result,
+            qPoints,
+            earned,
+            subStatus
+          ]);
+        });
+      });
+
+      if (dataRows.length === 0) {
+        dataRows.push(['No participants', '—', '—', '—', '—', 'Unanswered', 0, 0, 'Unanswered']);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
+      applyTableFillsAndBorders(ws, 1, 0);
+      XLSX.utils.book_append_sheet(wb, ws, 'Quiz Responses');
+      return;
+    }
+
     const questions = sessionData.questions || [];
     
     // Header row
@@ -1011,6 +1275,14 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
   // BUILD WORKBOOK BASED ON SELECTED EXPORT TYPE
   // ----------------------------------------------------
   const sheetsMap = {
+    quiz: () => {
+      // Standard Live Arena Quiz Workbook: Strictly 5 mathematically reconciled sheets
+      addQuizSummarySheet();
+      addParticipantResultsSheet();
+      addQuestionAnalysisSheet();
+      addFinalLeaderboardSheet();
+      addQuizResponsesSheet();
+    },
     executive: () => {
       addDashboardSheet();
       addExecutiveSummarySheet();
@@ -1082,7 +1354,15 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
     const ws = wb.Sheets[sheetName];
     // Default column widths
     const colW = [];
-    if (sheetName === 'Dashboard') {
+    if (sheetName === 'Quiz Summary') {
+      colW.push({ wch: 32 }, { wch: 45 });
+    } else if (sheetName === 'Participant Results') {
+      colW.push({ wch: 8 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 16 }, { wch: 16 }, { wch: 24 }, { wch: 18 }, { wch: 20 });
+    } else if (sheetName === 'Question Analysis') {
+      colW.push({ wch: 16 }, { wch: 45 }, { wch: 18 }, { wch: 25 }, { wch: 22 }, { wch: 22 }, { wch: 18 }, { wch: 20 }, { wch: 18 }, { wch: 18 });
+    } else if (sheetName === 'Final Leaderboard') {
+      colW.push({ wch: 8 }, { wch: 24 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 14 });
+    } else if (sheetName === 'Dashboard') {
       for (let i = 0; i < 12; i++) {
         colW.push({ wch: 15 });
       }
@@ -1090,12 +1370,14 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
       colW.push({ wch: 32 }, { wch: 45 }, { wch: 15 }, { wch: 55 });
     } else if (sheetName === 'Participant Performance') {
       colW.push({ wch: 15 }, { wch: 22 }, { wch: 15 }, { wch: 25 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 });
-    } else if (sheetName === 'Question Analysis') {
-      colW.push({ wch: 16 }, { wch: 45 }, { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 16 });
     } else if (sheetName === 'Quiz Responses') {
-      colW.push({ wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 22 });
-      for (let i = 6; i < 35; i++) {
-        colW.push({ wch: 30 });
+      if (workbookType === 'quiz') {
+        colW.push({ wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 45 }, { wch: 28 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 20 });
+      } else {
+        colW.push({ wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 22 });
+        for (let i = 6; i < 35; i++) {
+          colW.push({ wch: 30 });
+        }
       }
     } else {
       for (let i = 0; i < 10; i++) {
@@ -1107,6 +1389,7 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
 
   // Write and download file
   const reportNameMap = {
+    quiz: 'Quiz_Offline_Workbook',
     executive: 'Executive_Report',
     trainer: 'Trainer_Report',
     pm: 'Program_Manager_Report',

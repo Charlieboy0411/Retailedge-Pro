@@ -918,7 +918,9 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
       }
     }
 
-    const totalQuestions = session.Quiz && session.Quiz.questions ? session.Quiz.questions.length : 0;
+    const questions = (session.Quiz && session.Quiz.questions) ? session.Quiz.questions : [];
+    const totalQuestions = questions.length;
+    const maxPossiblePoints = questions.reduce((sum, q) => sum + (q.points !== undefined && q.points !== null ? Number(q.points) : 100), 0);
     let totalScoreSum = 0;
 
     const participantsDetails = (session.Participants || []).map(p => {
@@ -926,8 +928,9 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
       const totalTimeMs = responses.reduce((sum, r) => sum + (r.response_time || 0), 0);
       const timeSpentSec = Math.round(totalTimeMs / 1000);
       
-      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
-      const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
+      const correctCount = responses.filter(r => (r.points_awarded > 0) || r.is_correct).length;
+      const pointsEarned = responses.reduce((sum, r) => sum + (Number(r.points_awarded) || 0), 0);
+      const percentage = maxPossiblePoints > 0 ? Math.min(100, Math.max(0, Math.round((pointsEarned / maxPossiblePoints) * 100))) : 0;
       totalScoreSum += percentage;
 
       const answeredQuestions = responses.length;
@@ -939,8 +942,10 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
         employeeId: p.employeeId || 'N/A',
         mobileNumber: p.mobileNumber || 'N/A',
         score: `${correctCount} / ${totalQuestions}`,
+        pointsEarned,
+        maxPossiblePoints,
         percentage: `${percentage}%`,
-        arenaPoints: p.score || 0,
+        arenaPoints: p.score !== undefined && p.score !== null ? p.score : pointsEarned,
         timeSpent: `${timeSpentSec}s`,
         completion: `${completionPercentage}%`,
         storeName: p.storeName || null,
@@ -962,13 +967,16 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
       hostName: session.host ? session.host.name : 'Lead Trainer',
       date: session.startedAt ? new Date(session.startedAt).toISOString().split('T')[0] : new Date(session.createdAt).toISOString().split('T')[0],
       totalQuestions,
+      maxPossiblePoints,
       status: session.status || 'Finished',
       avgScore: `${avgScore}%`,
       participantsCount: participantsDetails.length,
       participants: participantsDetails,
-      questions: (session.Quiz && session.Quiz.questions || []).map(q => ({
+      questions: questions.map(q => ({
         id: q.id,
         text: q.text,
+        points: q.points !== undefined && q.points !== null ? Number(q.points) : 100,
+        options: q.options,
         correct_answer: q.correct_answer
       }))
     });

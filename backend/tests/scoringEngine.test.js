@@ -33,36 +33,74 @@ describe('scoringEngine.js Answer Validation', () => {
     const questionJsonStr = { type: 'multi_select', correct_answer: '["Option A", "Option B"]' };
     expect(isCorrectAnswer(questionJsonStr, 'Option A, Option B')).toBe(true);
     expect(isCorrectAnswer(questionJsonStr, ['Option B', 'Option A'])).toBe(true);
+    expect(isCorrectAnswer(questionJsonStr, 'invalid,json,array')).toBe(false);
+
+    const questionWithOptions = {
+      type: 'multi_select',
+      options: '["Option A", "Option B", "Option C"]', // JSON string options
+      correct_answer: ['Option A', 'Option B']
+    };
+    expect(isCorrectAnswer(questionWithOptions, ['0', '1'])).toBe(true);
+    expect(isCorrectAnswer(questionWithOptions, ['Option A', 'Option B', 'Option C'])).toBe(false);
+
+    // Invalid JSON options fallback
+    const questionBadJson = {
+      type: 'mcq',
+      options: 'not-valid-json',
+      correct_answer: 'Option A'
+    };
+    expect(isCorrectAnswer(questionBadJson, 'Option A')).toBe(true);
+  });
+
+  test('validates single choice when correct_answer or submittedAnswer is an option index', () => {
+    const questionWithIndex = {
+      type: 'mcq',
+      options: ['First Choice', 'Second Choice', 'Third Choice'],
+      correct_answer: '0' // index 0
+    };
+    expect(isCorrectAnswer(questionWithIndex, 'First Choice')).toBe(true);
+    expect(isCorrectAnswer(questionWithIndex, 'first choice')).toBe(true);
+    expect(isCorrectAnswer(questionWithIndex, 'Second Choice')).toBe(false);
+
+    const questionWithText = {
+      type: 'mcq',
+      options: ['First Choice', 'Second Choice'],
+      correct_answer: 'First Choice'
+    };
+    expect(isCorrectAnswer(questionWithText, '0')).toBe(true);
+    expect(isCorrectAnswer(questionWithText, '1')).toBe(false);
   });
 });
 
 describe('scoringEngine.js Score Calculation', () => {
-  const question = { time_limit: 30 }; // 30 seconds
+  const questionStandard = { points: 100, time_limit: 30 };
+  const questionCustom50 = { points: 50, time_limit: 30 };
+  const questionCustom250 = { points: 250, time_limit: 45 };
+  const questionUnset = { time_limit: 30 };
 
-  test('returns 0 for incorrect answers', () => {
-    expect(calculatePoints(false, question, 1000)).toBe(0);
+  test('returns 0 for incorrect answers regardless of time taken', () => {
+    expect(calculatePoints(false, questionStandard, 0)).toBe(0);
+    expect(calculatePoints(false, questionStandard, 15000)).toBe(0);
+    expect(calculatePoints(false, questionStandard, 30000)).toBe(0);
   });
 
-  test('awards maximum score (1000) for instant correct answers', () => {
-    expect(calculatePoints(true, question, 0)).toBe(1000);
+  test('awards strictly configured question points for correct answers without speed bonuses', () => {
+    // Instant answer earns exactly configured points (no +500 speed bonus)
+    expect(calculatePoints(true, questionStandard, 0)).toBe(100);
+    expect(calculatePoints(true, questionStandard, 15000)).toBe(100);
+    expect(calculatePoints(true, questionStandard, 29000)).toBe(100);
+
+    // Custom point allocations
+    expect(calculatePoints(true, questionCustom50, 1000)).toBe(50);
+    expect(calculatePoints(true, questionCustom250, 20000)).toBe(250);
   });
 
-  test('awards speed-bonus based points for average response time', () => {
-    // 30s limit. 15s taken = half time used.
-    // 500 base + 500 * (1 - 15/30) = 750 points
-    expect(calculatePoints(true, question, 15000)).toBe(750);
+  test('defaults to 100 points when question has no explicit points configuration', () => {
+    expect(calculatePoints(true, questionUnset, 5000)).toBe(100);
   });
 
-  test('awards base score (500) for correct answer submitted at the last second', () => {
-    expect(calculatePoints(true, question, 30000)).toBe(500);
-  });
-
-  test('clips values exceeding time limit to base score (500)', () => {
-    expect(calculatePoints(true, question, 35000)).toBe(500);
-  });
-
-  test('defaults to 30 second time limit if not specified', () => {
-    const noLimitQuestion = {};
-    expect(calculatePoints(true, noLimitQuestion, 15000)).toBe(750);
+  test('handles negative or invalid points gracefully by returning 0', () => {
+    expect(calculatePoints(true, { points: -50 }, 1000)).toBe(0);
+    expect(calculatePoints(true, { points: 'invalid' }, 1000)).toBe(0);
   });
 });

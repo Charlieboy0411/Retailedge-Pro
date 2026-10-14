@@ -127,6 +127,7 @@ router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T
     if (questions && questions.length > 0) {
       const questionsData = questions.map(q => ({
         ...q,
+        points: (q.points !== undefined && q.points !== null && !isNaN(q.points) && Number(q.points) > 0) ? Number(q.points) : 100,
         quizId: quiz.id
       }));
       await Question.bulkCreate(questionsData);
@@ -691,7 +692,7 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 
           options: q.options,
           correct_answer: q.correct_answer,
           time_limit: q.time_limit !== undefined ? q.time_limit : 30,
-          points: q.points !== undefined ? q.points : 1,
+          points: (q.points !== undefined && q.points !== null && !isNaN(q.points) && Number(q.points) > 0) ? Number(q.points) : 100,
           media_url: q.media_url || '',
           quizId: quiz.id
         }));

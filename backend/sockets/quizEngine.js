@@ -95,10 +95,24 @@ const startServerTimer = (io, roomCode, durationSeconds, questionId) => {
         io.to(roomCode).emit('timer_expired');
         io.to(roomCode).emit('time_up'); // legacy alias for host
 
-        // Automatic Correct-Answer Reveal (Phase 7)
+        // Automatic Correct-Answer Reveal (Phase 7 & Phase 2)
         try {
           const question = await Question.findByPk(questionId);
-          const correctAnswer = question ? question.correct_answer : null;
+          let correctAnswer = question ? question.correct_answer : null;
+          let correctAnswerIndex = null;
+          if (question) {
+            let opts = [];
+            if (Array.isArray(question.options)) opts = question.options;
+            else if (typeof question.options === 'string') {
+              try { opts = JSON.parse(question.options); } catch (e) { opts = []; }
+            }
+            opts.forEach((o, idx) => {
+              if (scoringEngine.isCorrectAnswer(question, o)) {
+                correctAnswerIndex = idx;
+                correctAnswer = o;
+              }
+            });
+          }
           const session = await Session.findOne({ where: { roomCode } });
           let leaderboardData = [];
           if (session) {
@@ -120,11 +134,13 @@ const startServerTimer = (io, roomCode, durationSeconds, questionId) => {
           }
           io.to(roomCode).emit('answer_revealed', {
             correctAnswer,
+            correctAnswerIndex,
             questionId,
+            questionPoints: question?.points ?? 100,
             leaderboard: leaderboardData,
             automatic: true
           });
-          logger.info('QuizEngine', roomCode, null, 'Automatic answer reveal triggered on timer expiration', { questionId });
+          logger.info('QuizEngine', roomCode, null, 'Automatic answer reveal triggered on timer expiration', { questionId, correctAnswer });
         } catch (revealErr) {
           logger.error('QuizEngine', roomCode, null, 'Error in automatic answer reveal', revealErr);
         }
@@ -801,37 +817,86 @@ function quizEngine(io) {
         return;
       }
 
-      // ── Security Check 3: Reject duplicate submissions for the same question ──
+      // ── Security Check 3: Check existing response for revision or idempotent retransmission ──
       const dedupeKey = `${effectiveParticipantId}:${questionId}`;
-      if (answeredMap[dedupeKey]) {
-        monitorStats.totalDupeRejections++;
-        logger.warn('QuizEngine', cleanCode, null, 'Duplicate answer rejected (memory check)', {
-          participantId: effectiveParticipantId, questionId,
-        });
-        socket.emit('answer_rejected', { reason: 'Already answered' });
-        return;
-      }
-
-      // DB-level deduplication: ensure participant has not already submitted for this question
-      const existingResponse = await Response.findOne({
-        where: { participantId: effectiveParticipantId, questionId }
-      });
-      if (existingResponse) {
-        answeredMap[dedupeKey] = true;
-        monitorStats.totalDupeRejections++;
-        logger.warn('QuizEngine', cleanCode, null, 'Duplicate answer rejected (DB check)', {
-          participantId: effectiveParticipantId, questionId,
-        });
-        socket.emit('answer_rejected', { reason: 'Already answered' });
-        return;
-      }
-      answeredMap[dedupeKey] = true;
-
       try {
-        const question  = await Question.findByPk(questionId);
+        const question = await Question.findByPk(questionId);
+        if (!question) {
+          socket.emit('answer_rejected', { reason: 'Question not found' });
+          return;
+        }
+
         const isCorrect = scoringEngine.isCorrectAnswer(question, answer);
         const points    = scoringEngine.calculatePoints(isCorrect, question, timeTaken);
+        const participant = await Participant.findByPk(effectiveParticipantId);
 
+        // Check if a response already exists for this participant and question
+        const existingResponse = await Response.findOne({
+          where: { participantId: effectiveParticipantId, questionId }
+        });
+
+        if (existingResponse) {
+          // Idempotent retransmission check (same answer sent again)
+          if (existingResponse.answer === answerStr) {
+            socket.emit('answer_confirmed', {
+              questionId,
+              answer,
+              pointsAwarded: existingResponse.points_awarded || 0,
+              isCorrect: (existingResponse.points_awarded || 0) > 0,
+              totalScore: participant ? participant.score : 0,
+              isRevision: false,
+              message: 'Answer recorded'
+            });
+            return;
+          }
+
+          // Legitimate revision before the authoritative deadline
+          const oldPoints = existingResponse.points_awarded || 0;
+          const scoreDelta = points - oldPoints;
+
+          existingResponse.answer = answerStr;
+          existingResponse.response_time = timeTaken;
+          existingResponse.points_awarded = points;
+          await existingResponse.save();
+
+          if (participant) {
+            participant.score = Math.max(0, (participant.score || 0) + scoreDelta);
+            await participant.save();
+          }
+
+          answeredMap[dedupeKey] = answerStr;
+
+          socket.emit('answer_confirmed', {
+            questionId,
+            answer,
+            pointsAwarded: points,
+            isCorrect,
+            totalScore: participant ? participant.score : 0,
+            isRevision: true,
+            message: 'Updated answer recorded'
+          });
+
+          io.to(cleanCode).emit('answer_received', {
+            participantId: effectiveParticipantId,
+            points,
+            answer,
+            isCorrect,
+            questionId,
+            isRevision: true
+          });
+
+          logger.info('QuizEngine', cleanCode, null, 'Answer revised & persisted', {
+            participantId: effectiveParticipantId,
+            questionId,
+            isCorrect,
+            points,
+            scoreDelta,
+            timeTaken,
+          });
+          return;
+        }
+
+        // First accepted submission for this question
         await Response.create({
           participantId:  effectiveParticipantId,
           questionId,
@@ -840,11 +905,12 @@ function quizEngine(io) {
           points_awarded: points,
         });
 
-        const participant = await Participant.findByPk(effectiveParticipantId);
         if (participant) {
           participant.score = (participant.score || 0) + points;
           await participant.save();
         }
+
+        answeredMap[dedupeKey] = answerStr;
 
         // Acknowledge submission to the submitting client
         socket.emit('answer_confirmed', {
@@ -853,6 +919,8 @@ function quizEngine(io) {
           pointsAwarded: points,
           isCorrect,
           totalScore: participant ? participant.score : 0,
+          isRevision: false,
+          message: 'Answer submitted — you may change it before the timer ends'
         });
 
         const answerPayload = {
@@ -860,7 +928,8 @@ function quizEngine(io) {
           points,
           answer,
           isCorrect,
-          questionId
+          questionId,
+          isRevision: false
         };
         // Broadcast canonical answer_received event to host and participants
         io.to(cleanCode).emit('answer_received', answerPayload);
@@ -1012,7 +1081,21 @@ function quizEngine(io) {
           }
         }
         const question      = qId ? await Question.findByPk(qId) : null;
-        const correctAnswer = question ? question.correct_answer : null;
+        let correctAnswer = question ? question.correct_answer : null;
+        let correctAnswerIndex = null;
+        if (question) {
+          let opts = [];
+          if (Array.isArray(question.options)) opts = question.options;
+          else if (typeof question.options === 'string') {
+            try { opts = JSON.parse(question.options); } catch (e) { opts = []; }
+          }
+          opts.forEach((o, idx) => {
+            if (scoringEngine.isCorrectAnswer(question, o)) {
+              correctAnswerIndex = idx;
+              correctAnswer = o;
+            }
+          });
+        }
 
         // Fetch current leaderboard alongside answer reveal
         let leaderboardData = [];
@@ -1032,8 +1115,14 @@ function quizEngine(io) {
           }));
         }
 
-        io.to(cleanCode).emit('answer_revealed', { correctAnswer, questionId: qId, leaderboard: leaderboardData });
-        logger.info('QuizEngine', cleanCode, null, 'Answer revealed', { questionId: qId });
+        io.to(cleanCode).emit('answer_revealed', {
+          correctAnswer,
+          correctAnswerIndex,
+          questionId: qId,
+          questionPoints: question?.points ?? 100,
+          leaderboard: leaderboardData
+        });
+        logger.info('QuizEngine', cleanCode, null, 'Answer revealed', { questionId: qId, correctAnswer });
       } catch (err) {
         logger.error('QuizEngine', roomCode, null, 'host_reveal_answer error', err);
         io.to(roomCode).emit('answer_revealed', { correctAnswer: null, leaderboard: [] });

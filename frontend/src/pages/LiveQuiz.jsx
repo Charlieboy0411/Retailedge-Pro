@@ -5,12 +5,11 @@ import { Clock, Trophy, Award, CheckCircle2, AlertCircle, Radio, Sparkles } from
 import { AuthContext } from '../context/AuthContext';
 
 const SHELFY_TIPS = [
-  '💡 Fastest responders earn bonus points in the live interactive arena.',
-  '🏆 Top performer gets the Sales Champion badge.',
-  '📦 Product Knowledge quizzes boost your level.',
-  '⚡ Answer in under 5s for a Fastest Finger badge!',
-  '🎯 Check the leaderboard after every question.',
-  '🔥 5 sessions in a row earns an Attendance Streak!',
+  '💡 Review your answer carefully — you can revise it before the timer expires!',
+  '🏆 Accuracy on configured question points determines the Leaderboard standings.',
+  '📦 Product Knowledge and SOP precision boost your overall score.',
+  '🎯 Points are strictly determined by the trainer for each question.',
+  '🔥 Participate actively in every session for top ranking!',
 ];
 
 let socket;
@@ -50,7 +49,9 @@ export default function LiveQuiz() {
   const [status, setStatus] = useState('waiting');
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState(null);
+  const [submittedAnswer, setSubmittedAnswer] = useState(null);
   const [submissionStatus, setSubmissionStatus] = useState('idle'); // idle, submitting, confirmed, rejected
+  const [submissionMessage, setSubmissionMessage] = useState('');
   const [submissionError, setSubmissionError]   = useState('');
   const [participantId, setParticipantId] = useState(saved.participantId || null);
   const [myScore, setMyScore] = useState(saved.score || 0);
@@ -62,6 +63,8 @@ export default function LiveQuiz() {
   const [leaderboard, setLeaderboard] = useState([]);
   const [answerRevealed, setAnswerRevealed] = useState(false);
   const [correctAnswer, setCorrectAnswer] = useState(null);
+  const [correctAnswerIndex, setCorrectAnswerIndex] = useState(null);
+  const [questionPoints, setQuestionPoints] = useState(100);
   const [tipIndex, setTipIndex] = useState(0);
   const [lobbyCountdown, setLobbyCountdown] = useState(60);
 
@@ -142,7 +145,9 @@ export default function LiveQuiz() {
       const q = data.question || data;
       setCurrentQuestion(q);
       setSelectedAnswer(null);
+      setSubmittedAnswer(null);
       setSubmissionStatus('idle');
+      setSubmissionMessage('');
       setSubmissionError('');
       setLiveAnswers([]);
       setStatus('question');
@@ -150,6 +155,8 @@ export default function LiveQuiz() {
       setQuestionStartTime(Date.now());
       setAnswerRevealed(false);
       setCorrectAnswer(null);
+      setCorrectAnswerIndex(null);
+      setQuestionPoints(q.points !== undefined && q.points !== null ? Number(q.points) : 100);
     };
 
     const onAnswerReceived = (data) => {
@@ -167,7 +174,12 @@ export default function LiveQuiz() {
 
     const onAnswerConfirmed = (data) => {
       setSubmissionStatus('confirmed');
-      setStatus('answered');
+      if (data && data.answer) {
+        setSubmittedAnswer(data.answer);
+      } else if (selectedAnswer) {
+        setSubmittedAnswer(selectedAnswer);
+      }
+      setSubmissionMessage(data?.message || (data?.isRevision ? 'Updated answer recorded' : 'Answer submitted — you may change it before the timer ends'));
       if (data && data.totalScore !== undefined) {
         setMyScore(data.totalScore);
       }
@@ -180,7 +192,9 @@ export default function LiveQuiz() {
 
     const onAnswerRevealed = (data) => {
       setAnswerRevealed(true);
-      setCorrectAnswer(data.correctAnswer);
+      if (data?.correctAnswer !== undefined) setCorrectAnswer(data.correctAnswer);
+      if (data?.correctAnswerIndex !== undefined) setCorrectAnswerIndex(data.correctAnswerIndex);
+      if (data?.questionPoints !== undefined) setQuestionPoints(data.questionPoints);
       setStatus('revealed');
     };
 
@@ -198,18 +212,20 @@ export default function LiveQuiz() {
       setStatus('waiting');
       setCurrentQuestion(null);
       setSelectedAnswer(null);
+      setSubmittedAnswer(null);
       setSubmissionStatus('idle');
+      setSubmissionMessage('');
       setSubmissionError('');
       setLiveAnswers([]);
       setAnswerRevealed(false);
       setCorrectAnswer(null);
+      setCorrectAnswerIndex(null);
     };
 
     const onQuizEnded = () => setStatus('ended');
     const onTimerTick = ({ remaining }) => setTimeLeft(remaining);
     const onTimerExpired = () => {
       setTimeLeft(0);
-      setStatus(prev => prev === 'question' ? 'answered' : prev);
     };
 
     socket.on('connect', onConnect);
@@ -246,13 +262,20 @@ export default function LiveQuiz() {
     return [];
   };
 
-  const isCorrectOpt = (opt) => {
+  const isCorrectOpt = (opt, index) => {
     if (!currentQuestion) return false;
     if (currentQuestion.type === 'poll') return true;
-    if (Array.isArray(currentQuestion.correct_answer)) {
-      return currentQuestion.correct_answer.includes(opt);
+    if (correctAnswerIndex !== null && correctAnswerIndex !== undefined && index === correctAnswerIndex) return true;
+    const authoritative = (correctAnswer !== null && correctAnswer !== undefined) ? correctAnswer : currentQuestion?.correct_answer;
+    if (!authoritative) return false;
+    if (Array.isArray(authoritative)) {
+      return authoritative.map(x => String(x).trim().toLowerCase()).includes(String(opt).trim().toLowerCase());
     }
-    return currentQuestion.correct_answer === opt;
+    const authStr = String(authoritative).trim().toLowerCase();
+    const optStr = String(opt).trim().toLowerCase();
+    if (authStr === optStr) return true;
+    if (authStr === String(index)) return true;
+    return false;
   };
 
   const getOptionVotes = (opt) => {
@@ -263,7 +286,7 @@ export default function LiveQuiz() {
   };
 
   const submitAnswer = (answerText) => {
-    if (status !== 'question' || submissionStatus === 'submitting' || submissionStatus === 'confirmed') return;
+    if (!answerText || status === 'revealed' || (timeLeft <= 0 && status !== 'waiting') || submissionStatus === 'submitting') return;
     setSubmissionStatus('submitting');
     setSubmissionError('');
     const timeTaken = Date.now() - questionStartTime;
@@ -354,7 +377,10 @@ export default function LiveQuiz() {
               <span style={{ fontSize: '1.2rem' }}>{myAvatar}</span>
               <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playerName}</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ background: 'rgba(37, 99, 235, 0.15)', border: '1px solid #2563EB', borderRadius: '8px', padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700, color: '#60A5FA' }}>
+                {questionPoints} pts
+              </div>
               <div style={{ background: '#162033', border: '1px solid #1E293B', borderRadius: '8px', padding: '4px 10px', fontSize: '0.8rem', fontWeight: 700, color: '#10B981' }}>
                 {myScore} pts
               </div>
@@ -408,164 +434,281 @@ export default function LiveQuiz() {
             </div>
 
             {/* Options Selection */}
-            {['mcq', 'multi_select', 'true_false', 'poll'].includes(currentQuestion.type) && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
-                {getOptions(currentQuestion).map((opt, i) => {
-                  const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
-                  const letter = letters[i] || '?';
-                  const isSelected = selectedAnswer === opt;
-                  const isCorrect = isCorrectOpt(opt);
+            {(() => {
+              const isLocked = status === 'revealed' || (timeLeft <= 0 && status !== 'waiting');
+              const hasUnsavedChanges = submittedAnswer !== null && selectedAnswer !== submittedAnswer && selectedAnswer !== null;
 
-                  let btnBg = '#111827';
-                  let btnBorder = '#1E293B';
-                  let btnColor = '#FFFFFF';
+              return (
+                <>
+                  {['mcq', 'multi_select', 'true_false', 'poll'].includes(currentQuestion.type) && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', width: '100%' }}>
+                      {getOptions(currentQuestion).map((opt, i) => {
+                        const letters = ['A', 'B', 'C', 'D', 'E', 'F'];
+                        const letter = letters[i] || '?';
+                        const isSelected = selectedAnswer === opt;
+                        const isSubmitted = submittedAnswer === opt;
+                        const isCorrect = isCorrectOpt(opt, i);
 
-                  if (status === 'revealed') {
-                    if (isCorrect) {
-                      btnBg = 'rgba(16, 185, 129, 0.15)';
-                      btnBorder = '#10B981';
-                      btnColor = '#10B981';
-                    } else if (isSelected && !isCorrect) {
-                      btnBg = 'rgba(239, 68, 68, 0.15)';
-                      btnBorder = '#EF4444';
-                      btnColor = '#EF4444';
-                    }
-                  } else if (isSelected) {
-                    btnBg = 'rgba(37, 99, 235, 0.15)';
-                    btnBorder = '#2563EB';
-                    btnColor = '#60A5FA';
-                  }
+                        let btnBg = '#111827';
+                        let btnBorder = '#1E293B';
+                        let btnColor = '#FFFFFF';
+                        let badgeText = null;
 
-                  const isDisabled = status === 'answered' || status === 'revealed' || submissionStatus === 'submitting' || submissionStatus === 'confirmed';
+                        if (status === 'revealed') {
+                          if (isCorrect) {
+                            btnBg = 'rgba(16, 185, 129, 0.2)';
+                            btnBorder = '#10B981';
+                            btnColor = '#10B981';
+                            badgeText = isSubmitted ? `Your Choice · Correct (+${questionPoints} pts)` : 'Correct Answer';
+                          } else if (isSubmitted) {
+                            btnBg = 'rgba(239, 68, 68, 0.2)';
+                            btnBorder = '#EF4444';
+                            btnColor = '#EF4444';
+                            badgeText = 'Your Choice · Incorrect (0 pts)';
+                          } else {
+                            btnBg = '#0B1220';
+                            btnBorder = '#1E293B';
+                            btnColor = '#64748B';
+                          }
+                        } else if (isSelected) {
+                          btnBg = 'rgba(37, 99, 235, 0.2)';
+                          btnBorder = '#3B82F6';
+                          btnColor = '#93C5FD';
+                          badgeText = isSubmitted ? 'Submitted Answer' : 'Selected Choice';
+                        }
 
-                  return (
-                    <button
-                      key={i}
-                      disabled={isDisabled}
-                      onClick={() => {
-                        setSelectedAnswer(opt);
-                        submitAnswer(opt);
-                      }}
-                      style={{
-                        minHeight: '52px',
-                        padding: '14px 16px',
-                        borderRadius: '12px',
-                        background: btnBg,
-                        border: `1.5px solid ${btnBorder}`,
-                        color: btnColor,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '12px',
-                        fontSize: '0.95rem',
-                        fontWeight: 600,
-                        cursor: isDisabled ? 'default' : 'pointer',
-                        textAlign: 'left',
-                        transition: 'all 0.15s',
-                        width: '100%',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      <span style={{
-                        width: '28px',
-                        height: '28px',
-                        borderRadius: '6px',
-                        background: isSelected ? '#2563EB' : '#1E293B',
-                        color: '#FFFFFF',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.82rem',
-                        fontWeight: 800,
-                        flexShrink: 0
-                      }}>
-                        {letter}
-                      </span>
-                      <span style={{
-                        flex: 1,
-                        wordBreak: 'break-word',
-                        overflowWrap: 'break-word',
-                        lineHeight: 1.35
-                      }}>
-                        {opt}
-                      </span>
-                      {status === 'revealed' && isCorrect && <CheckCircle2 size={18} color="#10B981" style={{ flexShrink: 0 }} />}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+                        return (
+                          <button
+                            key={i}
+                            id={`option-btn-${i}`}
+                            disabled={isLocked || submissionStatus === 'submitting'}
+                            onClick={() => {
+                              if (!isLocked && submissionStatus !== 'submitting') {
+                                setSelectedAnswer(opt);
+                                if (submissionError) setSubmissionError('');
+                              }
+                            }}
+                            style={{
+                              minHeight: '54px',
+                              padding: '14px 16px',
+                              borderRadius: '12px',
+                              background: btnBg,
+                              border: `2px solid ${btnBorder}`,
+                              color: btnColor,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '12px',
+                              fontSize: '0.98rem',
+                              fontWeight: 600,
+                              cursor: (isLocked || submissionStatus === 'submitting') ? 'default' : 'pointer',
+                              textAlign: 'left',
+                              transition: 'all 0.15s ease',
+                              width: '100%',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            <span style={{
+                              width: '30px',
+                              height: '30px',
+                              borderRadius: '6px',
+                              background: status === 'revealed' ? (isCorrect ? '#10B981' : (isSubmitted ? '#EF4444' : '#1E293B')) : (isSelected ? '#2563EB' : '#1E293B'),
+                              color: '#FFFFFF',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.85rem',
+                              fontWeight: 800,
+                              flexShrink: 0
+                            }}>
+                              {letter}
+                            </span>
+                            <span style={{
+                              flex: 1,
+                              wordBreak: 'break-word',
+                              overflowWrap: 'break-word',
+                              lineHeight: 1.35
+                            }}>
+                              {opt}
+                              {badgeText && (
+                                <span style={{
+                                  display: 'block',
+                                  fontSize: '0.72rem',
+                                  fontWeight: 700,
+                                  marginTop: '2px',
+                                  color: status === 'revealed' ? (isCorrect ? '#34D399' : '#F87171') : (isSubmitted ? '#60A5FA' : '#FBBF24')
+                                }}>
+                                  {badgeText}
+                                </span>
+                              )}
+                            </span>
+                            {status === 'revealed' && isCorrect && <CheckCircle2 size={20} color="#10B981" style={{ flexShrink: 0 }} />}
+                            {status === 'revealed' && isSubmitted && !isCorrect && <AlertCircle size={20} color="#EF4444" style={{ flexShrink: 0 }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
 
-            {submissionStatus === 'submitting' && (
-              <div style={{
-                marginTop: '20px',
-                textAlign: 'center',
-                padding: '14px',
-                background: 'rgba(37, 99, 235, 0.12)',
-                borderRadius: '12px',
-                border: '1px solid rgba(37, 99, 235, 0.35)',
-                color: '#93C5FD',
-                fontSize: '0.9rem',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px'
-              }}>
-                <div style={{ width: '16px', height: '16px', borderRadius: '50%', border: '2px solid #3B82F6', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
-                <span>Recording response securely with server...</span>
-              </div>
-            )}
+                  {/* Explicit Submit Answer Button & Feedback States */}
+                  {status !== 'revealed' && (
+                    <div style={{ marginTop: '20px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      <button
+                        id="submit-answer-btn"
+                        disabled={isLocked || submissionStatus === 'submitting' || !selectedAnswer || (submissionStatus === 'confirmed' && !hasUnsavedChanges)}
+                        onClick={() => {
+                          if (selectedAnswer) submitAnswer(selectedAnswer);
+                        }}
+                        style={{
+                          width: '100%',
+                          padding: '16px',
+                          borderRadius: '12px',
+                          border: 'none',
+                          fontSize: '1.02rem',
+                          fontWeight: 800,
+                          cursor: (isLocked || submissionStatus === 'submitting' || !selectedAnswer || (submissionStatus === 'confirmed' && !hasUnsavedChanges)) ? 'not-allowed' : 'pointer',
+                          background: isLocked
+                            ? '#334155'
+                            : (hasUnsavedChanges
+                              ? 'linear-gradient(135deg, #F59E0B, #D97706)'
+                              : (submissionStatus === 'confirmed' && !hasUnsavedChanges
+                                ? '#059669'
+                                : (selectedAnswer
+                                  ? 'linear-gradient(135deg, #2563EB, #1D4ED8)'
+                                  : '#1E293B'))),
+                          color: (isLocked || (!selectedAnswer && submissionStatus !== 'confirmed')) ? '#94A3B8' : '#FFFFFF',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '10px',
+                          boxShadow: (!isLocked && selectedAnswer && (hasUnsavedChanges || submissionStatus !== 'confirmed')) ? '0 4px 16px rgba(37, 99, 235, 0.4)' : 'none',
+                          transition: 'all 0.2s ease',
+                          minHeight: '52px'
+                        }}
+                      >
+                        {isLocked ? (
+                          <span>Time expired — answers locked</span>
+                        ) : submissionStatus === 'submitting' ? (
+                          <>
+                            <div style={{ width: '18px', height: '18px', borderRadius: '50%', border: '2.5px solid #FFFFFF', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
+                            <span>Submitting...</span>
+                          </>
+                        ) : hasUnsavedChanges ? (
+                          <span>Submit Revised Answer</span>
+                        ) : submissionStatus === 'confirmed' ? (
+                          <>
+                            <CheckCircle2 size={18} color="#FFFFFF" />
+                            <span>Answer Submitted</span>
+                          </>
+                        ) : selectedAnswer ? (
+                          <span>Submit Answer</span>
+                        ) : (
+                          <span>Select an answer</span>
+                        )}
+                      </button>
 
-            {submissionStatus === 'rejected' && (
-              <div style={{
-                marginTop: '20px',
-                textAlign: 'center',
-                padding: '14px',
-                background: 'rgba(239, 68, 68, 0.12)',
-                borderRadius: '12px',
-                border: '1px solid #EF4444',
-                color: '#F87171',
-                fontSize: '0.88rem'
-              }}>
-                <div style={{ fontWeight: 700, marginBottom: '4px' }}>Submission Not Persisted</div>
-                <div style={{ marginBottom: '8px' }}>{submissionError || 'Please try again before the deadline.'}</div>
-                {timeLeft > 0 && status === 'question' && (
-                  <button
-                    onClick={() => {
-                      setSubmissionStatus('idle');
-                      setSubmissionError('');
-                      if (selectedAnswer) submitAnswer(selectedAnswer);
-                    }}
-                    style={{
-                      background: '#EF4444',
-                      color: '#FFF',
-                      border: 'none',
-                      borderRadius: '8px',
-                      padding: '6px 16px',
-                      fontSize: '0.8rem',
-                      fontWeight: 700,
-                      cursor: 'pointer'
-                    }}
-                  >
-                    Retry Submission
-                  </button>
-                )}
-              </div>
-            )}
+                      {hasUnsavedChanges && !isLocked && (
+                        <div style={{
+                          background: 'rgba(245, 158, 11, 0.15)',
+                          border: '1px solid #F59E0B',
+                          borderRadius: '10px',
+                          padding: '10px 14px',
+                          color: '#FCD34D',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          textAlign: 'center'
+                        }}>
+                          ⚠️ You selected a different answer. Tap <strong>Submit Revised Answer</strong> before time expires!
+                        </div>
+                      )}
 
-            {(status === 'answered' || submissionStatus === 'confirmed') && (
-              <div style={{
-                marginTop: '20px',
-                textAlign: 'center',
-                padding: '16px',
-                background: '#111827',
-                borderRadius: '12px',
-                border: '1px solid #1E293B',
-                color: '#93C5FD',
-                fontSize: '0.9rem'
-              }}>
-                ✓ Response recorded! Waiting for host to reveal results...
-              </div>
-            )}
+                      {submissionStatus === 'confirmed' && !hasUnsavedChanges && (
+                        <div style={{
+                          background: 'rgba(16, 185, 129, 0.12)',
+                          border: '1px solid #10B981',
+                          borderRadius: '10px',
+                          padding: '12px 14px',
+                          color: '#34D399',
+                          fontSize: '0.88rem',
+                          fontWeight: 600,
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px'
+                        }}>
+                          <CheckCircle2 size={16} />
+                          <span>{submissionMessage || 'Answer submitted — you may change it before the timer ends'}</span>
+                        </div>
+                      )}
+
+                      {submissionStatus === 'rejected' && (
+                        <div style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid #EF4444',
+                          borderRadius: '10px',
+                          padding: '12px 14px',
+                          color: '#FCA5A5',
+                          fontSize: '0.88rem',
+                          textAlign: 'center'
+                        }}>
+                          <div style={{ fontWeight: 700, marginBottom: '4px' }}>Submission failed — retry while time remains</div>
+                          <div style={{ fontSize: '0.8rem', marginBottom: '8px' }}>{submissionError}</div>
+                          {!isLocked && selectedAnswer && (
+                            <button
+                              onClick={() => submitAnswer(selectedAnswer)}
+                              style={{
+                                background: '#EF4444',
+                                color: '#FFF',
+                                border: 'none',
+                                borderRadius: '6px',
+                                padding: '6px 16px',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                cursor: 'pointer'
+                              }}
+                            >
+                              Retry Submission
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {isLocked && (
+                        <div style={{
+                          background: '#162033',
+                          border: '1px solid #1E293B',
+                          borderRadius: '10px',
+                          padding: '12px 14px',
+                          color: '#94A3B8',
+                          fontSize: '0.88rem',
+                          textAlign: 'center'
+                        }}>
+                          Time expired — answers locked. Waiting for host to reveal results...
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {status === 'revealed' && (
+                    <div style={{
+                      marginTop: '20px',
+                      background: 'rgba(16, 185, 129, 0.12)',
+                      border: '1px solid #10B981',
+                      borderRadius: '12px',
+                      padding: '16px',
+                      textAlign: 'center'
+                    }}>
+                      <div style={{ color: '#34D399', fontWeight: 800, fontSize: '1rem', marginBottom: '4px' }}>
+                        ✓ Correct Answer Revealed
+                      </div>
+                      <div style={{ color: '#94A3B8', fontSize: '0.85rem' }}>
+                        Configured Question Value: <strong style={{ color: '#F59E0B' }}>{questionPoints} points</strong>
+                      </div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         </div>
       )}

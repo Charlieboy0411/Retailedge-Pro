@@ -117,7 +117,7 @@ export default function QuizBuilder() {
             options: opts || [],
             correct_answer: correct,
             time_limit: question.time_limit !== undefined ? question.time_limit : 30,
-            points: question.points !== undefined ? question.points : 1,
+            points: question.points !== undefined && question.points !== null ? Number(question.points) : 100,
             media_url: question.media_url || '',
             difficulty: question.difficulty || 'Medium'
           };
@@ -171,7 +171,7 @@ export default function QuizBuilder() {
         : (['mcq', 'multi_select', 'poll'].includes(type) ? ['', '', '', ''] : []),
       correct_answer: type === 'true_false' ? 'True' : '',
       time_limit: 30,
-      points: 1,
+      points: 100,
       media_url: '',
       difficulty: 'Medium'
     };
@@ -324,7 +324,7 @@ export default function QuizBuilder() {
         options: q.options,
         correct_answer: correct,
         time_limit: q.time_limit !== undefined ? q.time_limit : 30,
-        points: q.points !== undefined ? q.points : 1,
+        points: q.points !== undefined && q.points !== null ? Number(q.points) : 100,
         media_url: q.media_url || '',
         difficulty: q.difficulty || 'Medium'
       };
@@ -1075,17 +1075,21 @@ export default function QuizBuilder() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <span style={{ fontSize: '0.75rem', color: '#475569', fontWeight: 600 }}>Points:</span>
                     <select
-                      value={activeQuestion.points}
-                      onChange={e => updateActiveQuestion('points', parseInt(e.target.value) || 1)}
+                      value={activeQuestion.points !== undefined && activeQuestion.points !== null ? activeQuestion.points : 100}
+                      onChange={e => updateActiveQuestion('points', Math.max(1, parseInt(e.target.value) || 100))}
                       style={{
                         padding: '6px 12px', borderRadius: '8px', border: '1.5px solid #CBD5E1', background: '#FFFFFF',
                         fontSize: '0.78rem', fontWeight: 700, outline: 'none', color: '#0F172A'
                       }}
                     >
-                      <option value={1}>1 Point</option>
-                      <option value={2}>2 Points</option>
-                      <option value={5}>5 Points</option>
+                      <option value={100}>100 Points</option>
+                      <option value={50}>50 Points</option>
+                      <option value={200}>200 Points</option>
+                      <option value={500}>500 Points</option>
                       <option value={10}>10 Points</option>
+                      <option value={5}>5 Points</option>
+                      <option value={2}>2 Points</option>
+                      <option value={1}>1 Point</option>
                     </select>
                   </div>
 

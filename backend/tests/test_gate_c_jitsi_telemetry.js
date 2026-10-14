@@ -550,16 +550,16 @@ class InMemoryJitsiStore {
     'Scenario 31: Missing telemetry remains unavailable (null / UNAVAILABLE) rather than becoming a fabricated zero'
   );
 
-  // Scenario 32: Assessment percentage, Arena speed points, LMS progress, and attendance remain separate
+  // Scenario 32: Assessment percentage, Arena points, LMS progress, and attendance remain separate
   const { calculatePoints } = require('../sockets/services/scoringEngine');
-  const speedPoints = calculatePoints(true, 1000, 10000); // 950 pts
+  const arenaPoints = calculatePoints(true, { points: 200 }, 10000); // 200 pts
   const assessmentPct = 85; // 85%
   const lmsProgress = 100; // 100%
   const attendancePct = 90; // 90%
   assert(
-    speedPoints > 100 && assessmentPct <= 100 && lmsProgress <= 100 && attendancePct <= 100 &&
-    speedPoints !== assessmentPct && assessmentPct !== attendancePct,
-    'Scenario 32: Assessment percentage, Arena speed points, LMS progress, and attendance remain completely separate'
+    arenaPoints > 100 && assessmentPct <= 100 && lmsProgress <= 100 && attendancePct <= 100 &&
+    arenaPoints !== assessmentPct && assessmentPct !== attendancePct,
+    'Scenario 32: Assessment percentage, Arena points, LMS progress, and attendance remain completely separate'
   );
 
   // Scenario 33: No mock participants or fallback attendance percentages are introduced
