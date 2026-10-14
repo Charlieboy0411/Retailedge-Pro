@@ -45,6 +45,6 @@ jobs:
             sudo chown -R www-data:www-data /var/www/retailedge
 
             sudo nginx -t
-            sudo systemctl reload nginx
+            sudo systemctl reload nginx || sudo systemctl restart nginx
 
             echo "Deployment completed successfully!"
