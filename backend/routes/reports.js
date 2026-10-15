@@ -455,7 +455,7 @@ router.get('/attendance', requireAuth, async (req, res) => {
 router.get('/gamification', requireAuth, async (req, res) => {
   try {
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
-    const { projectId = 'all', subProjectId = 'all' } = req.query;
+    const { projectId = 'all', subProjectId = 'all', quizId = 'all', sessionId = 'all' } = req.query;
 
     // 1. Resolve all accessible projects for user to determine project selector and authorization
     let allAuthorizedIds = [];
@@ -528,6 +528,9 @@ router.get('/gamification', requireAuth, async (req, res) => {
           avgScore: 'N/A',
           totalArenaPoints: 0
         },
+        availableQuizzes: [],
+        availableSessions: [],
+        participantSummaries: [],
         zoneBreakdown: [],
         leaderboard: [],
         participantResults: [],
@@ -585,12 +588,59 @@ router.get('/gamification', requireAuth, async (req, res) => {
       return pProj && accessibleProjectIds.includes(pProj);
     });
 
+    // Collect available quizzes and sessions in project scope for topic filter
+    let availableQuizzes = [];
+    try {
+      const projectQuizzes = await Quiz.findAll({
+        where: { projectId: { [Op.in]: accessibleProjectIds } },
+        attributes: ['id', 'title', 'projectId', 'createdAt'],
+        include: [{ model: Question, as: 'questions', attributes: ['id', 'points'] }],
+        order: [['title', 'ASC']]
+      });
+      availableQuizzes = (projectQuizzes || []).map(q => ({
+        id: q.id,
+        title: q.title,
+        questionCount: q.questions ? q.questions.length : 0
+      }));
+    } catch (e) {
+      // Graceful fallback if stubbed or model query error
+    }
+
+    let availableSessions = [];
+    try {
+      const projectSessions = await Session.findAll({
+        where: {
+          [Op.or]: [
+            { projectId: { [Op.in]: accessibleProjectIds } },
+            { '$Quiz.projectId$': { [Op.in]: accessibleProjectIds } }
+          ]
+        },
+        include: [
+          { model: Quiz, attributes: ['id', 'title', 'projectId'] }
+        ],
+        order: [['createdAt', 'DESC']]
+      });
+      availableSessions = (projectSessions || []).map(s => ({
+        id: s.id,
+        sessionName: s.session_name || s.roomCode || 'Session',
+        roomCode: s.roomCode,
+        quizId: s.Quiz?.id || s.quizId || '',
+        quizTitle: s.Quiz?.title || 'Quiz',
+        status: s.status,
+        createdAt: s.createdAt,
+        startedAt: s.startedAt
+      }));
+    } catch (e) {
+      // Graceful fallback if stubbed or model query error
+    }
+
     // 4. Calculate participant-level stats, team leaderboard, and zone performance
     const userAggregates = {};
     const zoneAggregates = {};
     const participantRows = [];
     const distinctQuizIds = new Set();
     const distinctSessionIds = new Set();
+    const seenUserSessions = new Set();
 
     let totalPointsAcrossScope = 0;
     let completedAttemptsCount = 0;
@@ -604,8 +654,31 @@ router.get('/gamification', requireAuth, async (req, res) => {
       const arenaPts = Number(p.score) || 0;
       totalPointsAcrossScope += arenaPts;
 
-      if (p.Session?.Quiz?.id) distinctQuizIds.add(p.Session.Quiz.id);
-      if (p.Session?.id) distinctSessionIds.add(p.Session.id);
+      if (p.Session?.Quiz?.id) {
+        distinctQuizIds.add(p.Session.Quiz.id);
+        if (!availableQuizzes.some(aq => aq.id === p.Session.Quiz.id)) {
+          availableQuizzes.push({
+            id: p.Session.Quiz.id,
+            title: p.Session.Quiz.title || 'Quiz',
+            questionCount: questionsCount
+          });
+        }
+      }
+      if (p.Session?.id) {
+        distinctSessionIds.add(p.Session.id);
+        if (!availableSessions.some(as => as.id === p.Session.id)) {
+          availableSessions.push({
+            id: p.Session.id,
+            sessionName: p.Session.session_name || p.Session.roomCode || 'Session',
+            roomCode: p.Session.roomCode,
+            quizId: p.Session.Quiz?.id || '',
+            quizTitle: p.Session.Quiz?.title || 'Quiz',
+            status: p.Session.status,
+            createdAt: p.Session.createdAt,
+            startedAt: p.Session.startedAt
+          });
+        }
+      }
 
       const isFinished = p.Session?.status === 'finished' || (questionsCount > 0 && responses.length >= questionsCount);
       if (isFinished) completedAttemptsCount += 1;
@@ -645,14 +718,24 @@ router.get('/gamification', requireAuth, async (req, res) => {
           bestPercentage: -1,
           hasPerfectSession: false,
           hasRegisteredZone: false,
-          userId: p.userId
+          userId: p.userId,
+          lastQuizTimestamp: 0,
+          lastQuizDate: 'N/A',
+          lastQuizStatus: 'N/A'
         };
       }
-      userAggregates[userKey].arenaPoints += arenaPts;
-      userAggregates[userKey].totalCorrect += correctCount;
-      userAggregates[userKey].totalQuestions += questionsCount;
-      userAggregates[userKey].attempts += 1;
-      if (isFinished) userAggregates[userKey].completedCount += 1;
+
+      // Score integrity: count each distinct session once per participant
+      const sessionKey = `${userKey}_${p.Session?.id || p.id}`;
+      if (!seenUserSessions.has(sessionKey)) {
+        seenUserSessions.add(sessionKey);
+        userAggregates[userKey].arenaPoints += arenaPts;
+        userAggregates[userKey].totalCorrect += correctCount;
+        userAggregates[userKey].totalQuestions += questionsCount;
+        userAggregates[userKey].attempts += 1;
+        if (isFinished) userAggregates[userKey].completedCount += 1;
+      }
+
       if (minResponseTime < userAggregates[userKey].minResponseTime) {
         userAggregates[userKey].minResponseTime = minResponseTime;
       }
@@ -667,6 +750,14 @@ router.get('/gamification', requireAuth, async (req, res) => {
       }
       if (zoneName !== 'N/A' && userAggregates[userKey].zone === 'N/A') {
         userAggregates[userKey].zone = zoneName;
+      }
+
+      // Track most recent attempt for participant summary
+      const attemptTime = p.createdAt ? new Date(p.createdAt).getTime() : (p.Session?.startedAt ? new Date(p.Session.startedAt).getTime() : 0);
+      if (attemptTime >= userAggregates[userKey].lastQuizTimestamp) {
+        userAggregates[userKey].lastQuizTimestamp = attemptTime;
+        userAggregates[userKey].lastQuizDate = p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : (p.Session?.startedAt ? new Date(p.Session.startedAt).toISOString().split('T')[0] : 'N/A');
+        userAggregates[userKey].lastQuizStatus = isFinished ? 'Completed' : 'In Progress';
       }
 
       // Badges earned by this participant on this attempt
@@ -685,6 +776,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
         zone: zoneName,
         sessionId: p.Session?.id || '',
         sessionName: p.Session?.session_name || p.Session?.roomCode || 'Session',
+        roomCode: p.Session?.roomCode || '',
         quizId: p.Session?.Quiz?.id || '',
         quizTitle: p.Session?.Quiz?.title || 'Quiz',
         questionsCount,
@@ -693,9 +785,11 @@ router.get('/gamification', requireAuth, async (req, res) => {
         quizPercentage: participantPercentage !== null ? `${participantPercentage}%` : 'N/A',
         rawPercentage: participantPercentage,
         arenaPoints: arenaPts,
+        configuredPoints: arenaPts,
         status: isFinished ? 'Completed' : 'In Progress',
         earnedBadges: attemptBadges,
-        createdAt: p.createdAt
+        createdAt: p.createdAt,
+        date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : 'N/A'
       });
 
       // Zone aggregation
@@ -716,6 +810,68 @@ router.get('/gamification', requireAuth, async (req, res) => {
       zoneAggregates[zKey].totalQuestions += questionsCount;
       zoneAggregates[zKey].totalArenaPoints += arenaPts;
     });
+
+    // Sort participantRows by points earned descending by default, then accuracy descending, then participant name alphabetical ascending
+    participantRows.sort((a, b) => 
+      (b.arenaPoints - a.arenaPoints) || 
+      ((b.rawPercentage ?? -1) - (a.rawPercentage ?? -1)) || 
+      a.name.localeCompare(b.name)
+    );
+    // Recalculate ranks from sorted order
+    participantRows.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+
+    // Build participantSummaries: Exactly 1 row per unique participant in scope
+    const participantSummaries = Object.values(userAggregates).map(u => {
+      const overallAccuracy = u.totalQuestions > 0
+        ? Math.min(100, Math.max(0, Math.round((u.totalCorrect / u.totalQuestions) * 100)))
+        : null;
+
+      const userBadges = [];
+      if (u.bestPercentage >= 90) userBadges.push('champion');
+      if (u.minResponseTime < 3000) userBadges.push('fastest');
+      if (u.completedCount >= 3) userBadges.push('streak');
+      if (u.bestPercentage === 100) userBadges.push('expert');
+      if (u.hasRegisteredZone) userBadges.push('team');
+      if (u.hasPerfectSession) userBadges.push('perfect');
+
+      return {
+        userId: u.userId,
+        name: u.name,
+        employeeId: u.employeeId,
+        zone: u.zone,
+        quizzesCompleted: u.completedCount,
+        totalAttempts: u.attempts,
+        cumulativeArenaPoints: u.arenaPoints,
+        avgScore: overallAccuracy !== null ? `${overallAccuracy}%` : 'N/A',
+        overallAccuracy: overallAccuracy !== null ? `${overallAccuracy}%` : 'N/A',
+        rawPercentage: overallAccuracy !== null ? overallAccuracy : -1,
+        earnedBadges: userBadges,
+        lastQuizDate: u.lastQuizDate || 'N/A',
+        lastQuizStatus: u.lastQuizStatus || 'N/A'
+      };
+    }).sort((a, b) => 
+      (b.cumulativeArenaPoints - a.cumulativeArenaPoints) || 
+      (b.rawPercentage - a.rawPercentage) || 
+      a.name.localeCompare(b.name)
+    ).map((item, idx) => ({
+      ...item,
+      rank: idx + 1
+    }));
+
+    // Filter participant results if a specific quiz or session was requested
+    let filteredParticipantRows = [...participantRows];
+    if (quizId && quizId !== 'all') {
+      filteredParticipantRows = filteredParticipantRows.filter(r => r.quizId === quizId);
+    }
+    if (sessionId && sessionId !== 'all') {
+      filteredParticipantRows = filteredParticipantRows.filter(r => r.sessionId === sessionId);
+    }
+    filteredParticipantRows = filteredParticipantRows.map((r, idx) => ({
+      ...r,
+      rank: idx + 1
+    }));
 
     // Overall average score calculation
     const overallAvgScore = totalQuestionsSum > 0
@@ -946,6 +1102,8 @@ router.get('/gamification', requireAuth, async (req, res) => {
       selectedProjectId: targetProjectId,
       selectedProjectName,
       accessibleProjects,
+      selectedQuizId: quizId,
+      selectedSessionId: sessionId,
       summary: {
         totalParticipants: totalLearners,
         quizzesCompleted: completedAttemptsCount,
@@ -956,9 +1114,13 @@ router.get('/gamification', requireAuth, async (req, res) => {
         avgScore: overallAvgScore,
         totalArenaPoints: totalPointsAcrossScope
       },
+      availableQuizzes,
+      availableSessions,
+      participantSummaries,
       zoneBreakdown,
       leaderboard,
-      participantResults: participantRows,
+      participantResults: (quizId !== 'all' || sessionId !== 'all') ? filteredParticipantRows : participantRows,
+      allParticipantResults: participantRows,
       badges,
       stats: {
         sessionsParticipated: personalCompletedSessions,

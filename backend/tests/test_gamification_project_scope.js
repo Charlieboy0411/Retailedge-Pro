@@ -560,6 +560,311 @@ const api = {
       assert(lbItems[i].arenaPoints >= lbItems[i + 1].arenaPoints, `Test 30: Leaderboard rank ${i + 1} points (${lbItems[i].arenaPoints}) >= rank ${i + 2} points (${lbItems[i + 1].arenaPoints})`);
     }
 
+    // =========================================================================
+    // GROUP 5: Gamification Finalization — Multi-Quiz Scenario & Scalable Views
+    // =========================================================================
+    console.log('\n--- GROUP 5: Gamification Finalization — Multi-Quiz Scenario (Tests 31-42) ---');
+
+    const QUIZ_1_ID = 'quiz-alpha-1';
+    const QUIZ_2_ID = 'quiz-alpha-2';
+    const QUIZ_3_ID = 'quiz-alpha-3';
+
+    const SESS_1_ID = 'sess-alpha-1';
+    const SESS_2_ID = 'sess-alpha-2';
+    const SESS_3_ID = 'sess-alpha-3';
+
+    const quiz1Obj = {
+      id: QUIZ_1_ID,
+      title: 'Dermatology Core Fundamentals',
+      projectId: PROJ_A_ID,
+      questions: [{ id: 'q1_1', points: 5 }, { id: 'q1_2', points: 5 }, { id: 'q1_3', points: 5 }, { id: 'q1_4', points: 5 }, { id: 'q1_5', points: 5 }]
+    };
+    const quiz2Obj = {
+      id: QUIZ_2_ID,
+      title: 'Sunscreen & Photoprotection',
+      projectId: PROJ_A_ID,
+      questions: [{ id: 'q2_1', points: 10 }, { id: 'q2_2', points: 10 }, { id: 'q2_3', points: 10 }, { id: 'q2_4', points: 10 }]
+    };
+    const quiz3Obj = {
+      id: QUIZ_3_ID,
+      title: 'Clinical Acne Management',
+      projectId: PROJ_A_ID,
+      questions: [{ id: 'q3_1', points: 10 }, { id: 'q3_2', points: 10 }, { id: 'q3_3', points: 10 }]
+    };
+
+    const session1Obj = {
+      id: SESS_1_ID,
+      session_name: 'Dermatology Batch A',
+      roomCode: 'DERM1',
+      status: 'finished',
+      projectId: PROJ_A_ID,
+      Quiz: quiz1Obj
+    };
+    const session2Obj = {
+      id: SESS_2_ID,
+      session_name: 'SPF Masterclass',
+      roomCode: 'SPF02',
+      status: 'finished',
+      projectId: PROJ_A_ID,
+      Quiz: quiz2Obj
+    };
+    const session3Obj = {
+      id: SESS_3_ID,
+      session_name: 'Acne Protocol Session',
+      roomCode: 'ACNE3',
+      status: 'finished',
+      projectId: PROJ_A_ID,
+      Quiz: quiz3Obj
+    };
+
+    const multiQuizParticipants = [];
+
+    // Participants 1 to 22 in Project Alpha
+    for (let i = 1; i <= 22; i++) {
+      const empId = `EMP_A_${String(i).padStart(3, '0')}`;
+      let name = `Participant ${String(i).padStart(2, '0')}`;
+      let storeName = i % 2 === 0 ? 'Mumbai West' : 'Delhi North';
+      
+      if (i === 1) name = 'Aarav Sharma';
+      if (i === 2) name = 'Aditi Rao';
+      if (i === 3) name = 'Ananya Roy';
+      if (i === 4) name = 'Bhavna Patel';
+      if (i === 5) storeName = null; // Missing zone null
+      if (i === 6) storeName = '';   // Missing zone empty string
+
+      // Session 1: Participants 1-21 attempt Quiz 1 (5 questions, 5 pts each = 25 max)
+      if (i <= 21) {
+        let score1 = 20;
+        let responses1 = [
+          { id: `r_${i}_1_1`, points_awarded: 5, is_correct: true, response_time: 2000 },
+          { id: `r_${i}_1_2`, points_awarded: 5, is_correct: true, response_time: 2100 },
+          { id: `r_${i}_1_3`, points_awarded: 5, is_correct: true, response_time: 2200 },
+          { id: `r_${i}_1_4`, points_awarded: 5, is_correct: true, response_time: 2300 },
+          { id: `r_${i}_1_5`, points_awarded: 0, is_correct: false, response_time: 2400 }
+        ];
+
+        if (i === 1) {
+          // Aarav: 5/5 = 25 pts (100%)
+          score1 = 25;
+          responses1[4] = { id: `r_${i}_1_5`, points_awarded: 5, is_correct: true, response_time: 1800 };
+        } else if (i === 2) {
+          // Aditi: 4/5 = 20 pts (80%)
+          score1 = 20;
+        } else if (i === 3 || i === 4) {
+          // Ananya & Bhavna: 4/5 = 20 pts (80%)
+          score1 = 20;
+        }
+
+        multiQuizParticipants.push({
+          id: `p_s1_${i}`,
+          name,
+          employeeId: empId,
+          storeName,
+          score: score1,
+          userId: `user_a_${i}`,
+          Session: session1Obj,
+          Responses: responses1,
+          createdAt: new Date('2026-10-01T10:00:00Z')
+        });
+      }
+
+      // Session 2: Participants 1-18 attempt Quiz 2 (4 questions, 10 pts each = 40 max)
+      if (i <= 18) {
+        let score2 = 30;
+        let responses2 = [
+          { id: `r_${i}_2_1`, points_awarded: 10, is_correct: true, response_time: 1900 },
+          { id: `r_${i}_2_2`, points_awarded: 10, is_correct: true, response_time: 2000 },
+          { id: `r_${i}_2_3`, points_awarded: 10, is_correct: true, response_time: 2100 },
+          { id: `r_${i}_2_4`, points_awarded: 0, is_correct: false, response_time: 2200 }
+        ];
+
+        if (i === 1) {
+          // Aarav: 3/4 = 30 pts (75%) -> Cumulative = 25 + 30 = 55 pts, Total 8/9 correct = 89%
+          score2 = 30;
+        } else if (i === 2) {
+          // Aditi: 4/4 = 40 pts (100%) -> Cumulative = 20 + 40 = 60 pts, Total 8/9 correct = 89%
+          score2 = 40;
+          responses2[3] = { id: `r_${i}_2_4`, points_awarded: 10, is_correct: true, response_time: 1500 };
+        } else if (i === 3 || i === 4) {
+          // Ananya & Bhavna: 3/4 = 30 pts (75%) -> Cumulative = 20 + 30 = 50 pts each
+          score2 = 30;
+        }
+
+        multiQuizParticipants.push({
+          id: `p_s2_${i}`,
+          name,
+          employeeId: empId,
+          storeName,
+          score: score2,
+          userId: `user_a_${i}`,
+          Session: session2Obj,
+          Responses: responses2,
+          createdAt: new Date('2026-10-08T10:00:00Z')
+        });
+      }
+
+      // Session 3: Participants 1-10 attempt Quiz 3 (3 questions, 10 pts each = 30 max)
+      if (i <= 10) {
+        multiQuizParticipants.push({
+          id: `p_s3_${i}`,
+          name,
+          employeeId: empId,
+          storeName,
+          score: 30,
+          userId: `user_a_${i}`,
+          Session: session3Obj,
+          Responses: [
+            { id: `r_${i}_3_1`, points_awarded: 10, is_correct: true, response_time: 2000 },
+            { id: `r_${i}_3_2`, points_awarded: 10, is_correct: true, response_time: 2100 },
+            { id: `r_${i}_3_3`, points_awarded: 10, is_correct: true, response_time: 2200 }
+          ],
+          createdAt: new Date('2026-10-14T10:00:00Z')
+        });
+      }
+
+      // Participant 7 retry/revision attempt in Session 1 (simulating duplicate/revised record)
+      if (i === 7) {
+        multiQuizParticipants.push({
+          id: `p_s1_7_retry`,
+          name,
+          employeeId: empId,
+          storeName,
+          score: 20,
+          userId: `user_a_${i}`,
+          Session: session1Obj,
+          Responses: [
+            { id: `r_7_retry_1`, points_awarded: 5, is_correct: true, response_time: 1900 },
+            { id: `r_7_retry_2`, points_awarded: 5, is_correct: true, response_time: 1900 }
+          ],
+          createdAt: new Date('2026-10-01T10:30:00Z')
+        });
+      }
+    }
+
+    // Participant 22: Incomplete attempt on Quiz 2
+    multiQuizParticipants.push({
+      id: 'p_s2_22_inc',
+      name: 'Participant 22',
+      employeeId: 'EMP_A_022',
+      storeName: 'Delhi North',
+      score: 0,
+      userId: 'user_a_22',
+      Session: {
+        id: 'sess-alpha-2-inc',
+        session_name: 'SPF Masterclass',
+        roomCode: 'SPF02',
+        status: 'in_progress',
+        projectId: PROJ_A_ID,
+        Quiz: quiz2Obj
+      },
+      Responses: [
+        { id: 'r_22_inc_1', points_awarded: 0, is_correct: false, response_time: 4000 }
+      ],
+      createdAt: new Date('2026-10-08T11:00:00Z')
+    });
+
+    // Participant 23 in Project Beta (Unrelated project to test leak prevention)
+    multiQuizParticipants.push({
+      id: 'p_beta_23',
+      name: 'Rohan Verma',
+      employeeId: 'EMP_B_023',
+      storeName: 'Kolkata East',
+      score: 100,
+      userId: 'user_b_23',
+      Session: {
+        id: 'sess-beta-1',
+        session_name: 'Beta Project Training',
+        roomCode: 'BETA01',
+        status: 'finished',
+        projectId: PROJ_B_ID,
+        Quiz: {
+          id: 'quiz-beta-1',
+          title: 'Unilever Compliance',
+          projectId: PROJ_B_ID,
+          questions: [{ id: 'qb1' }, { id: 'qb2' }]
+        }
+      },
+      Responses: [
+        { id: 'rb1', points_awarded: 50, is_correct: true, response_time: 2000 },
+        { id: 'rb2', points_awarded: 50, is_correct: true, response_time: 2000 }
+      ],
+      createdAt: new Date('2026-10-10T10:00:00Z')
+    });
+
+    // Stub Participant.findAll to return this realistic multi-quiz dataset
+    stubber.stub(Participant, 'findAll', async () => multiQuizParticipants);
+
+    currentAuthUser = PM_A_USER;
+    const resMulti = await api.get(`/reports/gamification?projectId=${PROJ_A_ID}`);
+    assert(resMulti.status === 200, 'Test 31: GET /api/reports/gamification with multi-quiz fixture returns 200 OK');
+
+    // Test 31: Table sorts points descending by default
+    const attempts = resMulti.data.participantResults;
+    let isPointsDescending = true;
+    for (let i = 0; i < attempts.length - 1; i++) {
+      if (attempts[i].arenaPoints < attempts[i + 1].arenaPoints) {
+        isPointsDescending = false;
+        break;
+      }
+    }
+    assert(isPointsDescending, 'Test 31: Participant results table sorts points descending by default (no non-ranking order)');
+
+    // Test 32: Deterministic secondary order for ties
+    // Aditi Rao and Aarav Sharma or Ananya Roy and Bhavna Patel
+    const summaries = resMulti.data.participantSummaries;
+    const ananya = summaries.find(s => s.name === 'Ananya Roy');
+    const bhavna = summaries.find(s => s.name === 'Bhavna Patel');
+    assert(ananya && bhavna, 'Test 32: Tied participants Ananya and Bhavna found in summaries');
+    assert(ananya.cumulativeArenaPoints === bhavna.cumulativeArenaPoints, 'Test 32: Ananya and Bhavna have equal cumulative arena points (50 pts)');
+    assert(ananya.rank < bhavna.rank, 'Test 32: Equal scores tie-breaker places Ananya Roy before Bhavna Patel alphabetically');
+
+    // Test 33: Project summary has one row per unique participant in scope
+    assert(summaries.length === 22, `Test 33: Project summary has exactly 22 unique participant rows (actual: ${summaries.length})`);
+
+    // Test 34: 3 quizzes do NOT create duplicate summary rows
+    const uniqueIds = new Set(summaries.map(s => s.employeeId));
+    assert(uniqueIds.size === 22, 'Test 34: Multiple quizzes do not create duplicate summary rows for participants');
+
+    // Test 35: Quiz/topic view scopes to selected quiz
+    const resTopicQuiz2 = await api.get(`/reports/gamification?projectId=${PROJ_A_ID}&quizId=${QUIZ_2_ID}`);
+    assert(resTopicQuiz2.status === 200, 'Test 35: Topic query returns 200 OK');
+    const topicResults = resTopicQuiz2.data.participantResults;
+    assert(topicResults.length > 0 && topicResults.every(r => r.quizId === QUIZ_2_ID), `Test 35: Topic view returns exclusively Quiz 2 attempts (${topicResults.length} records)`);
+
+    // Test 36: Historical attempts remain available in allParticipantResults
+    assert(resTopicQuiz2.data.allParticipantResults.length >= attempts.length, 'Test 36: Full historical attempts remain available across quizzes');
+
+    // Test 37: Cumulative Arena Points reconcile to legitimate points earned
+    // Aarav: 25 (Quiz 1) + 30 (Quiz 2) + 30 (Quiz 3) = 85 pts
+    const aarav = summaries.find(s => s.name === 'Aarav Sharma');
+    assert(aarav && aarav.cumulativeArenaPoints === 85, `Test 37: Aarav cumulative points reconcile to 85 pts (actual: ${aarav?.cumulativeArenaPoints})`);
+
+    // Test 38: Revision/retries do not double-count scores
+    // Participant 7 has 2 submissions for session 1 (score 20), plus session 2 (score 30) + session 3 (score 30) = 80 pts (not 100 pts)
+    const part7 = summaries.find(s => s.employeeId === 'EMP_A_007');
+    assert(part7 && part7.cumulativeArenaPoints === 80, `Test 38: Participant 7 retried session does not double-count (expected 80 pts, got: ${part7?.cumulativeArenaPoints})`);
+
+    // Test 39: PM A cannot see Participant 23 from Project Beta (strict project isolation)
+    const betaLeakInSummaries = summaries.some(s => s.name === 'Rohan Verma' || s.employeeId === 'EMP_B_023');
+    const betaLeakInAttempts = attempts.some(a => a.name === 'Rohan Verma' || a.employeeId === 'EMP_B_023');
+    assert(!betaLeakInSummaries && !betaLeakInAttempts, 'Test 39: PM project filtering strictly prevents leak of Project Beta participants');
+
+    // Test 40: Missing zone values display as N/A without fabrication
+    const part5 = summaries.find(s => s.employeeId === 'EMP_A_005');
+    const part6 = summaries.find(s => s.employeeId === 'EMP_A_006');
+    assert(part5 && part5.zone === 'N/A', 'Test 40: Null storeName displays as N/A');
+    assert(part6 && part6.zone === 'N/A', 'Test 40: Empty storeName displays as N/A');
+
+    // Test 41: Incomplete attempt displays In Progress and does not inflate completed count
+    const part22 = summaries.find(s => s.employeeId === 'EMP_A_022');
+    assert(part22 && part22.quizzesCompleted === 0, `Test 41: Incomplete attempt participant has 0 quizzes completed (got: ${part22?.quizzesCompleted})`);
+    assert(part22 && part22.lastQuizStatus === 'In Progress', 'Test 41: Incomplete attempt status displays In Progress');
+
+    // Test 42: Summary KPI values reconcile with displayed participant records
+    assert(resMulti.data.summary.totalParticipants === 22, `Test 42: Summary totalParticipants strictly equals 22 (got: ${resMulti.data.summary.totalParticipants})`);
+    assert(resMulti.data.availableQuizzes.length >= 3, `Test 42: Available quizzes contains at least 3 topics (got: ${resMulti.data.availableQuizzes.length})`);
+    assert(resMulti.data.availableSessions.length >= 3, `Test 42: Available sessions contains at least 3 sessions (got: ${resMulti.data.availableSessions.length})`);
+
   } finally {
     stubber.restoreAll();
     server.close();
