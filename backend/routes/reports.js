@@ -457,20 +457,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
     const { projectId = 'all', subProjectId = 'all' } = req.query;
 
-    // 1. Resolve accessible project IDs with server-side authorization
-    let accessibleProjectIds = [];
-    if (userRole === 'Client') {
-      const clientService = require('../utils/clientService');
-      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, projectId, subProjectId);
-    } else if (userRole === 'T&D Manager') {
-      const tdService = require('../utils/tdService');
-      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, projectId, subProjectId);
-    } else {
-      const intelligenceService = require('../utils/projectIntelligenceService');
-      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
-    }
-
-    // 2. Resolve all accessible projects for project selector dropdown
+    // 1. Resolve all accessible projects for user to determine project selector and authorization
     let allAuthorizedIds = [];
     if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
@@ -495,17 +482,49 @@ router.get('/gamification', requireAuth, async (req, res) => {
       parentId: p.parentId
     }));
 
+    // Determine effective project scope:
+    // If user has exactly one assigned project, auto-resolve target to that single project.
+    let targetProjectId = projectId;
+    if (accessibleProjects.length === 1 && (!targetProjectId || targetProjectId === 'all')) {
+      targetProjectId = accessibleProjects[0].id;
+    }
+
+    // Enforce server-side authorization: PM cannot access unauthorized project ID
+    if (targetProjectId && targetProjectId !== 'all') {
+      if (!allAuthorizedIds.includes(targetProjectId)) {
+        const err = new Error('Forbidden: You do not have permission for this project.');
+        err.status = 403;
+        throw err;
+      }
+    }
+
+    // 2. Resolve accessible project IDs based on effective targetProjectId
+    let accessibleProjectIds = [];
+    if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, targetProjectId, subProjectId);
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, targetProjectId, subProjectId);
+    } else {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, targetProjectId, subProjectId);
+    }
+
     // If user has no accessible projects, return legitimate empty state
     if (!accessibleProjectIds || accessibleProjectIds.length === 0) {
       return res.json({
         isEmployee: userRole === 'Employee',
-        selectedProjectId: projectId,
+        selectedProjectId: targetProjectId,
         selectedProjectName: 'No Assigned Projects',
         accessibleProjects,
         summary: {
           totalParticipants: 0,
           quizzesCompleted: 0,
+          completedAttempts: 0,
           totalAttempts: 0,
+          distinctQuizzesCount: 0,
+          distinctSessionsCount: 0,
           avgScore: 'N/A',
           totalArenaPoints: 0
         },
@@ -534,9 +553,11 @@ router.get('/gamification', requireAuth, async (req, res) => {
 
     // Selected project name
     let selectedProjectName = 'All Assigned Projects';
-    if (projectId && projectId !== 'all') {
-      const found = accessibleProjects.find(p => p.id === projectId);
+    if (targetProjectId && targetProjectId !== 'all') {
+      const found = accessibleProjects.find(p => p.id === targetProjectId);
       if (found) selectedProjectName = found.name;
+    } else if (accessibleProjects.length > 1) {
+      selectedProjectName = `All Assigned Projects (${accessibleProjects.length} Projects)`;
     }
 
     // 3. Query participants joined with Session, Quiz, Question, Response
@@ -568,9 +589,11 @@ router.get('/gamification', requireAuth, async (req, res) => {
     const userAggregates = {};
     const zoneAggregates = {};
     const participantRows = [];
+    const distinctQuizIds = new Set();
+    const distinctSessionIds = new Set();
 
     let totalPointsAcrossScope = 0;
-    let completedQuizzesCount = 0;
+    let completedAttemptsCount = 0;
     let totalQuestionsSum = 0;
     let totalCorrectSum = 0;
 
@@ -581,8 +604,11 @@ router.get('/gamification', requireAuth, async (req, res) => {
       const arenaPts = Number(p.score) || 0;
       totalPointsAcrossScope += arenaPts;
 
+      if (p.Session?.Quiz?.id) distinctQuizIds.add(p.Session.Quiz.id);
+      if (p.Session?.id) distinctSessionIds.add(p.Session.id);
+
       const isFinished = p.Session?.status === 'finished' || (questionsCount > 0 && responses.length >= questionsCount);
-      if (isFinished) completedQuizzesCount += 1;
+      if (isFinished) completedAttemptsCount += 1;
 
       if (questionsCount > 0) {
         totalQuestionsSum += questionsCount;
@@ -603,25 +629,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
 
       const zoneName = p.storeName && p.storeName.trim() ? p.storeName.trim() : 'N/A';
 
-      // Table row
-      participantRows.push({
-        id: p.id,
-        name: p.name,
-        employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
-        zone: zoneName,
-        sessionName: p.Session?.session_name || p.Session?.roomCode || 'Session',
-        quizTitle: p.Session?.Quiz?.title || 'Quiz',
-        questionsCount,
-        answeredCount: responses.length,
-        correctCount,
-        quizPercentage: participantPercentage !== null ? `${participantPercentage}%` : 'N/A',
-        rawPercentage: participantPercentage,
-        arenaPoints: arenaPts,
-        status: isFinished ? 'Completed' : 'In Progress',
-        createdAt: p.createdAt
-      });
-
-      // User aggregation for leaderboard
+      // User aggregation for leaderboard & badges
       const userKey = p.employeeId ? p.employeeId.trim().toLowerCase() : p.name.trim().toLowerCase();
       if (!userAggregates[userKey]) {
         userAggregates[userKey] = {
@@ -634,6 +642,9 @@ router.get('/gamification', requireAuth, async (req, res) => {
           attempts: 0,
           completedCount: 0,
           minResponseTime: Infinity,
+          bestPercentage: -1,
+          hasPerfectSession: false,
+          hasRegisteredZone: false,
           userId: p.userId
         };
       }
@@ -645,9 +656,47 @@ router.get('/gamification', requireAuth, async (req, res) => {
       if (minResponseTime < userAggregates[userKey].minResponseTime) {
         userAggregates[userKey].minResponseTime = minResponseTime;
       }
+      if (participantPercentage !== null && participantPercentage > userAggregates[userKey].bestPercentage) {
+        userAggregates[userKey].bestPercentage = participantPercentage;
+      }
+      if (isFinished && participantPercentage === 100) {
+        userAggregates[userKey].hasPerfectSession = true;
+      }
+      if (p.storeName && p.storeName.trim().length > 0) {
+        userAggregates[userKey].hasRegisteredZone = true;
+      }
       if (zoneName !== 'N/A' && userAggregates[userKey].zone === 'N/A') {
         userAggregates[userKey].zone = zoneName;
       }
+
+      // Badges earned by this participant on this attempt
+      const attemptBadges = [];
+      if (participantPercentage !== null && participantPercentage >= 90) attemptBadges.push('champion');
+      if (minResponseTime < 3000) attemptBadges.push('fastest');
+      if (participantPercentage === 100) attemptBadges.push('expert');
+      if (p.storeName && p.storeName.trim().length > 0) attemptBadges.push('team');
+      if (isFinished && participantPercentage === 100) attemptBadges.push('perfect');
+
+      // Table row
+      participantRows.push({
+        id: p.id,
+        name: p.name,
+        employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
+        zone: zoneName,
+        sessionId: p.Session?.id || '',
+        sessionName: p.Session?.session_name || p.Session?.roomCode || 'Session',
+        quizId: p.Session?.Quiz?.id || '',
+        quizTitle: p.Session?.Quiz?.title || 'Quiz',
+        questionsCount,
+        answeredCount: responses.length,
+        correctCount,
+        quizPercentage: participantPercentage !== null ? `${participantPercentage}%` : 'N/A',
+        rawPercentage: participantPercentage,
+        arenaPoints: arenaPts,
+        status: isFinished ? 'Completed' : 'In Progress',
+        earnedBadges: attemptBadges,
+        createdAt: p.createdAt
+      });
 
       // Zone aggregation
       const zKey = zoneName;
@@ -759,24 +808,30 @@ router.get('/gamification', requireAuth, async (req, res) => {
       : 100;
     const pointsToNext = nextLevel ? Math.max(0, nextLevel.min - personalArenaPoints) : 0;
 
-    // Badges strictly evaluated from genuine data
-    const championUnlocked = personalAttempts.some(p => {
+    // Badges evaluated according to role and established product intent:
+    // For Employee: personal unlocked status.
+    // For Non-Employee (PM / Trainer / Admin): project-team badge achievement counts & criteria.
+    const isEmployee = userRole === 'Employee';
+    const totalLearners = Object.keys(userAggregates).length;
+
+    // Personal unlocks for employee
+    const personalChampionUnlocked = personalAttempts.some(p => {
       const qLen = p.Session?.Quiz?.questions?.length || 0;
       if (qLen === 0) return false;
       const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
       return (c / qLen) >= 0.9;
     });
 
-    const fastestUnlocked = personalMinTime < 3000;
-    const streakUnlocked = personalCompletedSessions >= 3;
-    const expertUnlocked = personalAttempts.some(p => {
+    const personalFastestUnlocked = personalMinTime < 3000;
+    const personalStreakUnlocked = personalCompletedSessions >= 3;
+    const personalExpertUnlocked = personalAttempts.some(p => {
       const qLen = p.Session?.Quiz?.questions?.length || 0;
       if (qLen === 0) return false;
       const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
       return c === qLen;
     });
-    const teamUnlocked = personalAttempts.some(p => p.storeName && p.storeName.trim().length > 0);
-    const perfectUnlocked = personalAttempts.some(p => {
+    const personalTeamUnlocked = personalAttempts.some(p => p.storeName && p.storeName.trim().length > 0);
+    const personalPerfectUnlocked = personalAttempts.some(p => {
       const qLen = p.Session?.Quiz?.questions?.length || 0;
       if (qLen === 0) return false;
       const isFin = p.Session?.status === 'finished' || (p.Responses || []).length >= qLen;
@@ -784,24 +839,120 @@ router.get('/gamification', requireAuth, async (req, res) => {
       return isFin && c === qLen;
     });
 
+    // Team qualifications across userAggregates
+    const usersList = Object.values(userAggregates);
+    const teamChampionCount = usersList.filter(u => u.bestPercentage >= 90).length;
+    const teamFastestCount = usersList.filter(u => u.minResponseTime < 3000).length;
+    const teamStreakCount = usersList.filter(u => u.completedCount >= 3).length;
+    const teamExpertCount = usersList.filter(u => u.bestPercentage === 100).length;
+    const teamZoneCount = usersList.filter(u => u.hasRegisteredZone).length;
+    const teamPerfectCount = usersList.filter(u => u.hasPerfectSession).length;
+
     const badges = [
-      { id: 'champion', label: 'Sales Champion',   desc: 'Scored 90%+ on any quiz in this project',  icon: '🏆', color: '#FF6B35', unlocked: championUnlocked },
-      { id: 'fastest',  label: 'Fastest Finger',    desc: 'Answered in under 3 seconds',              icon: '⚡', color: '#F59E0B', unlocked: fastestUnlocked },
-      { id: 'streak',   label: 'Attendance Streak', desc: '3+ training/quiz sessions completed',      icon: '🔥', color: '#EF4444', unlocked: streakUnlocked },
-      { id: 'expert',   label: 'Product Expert',    desc: 'Scored 100% on any quiz in this project',  icon: '📦', color: '#00C896', unlocked: expertUnlocked },
-      { id: 'team',     label: 'Zone Warrior',      desc: 'Participated with assigned store/zone',    icon: '🎯', color: '#2EA8FF', unlocked: teamUnlocked },
-      { id: 'perfect',  label: 'Perfect Session',   desc: 'Completed a quiz session with 100% score', icon: '💯', color: '#8B5CF6', unlocked: perfectUnlocked },
+      {
+        id: 'champion',
+        label: 'Sales Champion',
+        desc: 'Scored 90%+ on any quiz in this project',
+        icon: '🏆',
+        color: '#FF6B35',
+        unlocked: isEmployee ? personalChampionUnlocked : teamChampionCount > 0,
+        earnedCount: isEmployee ? (personalChampionUnlocked ? 1 : 0) : teamChampionCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalChampionUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamChampionCount > 0
+              ? `✓ Earned by ${teamChampionCount} of ${totalLearners} Learners (${Math.round((teamChampionCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
+      {
+        id: 'fastest',
+        label: 'Fastest Finger',
+        desc: 'Answered in under 3 seconds',
+        icon: '⚡',
+        color: '#F59E0B',
+        unlocked: isEmployee ? personalFastestUnlocked : teamFastestCount > 0,
+        earnedCount: isEmployee ? (personalFastestUnlocked ? 1 : 0) : teamFastestCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalFastestUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamFastestCount > 0
+              ? `✓ Earned by ${teamFastestCount} of ${totalLearners} Learners (${Math.round((teamFastestCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
+      {
+        id: 'streak',
+        label: 'Attendance Streak',
+        desc: '3+ training/quiz sessions completed',
+        icon: '🔥',
+        color: '#EF4444',
+        unlocked: isEmployee ? personalStreakUnlocked : teamStreakCount > 0,
+        earnedCount: isEmployee ? (personalStreakUnlocked ? 1 : 0) : teamStreakCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalStreakUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamStreakCount > 0
+              ? `✓ Earned by ${teamStreakCount} of ${totalLearners} Learners (${Math.round((teamStreakCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
+      {
+        id: 'expert',
+        label: 'Product Expert',
+        desc: 'Scored 100% on any quiz in this project',
+        icon: '📦',
+        color: '#00C896',
+        unlocked: isEmployee ? personalExpertUnlocked : teamExpertCount > 0,
+        earnedCount: isEmployee ? (personalExpertUnlocked ? 1 : 0) : teamExpertCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalExpertUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamExpertCount > 0
+              ? `✓ Earned by ${teamExpertCount} of ${totalLearners} Learners (${Math.round((teamExpertCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
+      {
+        id: 'team',
+        label: 'Zone Warrior',
+        desc: 'Participated with assigned store/zone',
+        icon: '🎯',
+        color: '#2EA8FF',
+        unlocked: isEmployee ? personalTeamUnlocked : teamZoneCount > 0,
+        earnedCount: isEmployee ? (personalTeamUnlocked ? 1 : 0) : teamZoneCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalTeamUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamZoneCount > 0
+              ? `✓ Earned by ${teamZoneCount} of ${totalLearners} Learners (${Math.round((teamZoneCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
+      {
+        id: 'perfect',
+        label: 'Perfect Session',
+        desc: 'Completed a quiz session with 100% score',
+        icon: '💯',
+        color: '#8B5CF6',
+        unlocked: isEmployee ? personalPerfectUnlocked : teamPerfectCount > 0,
+        earnedCount: isEmployee ? (personalPerfectUnlocked ? 1 : 0) : teamPerfectCount,
+        totalEligible: isEmployee ? 1 : totalLearners,
+        statusText: isEmployee
+          ? (personalPerfectUnlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')
+          : (teamPerfectCount > 0
+              ? `✓ Earned by ${teamPerfectCount} of ${totalLearners} Learners (${Math.round((teamPerfectCount / (totalLearners || 1)) * 100)}%)`
+              : `0 of ${totalLearners} Qualified (Criteria Unmet)`)
+      },
     ];
 
     res.json({
-      isEmployee: userRole === 'Employee',
-      selectedProjectId: projectId,
+      isEmployee,
+      selectedProjectId: targetProjectId,
       selectedProjectName,
       accessibleProjects,
       summary: {
-        totalParticipants: Object.keys(userAggregates).length,
-        quizzesCompleted: completedQuizzesCount,
+        totalParticipants: totalLearners,
+        quizzesCompleted: completedAttemptsCount,
+        completedAttempts: completedAttemptsCount,
         totalAttempts: scopedParticipants.length,
+        distinctQuizzesCount: distinctQuizIds.size,
+        distinctSessionsCount: distinctSessionIds.size,
         avgScore: overallAvgScore,
         totalArenaPoints: totalPointsAcrossScope
       },

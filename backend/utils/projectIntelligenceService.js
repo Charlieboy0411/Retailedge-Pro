@@ -40,8 +40,13 @@ async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId
     }
 
     // Also include user.projectId for full backward compatibility
-    if (user.projectId) {
-      const legacyIds = String(user.projectId).split(',').map(s => s.trim()).filter(Boolean);
+    let userProjId = user.projectId;
+    if (userProjId === undefined && isUuid) {
+      const dbUser = await User.findByPk(userId, { attributes: ['projectId'] });
+      if (dbUser) userProjId = dbUser.projectId;
+    }
+    if (userProjId) {
+      const legacyIds = String(userProjId).split(',').map(s => s.trim()).filter(Boolean);
       legacyIds.forEach(id => {
         if (!authorizedBaseIds.includes(id)) authorizedBaseIds.push(id);
       });

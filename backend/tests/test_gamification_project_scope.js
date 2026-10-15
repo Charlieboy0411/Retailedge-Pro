@@ -480,6 +480,86 @@ const api = {
     const lbNames = resLb.data.map(p => p.name);
     assert(lbNames.includes('Learner Charlie') && !lbNames.includes('Learner Zoe'), 'Test 21: Dedicated leaderboard endpoint strictly excludes cross-project participants');
 
+    // ════════════════════════════════════════════════════════════════════
+    // 4. FINAL PM AUDIT ACCEPTANCE TESTS (Tests 22 - 30)
+    // ════════════════════════════════════════════════════════════════════
+    console.log('\n--- GROUP 4: Final PM Audit Acceptance Tests (Tests 22-30) ---');
+
+    // Test 22: Single assigned project PM auto-resolves scope to that project
+    currentAuthUser = PM_B_USER;
+    const resSingleProjPM = await api.get('/reports/gamification?projectId=all');
+    assert(resSingleProjPM.data.accessibleProjects.length === 1, 'Test 22: PM B has exactly 1 accessible project (Project Beta)');
+    assert(resSingleProjPM.data.selectedProjectId === PROJ_B_ID, 'Test 22: Scope auto-resolves from "all" to assigned project ID');
+    assert(resSingleProjPM.data.selectedProjectName === 'Project Beta (Unilever)', 'Test 22: Selected project name resolves to "Project Beta (Unilever)"');
+
+    // Test 23: Multi-project PM preserves aggregate context when "all" requested
+    currentAuthUser = PM_A_USER;
+    const resMultiProjPM = await api.get('/reports/gamification?projectId=all');
+    assert(resMultiProjPM.data.accessibleProjects.length === 2, 'Test 23: PM A has 2 accessible projects');
+    assert(resMultiProjPM.data.selectedProjectId === 'all', 'Test 23: Scope remains "all" for multi-project PM');
+    assert(resMultiProjPM.data.selectedProjectName.includes('All Assigned Projects'), 'Test 23: Selected project name clearly indicates aggregate scope');
+
+    // Test 24: KPI accurately distinguishes participant submissions from distinct quizzes & sessions
+    assert(resMultiProjPM.data.summary.completedAttempts === 3, 'Test 24: Participant completed attempts equals 3');
+    assert(resMultiProjPM.data.summary.distinctQuizzesCount === 1, 'Test 24: Distinct quizzes count is accurately 1 (not 3)');
+    assert(resMultiProjPM.data.summary.distinctSessionsCount === 1, 'Test 24: Distinct sessions count is accurately 1 (not 3)');
+    assert(resMultiProjPM.data.summary.totalAttempts === 3, 'Test 24: Total attempts equals 3');
+
+    // Test 25: Team badge calculations for PM view
+    const teamBadges = resMultiProjPM.data.badges;
+    const champBadge = teamBadges.find(b => b.id === 'champion');
+    const expertBadgePM = teamBadges.find(b => b.id === 'expert');
+    const perfectBadgePM = teamBadges.find(b => b.id === 'perfect');
+    const zoneBadgePM = teamBadges.find(b => b.id === 'team');
+    const streakBadgePM = teamBadges.find(b => b.id === 'streak');
+    const fastestBadgePM = teamBadges.find(b => b.id === 'fastest');
+
+    assert(champBadge.unlocked === true && champBadge.earnedCount === 1, 'Test 25: Sales Champion unlocked (1 of 3 learners ≥90%)');
+    assert(champBadge.statusText.includes('1 of 3 Learners'), 'Test 25: Sales Champion statusText shows "1 of 3 Learners"');
+    assert(expertBadgePM.unlocked === true && expertBadgePM.earnedCount === 1, 'Test 25: Product Expert unlocked (1 of 3 learners scored 100%)');
+    assert(perfectBadgePM.unlocked === true && perfectBadgePM.earnedCount === 1, 'Test 25: Perfect Session unlocked (1 of 3 learners completed with 100%)');
+    assert(zoneBadgePM.unlocked === true && zoneBadgePM.earnedCount === 2, 'Test 25: Zone Warrior unlocked (2 of 3 learners have registered zone)');
+    assert(streakBadgePM.unlocked === false && streakBadgePM.earnedCount === 0, 'Test 25: Attendance Streak locked (0 of 3 learners have ≥3 sessions)');
+    assert(streakBadgePM.statusText.includes('0 of 3 Qualified'), 'Test 25: Attendance Streak statusText shows "0 of 3 Qualified"');
+    assert(fastestBadgePM.unlocked === true && fastestBadgePM.earnedCount === 1, 'Test 25: Fastest Finger unlocked (1 of 3 learners answered <3s)');
+
+    // Test 26: Participant rows include earnedBadges array
+    const charlieRowPM = resMultiProjPM.data.participantResults.find(p => p.name === 'Learner Charlie');
+    assert(charlieRowPM && Array.isArray(charlieRowPM.earnedBadges), 'Test 26: Participant row has earnedBadges array');
+    assert(charlieRowPM.earnedBadges.includes('champion') && charlieRowPM.earnedBadges.includes('expert') && charlieRowPM.earnedBadges.includes('team') && charlieRowPM.earnedBadges.includes('perfect'), 'Test 26: 100% scorer Charlie earns champion, expert, team, and perfect badges');
+
+    const daveRowPM = resMultiProjPM.data.participantResults.find(p => p.name === 'Learner Dave');
+    assert(daveRowPM && daveRowPM.earnedBadges.includes('team') && !daveRowPM.earnedBadges.includes('expert'), 'Test 26: 50% scorer Dave earns team badge but not expert badge');
+
+    // Test 27: Zone breakdown reconciles exactly with total participant results
+    const zoneBreakdown = resMultiProjPM.data.zoneBreakdown;
+    const sumZonePts = zoneBreakdown.reduce((sum, z) => sum + z.totalArenaPoints, 0);
+    const sumZoneLearners = zoneBreakdown.reduce((sum, z) => sum + z.participantCount, 0);
+    assert(sumZonePts === resMultiProjPM.data.summary.totalArenaPoints, `Test 27: Zone arena points sum (${sumZonePts}) equals total arena points (${resMultiProjPM.data.summary.totalArenaPoints})`);
+    assert(sumZoneLearners === resMultiProjPM.data.summary.totalParticipants, `Test 27: Zone learners sum (${sumZoneLearners}) equals total participants (${resMultiProjPM.data.summary.totalParticipants})`);
+
+    // Test 28: Empty project history displays consistent N/A and locked badges
+    stubber.stub(Participant, 'findAll', async () => []);
+    const resEmptyHistory = await api.get('/reports/gamification?projectId=all');
+    assert(resEmptyHistory.data.summary.avgScore === 'N/A', 'Test 28: Empty participant history yields N/A average score');
+    assert(resEmptyHistory.data.summary.quizzesCompleted === 0, 'Test 28: Empty history yields 0 completed attempts');
+    assert(resEmptyHistory.data.badges.every(b => b.unlocked === false), 'Test 28: All badges locked when no participant records exist');
+    assert(resEmptyHistory.data.badges.every(b => b.earnedCount === 0), 'Test 28: Badge earned count equals 0 on empty history');
+    stubber.stub(Participant, 'findAll', async () => mockParticipants);
+
+    // Test 29: Unauthorized project access rejected with 403 for single-project PM as well
+    currentAuthUser = PM_B_USER;
+    const resUnauthorizedPMB = await api.get(`/reports/gamification?projectId=${PROJ_A_ID}`);
+    assert(resUnauthorizedPMB.status === 403, 'Test 29: PM B cannot access Project A (HTTP 403 Forbidden)');
+
+    // Test 30: Leaderboard ordering and tie-breaking match participant points
+    currentAuthUser = PM_A_USER;
+    const resLeaderboardCheck = await api.get('/reports/gamification?projectId=all');
+    const lbItems = resLeaderboardCheck.data.leaderboard;
+    for (let i = 0; i < lbItems.length - 1; i++) {
+      assert(lbItems[i].arenaPoints >= lbItems[i + 1].arenaPoints, `Test 30: Leaderboard rank ${i + 1} points (${lbItems[i].arenaPoints}) >= rank ${i + 2} points (${lbItems[i + 1].arenaPoints})`);
+    }
+
   } finally {
     stubber.restoreAll();
     server.close();

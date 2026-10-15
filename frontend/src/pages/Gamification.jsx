@@ -61,17 +61,20 @@ export default function Gamification() {
   };
 
   // Filter participant rows based on search
+  const participantResults = data?.participantResults;
   const filteredParticipants = useMemo(() => {
-    if (!data?.participantResults) return [];
-    if (!searchQuery.trim()) return data.participantResults;
+    if (!participantResults) return [];
+    if (!searchQuery.trim()) return participantResults;
     const q = searchQuery.toLowerCase().trim();
-    return data.participantResults.filter(p => 
+    return participantResults.filter(p => 
       (p.name && p.name.toLowerCase().includes(q)) ||
       (p.employeeId && p.employeeId.toLowerCase().includes(q)) ||
       (p.zone && p.zone.toLowerCase().includes(q)) ||
-      (p.quizTitle && p.quizTitle.toLowerCase().includes(q))
+      (p.quizTitle && p.quizTitle.toLowerCase().includes(q)) ||
+      (p.sessionName && p.sessionName.toLowerCase().includes(q)) ||
+      (p.sessionId && p.sessionId.toLowerCase().includes(q))
     );
-  }, [data?.participantResults, searchQuery]);
+  }, [participantResults, searchQuery]);
 
   if (loading && !data) {
     return (
@@ -160,7 +163,7 @@ export default function Gamification() {
         gap: '20px'
       }}>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <span style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -177,8 +180,22 @@ export default function Gamification() {
               <ShieldCheck size={14} />
               {isEmployee ? 'Personal Arena' : `${userRole || 'Project'} Analytics`}
             </span>
-            <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>•</span>
-            <span style={{ fontSize: '0.85rem', color: '#64748B', fontWeight: 600 }}>
+            <span style={{ fontSize: '0.85rem', color: '#CBD5E1', fontWeight: 600 }}>•</span>
+            <span style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 10px',
+              borderRadius: '20px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              background: (selectedProjectId === 'all' && accessibleProjects.length > 1) ? '#FEF3C7' : '#F1F5F9',
+              color: (selectedProjectId === 'all' && accessibleProjects.length > 1) ? '#B45309' : '#0F172A',
+              border: `1px solid ${(selectedProjectId === 'all' && accessibleProjects.length > 1) ? '#FDE68A' : '#E2E8F0'}`
+            }}>
+              {(selectedProjectId === 'all' && accessibleProjects.length > 1) ? '🌐 Portfolio Aggregate' : '📁 Project Scope'}
+            </span>
+            <span style={{ fontSize: '0.88rem', color: '#0F172A', fontWeight: 700 }}>
               {selectedProjectName}
             </span>
           </div>
@@ -205,11 +222,11 @@ export default function Gamification() {
           {accessibleProjects.length > 0 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <label htmlFor="gamification-project-select" style={{ fontSize: '0.82rem', fontWeight: 700, color: '#475569' }}>
-                Project:
+                Project Scope:
               </label>
               <select
                 id="gamification-project-select"
-                value={selectedProjectId}
+                value={selectedProjectId || (accessibleProjects.length === 1 ? accessibleProjects[0].id : 'all')}
                 onChange={handleProjectChange}
                 style={{
                   padding: '9px 16px',
@@ -226,7 +243,7 @@ export default function Gamification() {
                 }}
               >
                 {accessibleProjects.length > 1 && (
-                  <option value="all">🌐 All Assigned Projects</option>
+                  <option value="all">🌐 All Assigned Projects ({accessibleProjects.length})</option>
                 )}
                 {accessibleProjects.map(p => (
                   <option key={p.id} value={p.id}>
@@ -511,13 +528,13 @@ export default function Gamification() {
                 <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
                   {summary.totalParticipants ?? 0}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '3px' }}>
-                  In {selectedProjectName}
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
+                  {selectedProjectId === 'all' && accessibleProjects.length > 1 ? 'Across all assigned projects' : `In ${selectedProjectName}`}
                 </div>
               </div>
             </div>
 
-            {/* Card 2: Quizzes Completed */}
+            {/* Card 2: Participant Submissions */}
             <div style={{
               background: '#FFFFFF',
               borderRadius: '14px',
@@ -537,13 +554,13 @@ export default function Gamification() {
               </div>
               <div>
                 <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Quizzes Completed
+                  Participant Submissions
                 </div>
                 <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
-                  {summary.quizzesCompleted ?? 0}
+                  {summary.completedAttempts ?? summary.quizzesCompleted ?? 0}
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '3px' }}>
-                  {summary.totalAttempts ?? 0} total attempts
+                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
+                  {summary.completedAttempts ?? summary.quizzesCompleted ?? 0} of {summary.totalAttempts ?? 0} attempts completed • {summary.distinctSessionsCount ?? 1} {(summary.distinctSessionsCount === 1) ? 'session' : 'sessions'} • {summary.distinctQuizzesCount ?? 1} {(summary.distinctQuizzesCount === 1) ? 'quiz' : 'quizzes'}
                 </div>
               </div>
             </div>
@@ -870,6 +887,7 @@ export default function Gamification() {
                       <th style={{ padding: '12px 14px', textAlign: 'center' }}>Correct</th>
                       <th style={{ padding: '12px 14px', textAlign: 'center' }}>Quiz Score</th>
                       <th style={{ padding: '12px 14px', textAlign: 'right' }}>Arena Points</th>
+                      <th style={{ padding: '12px 14px', textAlign: 'center' }}>Achievements</th>
                       <th style={{ padding: '12px 14px', textAlign: 'center' }}>Status</th>
                     </tr>
                   </thead>
@@ -890,8 +908,22 @@ export default function Gamification() {
                           {row.zone}
                         </td>
                         <td style={{ padding: '12px 14px', color: '#0F172A' }}>
-                          <div style={{ fontWeight: 600 }}>{row.quizTitle}</div>
-                          <div style={{ fontSize: '0.72rem', color: '#94A3B8' }}>{row.sessionName}</div>
+                          <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0F172A' }}>{row.quizTitle}</div>
+                          <div style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            fontSize: '0.72rem',
+                            color: '#64748B',
+                            marginTop: '3px',
+                            background: '#F1F5F9',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontFamily: 'monospace'
+                          }}>
+                            <span>Session:</span>
+                            <span style={{ fontWeight: 600 }}>{row.sessionName}</span>
+                          </div>
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'center', color: '#475569' }}>
                           {row.answeredCount} / {row.questionsCount}
@@ -911,6 +943,38 @@ export default function Gamification() {
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#FF6B35' }}>
                           {row.arenaPoints} pts
+                        </td>
+                        <td style={{ padding: '12px 14px', textAlign: 'center' }}>
+                          {row.earnedBadges && row.earnedBadges.length > 0 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                              {row.earnedBadges.map(bId => {
+                                const badgeMeta = {
+                                  champion: { icon: '🏆', title: 'Sales Champion (90%+ on quiz)' },
+                                  fastest:  { icon: '⚡', title: 'Fastest Finger (Under 3s)' },
+                                  streak:   { icon: '🔥', title: 'Attendance Streak (3+ Sessions)' },
+                                  expert:   { icon: '📦', title: 'Product Expert (100% on quiz)' },
+                                  team:     { icon: '🎯', title: 'Zone Warrior (Registered Store/Zone)' },
+                                  perfect:  { icon: '💯', title: 'Perfect Session (100% score)' }
+                                }[bId];
+                                if (!badgeMeta) return null;
+                                return (
+                                  <span
+                                    key={bId}
+                                    title={badgeMeta.title}
+                                    style={{
+                                      fontSize: '1.05rem',
+                                      cursor: 'help',
+                                      display: 'inline-block'
+                                    }}
+                                  >
+                                    {badgeMeta.icon}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span style={{ color: '#94A3B8', fontSize: '0.78rem' }}>—</span>
+                          )}
                         </td>
                         <td style={{ padding: '12px 14px', textAlign: 'center' }}>
                           <span style={{
@@ -945,51 +1009,60 @@ export default function Gamification() {
           <div style={{ marginBottom: '20px' }}>
             <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 6px 0', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.2rem', color: '#0F172A' }}>
               <Award size={22} color="#FF6B35" />
-              Verified Badge Collection & Qualification Criteria
+              {isEmployee ? 'Personal Badge Collection' : 'Project Team Badge Achievements & Criteria'}
             </h3>
             <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748B' }}>
-              Badges are awarded strictly upon meeting objective qualification rules on finalized sessions.
+              {isEmployee
+                ? 'Your validated Live Arena achievements awarded strictly upon meeting objective qualification rules.'
+                : `Team qualification criteria evaluated against authoritative finalized session results (${badges.filter(b => b.unlocked).length} of ${badges.length} badges achieved by project team).`}
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
             {badges.map(b => (
               <div key={b.id} style={{
                 padding: '20px',
                 borderRadius: '14px',
-                background: b.unlocked ? `${b.color}08` : '#F8FAFC',
+                background: b.unlocked ? `${b.color}0A` : '#F8FAFC',
                 border: `1.5px solid ${b.unlocked ? b.color + '40' : '#E2E8F0'}`,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '14px',
-                opacity: b.unlocked ? 1 : 0.6,
-                transition: 'all 0.2s ease'
+                gap: '16px',
+                opacity: b.unlocked ? 1 : 0.7,
+                transition: 'all 0.2s ease',
+                boxShadow: b.unlocked ? `0 2px 8px ${b.color}15` : 'none'
               }}>
                 <div style={{
-                  width: '50px', height: '50px', borderRadius: '14px',
+                  width: '52px', height: '52px', borderRadius: '14px',
                   background: b.unlocked ? `${b.color}15` : '#E2E8F0',
                   border: `2px solid ${b.unlocked ? b.color + '40' : '#CBD5E1'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.6rem', flexShrink: 0
+                  fontSize: '1.65rem', flexShrink: 0
                 }}>
                   {b.icon}
                 </div>
-                <div>
-                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: b.unlocked ? '#0F172A' : '#64748B', marginBottom: '3px' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.94rem', color: b.unlocked ? '#0F172A' : '#475569', marginBottom: '3px' }}>
                     {b.label}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#64748B', lineHeight: 1.4 }}>
                     {b.desc}
                   </div>
-                  <div style={{
-                    fontSize: '0.7rem',
-                    color: b.unlocked ? b.color : '#94A3B8',
-                    fontWeight: 700,
-                    marginTop: '6px',
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.5px'
-                  }}>
-                    {b.unlocked ? '✓ Earned' : 'Locked (Criteria Unmet)'}
+                  <div style={{ marginTop: '8px' }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      padding: '3px 8px',
+                      borderRadius: '12px',
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      background: b.unlocked ? `${b.color}15` : '#F1F5F9',
+                      color: b.unlocked ? b.color : '#64748B',
+                      border: `1px solid ${b.unlocked ? b.color + '30' : '#E2E8F0'}`
+                    }}>
+                      {b.statusText || (b.unlocked ? '✓ Earned' : 'Locked (Criteria Unmet)')}
+                    </span>
                   </div>
                 </div>
               </div>
