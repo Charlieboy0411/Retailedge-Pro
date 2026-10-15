@@ -47,6 +47,22 @@ async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId
       });
     }
 
+    // For trainers, also resolve projects from sessions where they are host or assigned
+    if (userRole === 'Trainer') {
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId);
+      if (isUuid) {
+        const hostedSessions = await Session.findAll({
+          where: { hostId: userId },
+          attributes: ['projectId'],
+          include: [{ model: Quiz, attributes: ['projectId'] }]
+        });
+        hostedSessions.forEach(s => {
+          const pid = s.projectId || s.Quiz?.projectId;
+          if (pid && !authorizedBaseIds.includes(pid)) authorizedBaseIds.push(pid);
+        });
+      }
+    }
+
     // Expand mother projects to include their child subprojects
     if (authorizedBaseIds.length > 0) {
       const subProjects = await Project.findAll({

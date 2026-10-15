@@ -29,7 +29,7 @@ const getDetectedDashboard = (pathname, role) => {
   if (pathname.includes('/projects')) return 'Projects Admin';
   if (pathname.includes('/org-chart')) return 'Org Chart';
   if (pathname.includes('/certificates')) return 'Certificates';
-  if (pathname.includes('/gamification')) return 'Gamification Arena';
+  if (pathname.includes('/gamification')) return 'Participant Results & Performance';
   if (pathname.includes('/schedule')) return 'Schedule & Planner';
   
   if (role === 'Trainer') return 'Trainer Dashboard';
@@ -218,6 +218,14 @@ export default function Layout() {
                   ))}
                 </div>
               )}
+
+              <Link 
+                to="/gamification" 
+                className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}
+              >
+                <Trophy size={18} />
+                <span>Participant Results</span>
+              </Link>
             </>
           ) : (
             <>

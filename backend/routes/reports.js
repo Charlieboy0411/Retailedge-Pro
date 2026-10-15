@@ -451,26 +451,409 @@ router.get('/attendance', requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/reports/leaderboard - Fetch top 5 participants grouped by name/employeeId
+// GET /api/reports/gamification - Authoritative, project-scoped Participant Results & Gamification endpoint
+router.get('/gamification', requireAuth, async (req, res) => {
+  try {
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    const { projectId = 'all', subProjectId = 'all' } = req.query;
+
+    // 1. Resolve accessible project IDs with server-side authorization
+    let accessibleProjectIds = [];
+    if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, projectId, subProjectId);
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, projectId, subProjectId);
+    } else {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+    }
+
+    // 2. Resolve all accessible projects for project selector dropdown
+    let allAuthorizedIds = [];
+    if (userRole === 'Client') {
+      const clientService = require('../utils/clientService');
+      allAuthorizedIds = await clientService.getAccessibleClientProjectIds(req.user, 'all', 'all');
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      allAuthorizedIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+    } else {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      allAuthorizedIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+    }
+
+    const authorizedProjects = await Project.findAll({
+      where: { id: { [Op.in]: allAuthorizedIds } },
+      attributes: ['id', 'name', 'parentId'],
+      order: [['name', 'ASC']]
+    });
+
+    const accessibleProjects = authorizedProjects.map(p => ({
+      id: p.id,
+      name: p.name,
+      parentId: p.parentId
+    }));
+
+    // If user has no accessible projects, return legitimate empty state
+    if (!accessibleProjectIds || accessibleProjectIds.length === 0) {
+      return res.json({
+        isEmployee: userRole === 'Employee',
+        selectedProjectId: projectId,
+        selectedProjectName: 'No Assigned Projects',
+        accessibleProjects,
+        summary: {
+          totalParticipants: 0,
+          quizzesCompleted: 0,
+          totalAttempts: 0,
+          avgScore: 'N/A',
+          totalArenaPoints: 0
+        },
+        zoneBreakdown: [],
+        leaderboard: [],
+        participantResults: [],
+        badges: [],
+        stats: {
+          sessionsParticipated: 0,
+          badgesEarned: 0,
+          avgScore: 'N/A',
+          fastestAnswer: 'N/A'
+        },
+        level: {
+          name: 'Bronze',
+          min: 0,
+          max: 200,
+          color: '#CD7F32',
+          icon: '🥉',
+          progressPct: 0,
+          pointsToNext: 200
+        },
+        totalPoints: 0
+      });
+    }
+
+    // Selected project name
+    let selectedProjectName = 'All Assigned Projects';
+    if (projectId && projectId !== 'all') {
+      const found = accessibleProjects.find(p => p.id === projectId);
+      if (found) selectedProjectName = found.name;
+    }
+
+    // 3. Query participants joined with Session, Quiz, Question, Response
+    const participants = await Participant.findAll({
+      include: [
+        Response,
+        {
+          model: Session,
+          required: true,
+          include: [
+            {
+              model: Quiz,
+              required: true,
+              include: [{ model: Question, as: 'questions' }]
+            }
+          ]
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    });
+
+    // Strictly scope participants to accessible projects
+    const scopedParticipants = participants.filter(p => {
+      const pProj = p.Session?.projectId || p.Session?.Quiz?.projectId;
+      return pProj && accessibleProjectIds.includes(pProj);
+    });
+
+    // 4. Calculate participant-level stats, team leaderboard, and zone performance
+    const userAggregates = {};
+    const zoneAggregates = {};
+    const participantRows = [];
+
+    let totalPointsAcrossScope = 0;
+    let completedQuizzesCount = 0;
+    let totalQuestionsSum = 0;
+    let totalCorrectSum = 0;
+
+    scopedParticipants.forEach(p => {
+      const questionsCount = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+      const arenaPts = Number(p.score) || 0;
+      totalPointsAcrossScope += arenaPts;
+
+      const isFinished = p.Session?.status === 'finished' || (questionsCount > 0 && responses.length >= questionsCount);
+      if (isFinished) completedQuizzesCount += 1;
+
+      if (questionsCount > 0) {
+        totalQuestionsSum += questionsCount;
+        totalCorrectSum += correctCount;
+      }
+
+      // Fastest response time for this participant
+      let minResponseTime = Infinity;
+      responses.forEach(r => {
+        if (r.response_time && r.response_time > 0 && r.response_time < minResponseTime) {
+          minResponseTime = r.response_time;
+        }
+      });
+
+      const participantPercentage = questionsCount > 0
+        ? Math.min(100, Math.max(0, Math.round((correctCount / questionsCount) * 100)))
+        : null;
+
+      const zoneName = p.storeName && p.storeName.trim() ? p.storeName.trim() : 'N/A';
+
+      // Table row
+      participantRows.push({
+        id: p.id,
+        name: p.name,
+        employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
+        zone: zoneName,
+        sessionName: p.Session?.session_name || p.Session?.roomCode || 'Session',
+        quizTitle: p.Session?.Quiz?.title || 'Quiz',
+        questionsCount,
+        answeredCount: responses.length,
+        correctCount,
+        quizPercentage: participantPercentage !== null ? `${participantPercentage}%` : 'N/A',
+        rawPercentage: participantPercentage,
+        arenaPoints: arenaPts,
+        status: isFinished ? 'Completed' : 'In Progress',
+        createdAt: p.createdAt
+      });
+
+      // User aggregation for leaderboard
+      const userKey = p.employeeId ? p.employeeId.trim().toLowerCase() : p.name.trim().toLowerCase();
+      if (!userAggregates[userKey]) {
+        userAggregates[userKey] = {
+          name: p.name,
+          employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
+          zone: zoneName,
+          arenaPoints: 0,
+          totalCorrect: 0,
+          totalQuestions: 0,
+          attempts: 0,
+          completedCount: 0,
+          minResponseTime: Infinity,
+          userId: p.userId
+        };
+      }
+      userAggregates[userKey].arenaPoints += arenaPts;
+      userAggregates[userKey].totalCorrect += correctCount;
+      userAggregates[userKey].totalQuestions += questionsCount;
+      userAggregates[userKey].attempts += 1;
+      if (isFinished) userAggregates[userKey].completedCount += 1;
+      if (minResponseTime < userAggregates[userKey].minResponseTime) {
+        userAggregates[userKey].minResponseTime = minResponseTime;
+      }
+      if (zoneName !== 'N/A' && userAggregates[userKey].zone === 'N/A') {
+        userAggregates[userKey].zone = zoneName;
+      }
+
+      // Zone aggregation
+      const zKey = zoneName;
+      if (!zoneAggregates[zKey]) {
+        zoneAggregates[zKey] = {
+          zone: zKey,
+          participantsSet: new Set(),
+          quizzesCompleted: 0,
+          totalCorrect: 0,
+          totalQuestions: 0,
+          totalArenaPoints: 0
+        };
+      }
+      zoneAggregates[zKey].participantsSet.add(userKey);
+      if (isFinished) zoneAggregates[zKey].quizzesCompleted += 1;
+      zoneAggregates[zKey].totalCorrect += correctCount;
+      zoneAggregates[zKey].totalQuestions += questionsCount;
+      zoneAggregates[zKey].totalArenaPoints += arenaPts;
+    });
+
+    // Overall average score calculation
+    const overallAvgScore = totalQuestionsSum > 0
+      ? `${Math.min(100, Math.max(0, Math.round((totalCorrectSum / totalQuestionsSum) * 100)))}%`
+      : 'N/A';
+
+    // Build zone breakdown array
+    const zoneBreakdown = Object.values(zoneAggregates).map(z => {
+      const avgScore = z.totalQuestions > 0
+        ? `${Math.min(100, Math.max(0, Math.round((z.totalCorrect / z.totalQuestions) * 100)))}%`
+        : 'N/A';
+      return {
+        zone: z.zone,
+        participantCount: z.participantsSet.size,
+        quizzesCompleted: z.quizzesCompleted,
+        avgScore,
+        totalArenaPoints: z.totalArenaPoints
+      };
+    }).sort((a, b) => b.totalArenaPoints - a.totalArenaPoints || b.participantCount - a.participantCount);
+
+    // Build deterministic leaderboard
+    const leaderboard = Object.values(userAggregates).map(u => {
+      const percentage = u.totalQuestions > 0
+        ? Math.min(100, Math.max(0, Math.round((u.totalCorrect / u.totalQuestions) * 100)))
+        : null;
+      return {
+        name: u.name,
+        employeeId: u.employeeId,
+        zone: u.zone,
+        arenaPoints: u.arenaPoints,
+        quizScore: percentage !== null ? `${percentage}%` : 'N/A',
+        rawPercentage: percentage !== null ? percentage : -1,
+        attempts: u.attempts,
+        completedCount: u.completedCount,
+        completion: u.attempts > 0 ? `${Math.round((u.completedCount / u.attempts) * 100)}%` : 'N/A'
+      };
+    }).sort((a, b) => (b.arenaPoints - a.arenaPoints) || (b.rawPercentage - a.rawPercentage) || a.name.localeCompare(b.name))
+      .slice(0, 10);
+
+    // 5. Build personal gamification data if Employee (or matching user)
+    const LEVELS = [
+      { name: 'Bronze',       min: 0,    max: 200,  color: '#CD7F32', icon: '🥉' },
+      { name: 'Silver',       min: 200,  max: 500,  color: '#C0C0C0', icon: '🥈' },
+      { name: 'Gold',         min: 500,  max: 1000, color: '#FFD700', icon: '🥇' },
+      { name: 'Platinum',     min: 1000, max: 2000, color: '#2EA8FF', icon: '💎' },
+      { name: 'Arena Master', min: 2000, max: 50000, color: '#FF6B35', icon: '🏆' },
+    ];
+
+    let personalAttempts = [];
+    if (req.user.id) {
+      personalAttempts = scopedParticipants.filter(p =>
+        p.userId === req.user.id ||
+        (req.user.employeeId && p.employeeId && p.employeeId.trim().toLowerCase() === req.user.employeeId.trim().toLowerCase())
+      );
+    }
+
+    const personalArenaPoints = personalAttempts.reduce((sum, p) => sum + (Number(p.score) || 0), 0);
+    const personalQuestions = personalAttempts.reduce((sum, p) => sum + (p.Session?.Quiz?.questions?.length || 0), 0);
+    const personalCorrect = personalAttempts.reduce((sum, p) => {
+      const resps = p.Responses || [];
+      return sum + resps.filter(r => r.points_awarded > 0 || r.is_correct).length;
+    }, 0);
+
+    let personalMinTime = Infinity;
+    personalAttempts.forEach(p => {
+      (p.Responses || []).forEach(r => {
+        if (r.response_time && r.response_time > 0 && r.response_time < personalMinTime) {
+          personalMinTime = r.response_time;
+        }
+      });
+    });
+
+    const personalCompletedSessions = personalAttempts.filter(p =>
+      p.Session?.status === 'finished' || ((p.Responses || []).length > 0)
+    ).length;
+
+    const personalAvgScore = personalQuestions > 0
+      ? `${Math.min(100, Math.max(0, Math.round((personalCorrect / personalQuestions) * 100)))}%`
+      : 'N/A';
+
+    const personalFastestAnswer = personalMinTime !== Infinity
+      ? `${(personalMinTime / 1000).toFixed(1)}s`
+      : 'N/A';
+
+    // Current Level strictly calculated from personalArenaPoints
+    const currentLevel = LEVELS.find(l => personalArenaPoints >= l.min && personalArenaPoints < l.max) || LEVELS[LEVELS.length - 1];
+    const nextLevel = LEVELS[LEVELS.indexOf(currentLevel) + 1] || null;
+    const levelPct = nextLevel
+      ? Math.min(100, Math.max(0, Math.round(((personalArenaPoints - currentLevel.min) / (nextLevel.min - currentLevel.min)) * 100)))
+      : 100;
+    const pointsToNext = nextLevel ? Math.max(0, nextLevel.min - personalArenaPoints) : 0;
+
+    // Badges strictly evaluated from genuine data
+    const championUnlocked = personalAttempts.some(p => {
+      const qLen = p.Session?.Quiz?.questions?.length || 0;
+      if (qLen === 0) return false;
+      const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
+      return (c / qLen) >= 0.9;
+    });
+
+    const fastestUnlocked = personalMinTime < 3000;
+    const streakUnlocked = personalCompletedSessions >= 3;
+    const expertUnlocked = personalAttempts.some(p => {
+      const qLen = p.Session?.Quiz?.questions?.length || 0;
+      if (qLen === 0) return false;
+      const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
+      return c === qLen;
+    });
+    const teamUnlocked = personalAttempts.some(p => p.storeName && p.storeName.trim().length > 0);
+    const perfectUnlocked = personalAttempts.some(p => {
+      const qLen = p.Session?.Quiz?.questions?.length || 0;
+      if (qLen === 0) return false;
+      const isFin = p.Session?.status === 'finished' || (p.Responses || []).length >= qLen;
+      const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
+      return isFin && c === qLen;
+    });
+
+    const badges = [
+      { id: 'champion', label: 'Sales Champion',   desc: 'Scored 90%+ on any quiz in this project',  icon: '🏆', color: '#FF6B35', unlocked: championUnlocked },
+      { id: 'fastest',  label: 'Fastest Finger',    desc: 'Answered in under 3 seconds',              icon: '⚡', color: '#F59E0B', unlocked: fastestUnlocked },
+      { id: 'streak',   label: 'Attendance Streak', desc: '3+ training/quiz sessions completed',      icon: '🔥', color: '#EF4444', unlocked: streakUnlocked },
+      { id: 'expert',   label: 'Product Expert',    desc: 'Scored 100% on any quiz in this project',  icon: '📦', color: '#00C896', unlocked: expertUnlocked },
+      { id: 'team',     label: 'Zone Warrior',      desc: 'Participated with assigned store/zone',    icon: '🎯', color: '#2EA8FF', unlocked: teamUnlocked },
+      { id: 'perfect',  label: 'Perfect Session',   desc: 'Completed a quiz session with 100% score', icon: '💯', color: '#8B5CF6', unlocked: perfectUnlocked },
+    ];
+
+    res.json({
+      isEmployee: userRole === 'Employee',
+      selectedProjectId: projectId,
+      selectedProjectName,
+      accessibleProjects,
+      summary: {
+        totalParticipants: Object.keys(userAggregates).length,
+        quizzesCompleted: completedQuizzesCount,
+        totalAttempts: scopedParticipants.length,
+        avgScore: overallAvgScore,
+        totalArenaPoints: totalPointsAcrossScope
+      },
+      zoneBreakdown,
+      leaderboard,
+      participantResults: participantRows,
+      badges,
+      stats: {
+        sessionsParticipated: personalCompletedSessions,
+        badgesEarned: badges.filter(b => b.unlocked).length,
+        avgScore: personalAvgScore,
+        fastestAnswer: personalFastestAnswer
+      },
+      level: {
+        name: currentLevel.name,
+        min: currentLevel.min,
+        max: currentLevel.max,
+        color: currentLevel.color,
+        icon: currentLevel.icon,
+        progressPct: levelPct,
+        pointsToNext
+      },
+      totalPoints: personalArenaPoints
+    });
+
+  } catch (error) {
+    console.error('Error in GET /api/reports/gamification:', error);
+    const status = error.status || (error.message && (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to fetch gamification and participant results' });
+  }
+});
+
+// GET /api/reports/leaderboard - Fetch top participants strictly project-scoped and role-authorized
 router.get('/leaderboard', requireAuth, async (req, res) => {
   try {
-    const userRole = req.user.role;
-    const userProjectId = req.user.projectId;
-    const { projectId, startDate, endDate } = req.query;
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    const { projectId = 'all', subProjectId = 'all', startDate, endDate } = req.query;
 
-    const quizWhere = {};
-    if (['Admin', 'Super Admin', 'T&D Manager'].includes(userRole)) {
-      if (projectId && projectId !== 'all' && projectId !== 'undefined') {
-        const projectIds = await getAccessibleProjectIds(projectId);
-        quizWhere.projectId = { [Op.in]: projectIds };
-      }
-    } else if (userRole === 'Client') {
+    let accessibleProjectIds = [];
+    if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
-      const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
-      quizWhere.projectId = { [Op.in]: projectIds };
-    } else if (userProjectId) {
-      const projectIds = await getAccessibleProjectIds(userProjectId);
-      quizWhere.projectId = { [Op.in]: projectIds };
+      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, projectId, subProjectId);
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, projectId, subProjectId);
+    } else {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+    }
+
+    if (!accessibleProjectIds || accessibleProjectIds.length === 0) {
+      return res.json([]);
     }
 
     const sessionWhere = {};
@@ -495,7 +878,6 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
           include: [
             {
               model: Quiz,
-              where: quizWhere,
               required: true,
               include: [{ model: Question, as: 'questions' }]
             }
@@ -504,8 +886,13 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
       ]
     });
 
+    const scopedParticipants = participants.filter(p => {
+      const pProj = p.Session?.projectId || p.Session?.Quiz?.projectId;
+      return pProj && accessibleProjectIds.includes(pProj);
+    });
+
     const userStats = {};
-    participants.forEach(p => {
+    scopedParticipants.forEach(p => {
       const key = p.employeeId ? p.employeeId.trim().toLowerCase() : p.name.trim().toLowerCase();
       if (!userStats[key]) {
         userStats[key] = {
@@ -523,26 +910,29 @@ router.get('/leaderboard', requireAuth, async (req, res) => {
       userStats[key].totalCorrect += correctCount;
       userStats[key].totalQuestions += questionsCount;
       userStats[key].attempts += 1;
-      userStats[key].arenaPoints += (p.score || 0);
+      userStats[key].arenaPoints += (Number(p.score) || 0);
     });
 
     const leaderboard = Object.values(userStats)
       .map(u => {
-        const percentage = u.totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((u.totalCorrect / u.totalQuestions) * 100))) : 0;
+        const percentage = u.totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((u.totalCorrect / u.totalQuestions) * 100))) : null;
         return {
           name: u.name,
-          score: `${percentage}%`,
+          employeeId: u.employeeId,
+          score: percentage !== null ? `${percentage}%` : 'N/A',
+          rawScore: percentage !== null ? percentage : -1,
           arenaPoints: u.arenaPoints,
           completion: '100%'
         };
       })
-      .sort((a, b) => parseInt(b.score) - parseInt(a.score))
-      .slice(0, 5);
+      .sort((a, b) => (b.arenaPoints - a.arenaPoints) || (b.rawScore - a.rawScore) || a.name.localeCompare(b.name))
+      .slice(0, 10);
 
     res.json(leaderboard);
   } catch (error) {
     console.error('Error computing leaderboard:', error);
-    res.status(500).json({ error: 'Failed to compute leaderboard' });
+    const status = error.status || (error.message && (error.message.includes('Forbidden') || error.message.includes('Unauthorized')) ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to compute leaderboard' });
   }
 });
 
