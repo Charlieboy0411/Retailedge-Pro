@@ -3,7 +3,8 @@ import {
   Trophy, Award, Target, Zap, Clock, TrendingUp, Search, 
   Users, CheckCircle2, ChevronRight, Filter, AlertCircle, 
   MapPin, RefreshCw, BarChart2, ShieldCheck, Flame, Layers,
-  Download, ChevronUp, ChevronDown, ArrowUpDown, X, ExternalLink
+  Download, ChevronUp, ChevronDown, ArrowUpDown, X, ExternalLink,
+  Calendar, FileText, Check, Eye, Info
 } from 'lucide-react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -59,7 +60,7 @@ function exportToCSV(rows, filename = 'participant_quiz_history.csv') {
     'Employee ID',
     'Zone / Store',
     'Quiz Title',
-    'Session',
+    'Session Reference',
     'Questions Answered',
     'Total Questions',
     'Correct Answers',
@@ -112,6 +113,11 @@ export default function Gamification() {
   const [error, setError] = useState(null);
   const [selectedProjectId, setSelectedProjectId] = useState('all');
 
+  // Refresh state
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState(null);
+
   // Navigation tabs for non-employees: 'summary' (View A) | 'topic' (View B) | 'history' (View C) | 'badges'
   const [activeTab, setActiveTab] = useState('summary');
 
@@ -120,6 +126,7 @@ export default function Gamification() {
   const [summarySort, setSummarySort] = useState({ key: 'cumulativeArenaPoints', direction: 'desc' });
   const [summaryPage, setSummaryPage] = useState(1);
   const [summaryPageSize, setSummaryPageSize] = useState(10);
+  const [expandedSummaryRows, setExpandedSummaryRows] = useState({});
 
   // View B: Topic / Quiz Performance State
   const [topicQuizId, setTopicQuizId] = useState('all');
@@ -129,8 +136,10 @@ export default function Gamification() {
   const [topicSort, setTopicSort] = useState({ key: 'arenaPoints', direction: 'desc' });
   const [topicPage, setTopicPage] = useState(1);
   const [topicPageSize, setTopicPageSize] = useState(10);
+  const [expandedTopicRows, setExpandedTopicRows] = useState({});
 
   // View C: Quiz Attempt History State
+  const [historySubTab, setHistorySubTab] = useState('timeline'); // 'timeline' | 'participants'
   const [historySearch, setHistorySearch] = useState('');
   const [historyQuizFilter, setHistoryQuizFilter] = useState('all');
   const [historyStatusFilter, setHistoryStatusFilter] = useState('all');
@@ -138,6 +147,9 @@ export default function Gamification() {
   const [historySort, setHistorySort] = useState({ key: 'createdAt', direction: 'desc' });
   const [historyPage, setHistoryPage] = useState(1);
   const [historyPageSize, setHistoryPageSize] = useState(10);
+  const [historySummaryPage, setHistorySummaryPage] = useState(1);
+  const [historySummaryPageSize, setHistorySummaryPageSize] = useState(10);
+  const [expandedHistoryRows, setExpandedHistoryRows] = useState({});
 
   const userRole = user?.role || (user?.Role ? user?.Role?.role_name : '');
   const isEmployee = userRole === 'Employee';
@@ -145,21 +157,56 @@ export default function Gamification() {
   const fetchGamificationData = async (projId) => {
     setLoading(true);
     setError(null);
+    setRefreshError(null);
     try {
       const res = await axios.get('/api/reports/gamification', {
-        params: { projectId: projId || 'all' },
-        headers: { Authorization: `Bearer ${token}` }
+        params: { 
+          projectId: projId || 'all',
+          _t: Date.now()
+        },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache'
+        }
       });
       setData(res.data);
       if (res.data?.selectedProjectId) {
         setSelectedProjectId(res.data.selectedProjectId);
       }
+      setLastRefreshedAt(new Date());
     } catch (err) {
       console.error('Failed to load gamification data:', err);
       const msg = err.response?.data?.error || err.message || 'Failed to load participant results.';
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Dedicated functional refresh control
+  const handleRefresh = async () => {
+    if (isRefreshing) return; // Prevent duplicate overlapping requests
+    setIsRefreshing(true);
+    setRefreshError(null);
+    try {
+      const res = await axios.get('/api/reports/gamification', {
+        params: { 
+          projectId: selectedProjectId || 'all',
+          _t: Date.now() // Cache-busting
+        },
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Cache-Control': 'no-cache'
+        }
+      });
+      setData(res.data);
+      setLastRefreshedAt(new Date());
+    } catch (err) {
+      console.error('Refresh request failed:', err);
+      const msg = err.response?.data?.error || err.message || 'Failed to reload latest data.';
+      setRefreshError(msg);
+    } finally {
+      setIsRefreshing(false);
     }
   };
 
@@ -180,7 +227,21 @@ export default function Gamification() {
     setSummaryPage(1);
     setTopicPage(1);
     setHistoryPage(1);
+    setHistorySummaryPage(1);
     fetchGamificationData(newProj);
+  };
+
+  // Row expand toggles
+  const toggleSummaryRow = (id) => {
+    setExpandedSummaryRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleTopicRow = (id) => {
+    setExpandedTopicRows(prev => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleHistoryRow = (id) => {
+    setExpandedHistoryRows(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
   // Drill-down from View A into View C
@@ -190,12 +251,13 @@ export default function Gamification() {
       : participant.name;
     setHistoryParticipantFilter(filterKey);
     setHistorySearch('');
+    setHistorySubTab('timeline');
     setHistoryPage(1);
     setActiveTab('history');
   };
 
   // Helper sort header renderer
-  const renderSortHeader = (label, colKey, currentSort, setSortHandler, align = 'left') => {
+  const renderSortHeader = (label, colKey, currentSort, setSortHandler, align = 'left', customWidth = null) => {
     const isActive = currentSort.key === colKey;
     return (
       <th 
@@ -203,13 +265,12 @@ export default function Gamification() {
           if (isActive) {
             setSortHandler({ key: colKey, direction: currentSort.direction === 'asc' ? 'desc' : 'asc' });
           } else {
-            // Default numeric and date columns to desc, strings to asc
-            const defaultDesc = ['cumulativeArenaPoints', 'arenaPoints', 'rawPercentage', 'quizzesCompleted', 'totalAttempts', 'questionsCount', 'answeredCount', 'correctCount', 'createdAt', 'lastQuizDate'].includes(colKey);
+            const defaultDesc = ['cumulativeArenaPoints', 'arenaPoints', 'rawPercentage', 'quizzesCompleted', 'distinctQuizzesAttempted', 'totalAttempts', 'questionsCount', 'answeredCount', 'correctCount', 'createdAt', 'lastQuizDate'].includes(colKey);
             setSortHandler({ key: colKey, direction: defaultDesc ? 'desc' : 'asc' });
           }
         }}
         style={{
-          padding: '12px 14px',
+          padding: '10px 12px',
           textAlign: align,
           cursor: 'pointer',
           userSelect: 'none',
@@ -217,7 +278,8 @@ export default function Gamification() {
           color: isActive ? '#2563EB' : '#475569',
           fontWeight: 700,
           background: isActive ? '#EFF6FF50' : 'transparent',
-          transition: 'all 0.15s ease'
+          transition: 'all 0.15s ease',
+          width: customWidth || 'auto'
         }}
         title={`Sort by ${label}`}
       >
@@ -246,7 +308,7 @@ export default function Gamification() {
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: '12px',
-        padding: '16px 20px',
+        padding: '12px 18px',
         borderTop: '1px solid #E2E8F0',
         background: '#FAFAFA',
         borderRadius: '0 0 16px 16px',
@@ -402,6 +464,18 @@ export default function Gamification() {
   }, [filteredTopicAttempts, topicPage, topicPageSize]);
 
   // ── VIEW C: DATA PREPARATION (QUIZ ATTEMPT HISTORY) ──
+  // 1. Participant-level development summary list
+  const participantHistoryList = useMemo(() => {
+    return filteredSummaries;
+  }, [filteredSummaries]);
+
+  const paginatedParticipantHistory = useMemo(() => {
+    if (historySummaryPageSize === 'all') return participantHistoryList;
+    const start = (historySummaryPage - 1) * historySummaryPageSize;
+    return participantHistoryList.slice(start, start + historySummaryPageSize);
+  }, [participantHistoryList, historySummaryPage, historySummaryPageSize]);
+
+  // 2. Chronological attempts log list
   const filteredHistoryAttempts = useMemo(() => {
     let list = allAttempts;
     if (historyParticipantFilter) {
@@ -514,7 +588,7 @@ export default function Gamification() {
   const nextLevelObj = LEVELS[LEVELS.indexOf(currentLevelObj) + 1] || null;
 
   return (
-    <div className="view-section active" style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto' }}>
+    <div className="view-section active" style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
       
       {/* ── Top Header & Context Bar ── */}
       <div style={{
@@ -522,7 +596,7 @@ export default function Gamification() {
         borderRadius: '16px',
         border: '1px solid #E2E8F0',
         padding: '24px 28px',
-        marginBottom: '24px',
+        marginBottom: '20px',
         boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
         display: 'flex',
         flexWrap: 'wrap',
@@ -622,28 +696,60 @@ export default function Gamification() {
             </div>
           )}
 
+          {/* Functional Refresh Button */}
           <button
-            onClick={() => fetchGamificationData(selectedProjectId)}
-            title="Refresh Scope"
+            id="gamification-refresh-btn"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            title="Reload latest authorized data from server"
             style={{
               padding: '9px 14px',
               borderRadius: '10px',
-              border: '1px solid #E2E8F0',
-              background: '#F8FAFC',
-              color: '#475569',
-              cursor: 'pointer',
+              border: '1px solid #CBD5E1',
+              background: isRefreshing ? '#EFF6FF' : '#F8FAFC',
+              color: isRefreshing ? '#2563EB' : '#475569',
+              cursor: isRefreshing ? 'wait' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
               fontSize: '0.82rem',
-              fontWeight: 600
+              fontWeight: 600,
+              boxShadow: '0 1px 2px rgba(15,23,42,0.04)',
+              transition: 'all 0.15s ease'
             }}
           >
-            <RefreshCw size={15} className={loading ? 'spinning' : ''} />
-            <span>Refresh</span>
+            <RefreshCw size={15} className={isRefreshing ? 'spinning' : ''} style={{ color: isRefreshing ? '#2563EB' : '#64748B' }} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>
       </div>
+
+      {/* ── Refresh feedback banner / error alert ── */}
+      {refreshError && (
+        <div style={{
+          background: '#FEF2F2',
+          border: '1px solid #FCA5A5',
+          borderRadius: '10px',
+          padding: '10px 16px',
+          marginBottom: '16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          fontSize: '0.82rem',
+          color: '#991B1B'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <AlertCircle size={16} color="#DC2626" />
+            <span>Refresh notice: {refreshError}. Displaying previously loaded data.</span>
+          </div>
+          <button
+            onClick={() => setRefreshError(null)}
+            style={{ background: 'none', border: 'none', color: '#991B1B', cursor: 'pointer', padding: 0 }}
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
 
       {/* ── View Navigation Tabs (For Non-Employees) ── */}
       {!isEmployee && (
@@ -651,7 +757,7 @@ export default function Gamification() {
           display: 'flex',
           flexWrap: 'wrap',
           gap: '8px',
-          marginBottom: '24px',
+          marginBottom: '20px',
           borderBottom: '1px solid #E2E8F0',
           paddingBottom: '12px'
         }}>
@@ -741,290 +847,138 @@ export default function Gamification() {
         </div>
       )}
 
-      {/* ── EMPLOYEE VIEW (Personal Journey) ── */}
-      {isEmployee && (
-        <>
-          {/* Level Progress Card */}
+      {/* ── Top Metric Summary Cards (Shared across views) ── */}
+      {!isEmployee && (
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: '16px',
+          marginBottom: '24px'
+        }}>
+          {/* Card 1: Eligible Participants */}
           <div style={{
             background: '#FFFFFF',
-            borderRadius: '16px',
+            borderRadius: '14px',
             border: '1px solid #E2E8F0',
-            padding: '28px',
-            marginBottom: '24px',
-            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)'
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-              <div>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: '8px' }}>
-                  Current Level
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <div style={{
-                    width: '64px', height: '64px', borderRadius: '18px',
-                    background: `${level.color}15`,
-                    border: `2px solid ${level.color}40`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '2rem'
-                  }}>
-                    {level.icon}
-                  </div>
-                  <div>
-                    <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '2rem', fontWeight: 900, color: level.color, lineHeight: 1 }}>
-                      {level.name}
-                    </div>
-                    {nextLevelObj && (
-                      <div style={{ fontSize: '0.82rem', color: '#64748B', marginTop: '6px', fontWeight: 500 }}>
-                        {level.pointsToNext} pts to {nextLevelObj.icon} {nextLevelObj.name}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '1.2px', marginBottom: '8px' }}>
-                  Total Arena Points
-                </div>
-                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '2.8rem', fontWeight: 900, color: '#FF6B35', lineHeight: 1 }}>
-                  {totalPoints.toLocaleString()}
-                </div>
-                <div style={{ fontSize: '0.8rem', color: '#64748B', marginTop: '4px' }}>Live Arena Points</div>
-              </div>
+            <div style={{
+              width: '46px', height: '46px', borderRadius: '12px',
+              background: '#EFF6FF', color: '#2563EB',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+            }}>
+              <Users size={22} />
             </div>
-
-            {/* Level progression bar */}
-            <div style={{ marginBottom: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#64748B', marginBottom: '8px', fontWeight: 600 }}>
-                <span>{level.icon} {level.name} ({level.min} pts)</span>
-                {nextLevelObj && <span>{nextLevelObj.icon} {nextLevelObj.name} ({nextLevelObj.min} pts)</span>}
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Eligible Participants
               </div>
-              <div style={{ height: '14px', background: '#F1F5F9', borderRadius: '8px', overflow: 'hidden', border: '1px solid #E2E8F0' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${level.progressPct}%`,
-                  background: `linear-gradient(90deg, ${level.color}, #FF6B35)`,
-                  borderRadius: '8px',
-                  transition: 'width 0.8s ease'
-                }} />
+              <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.55rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
+                {summary.totalParticipants || 0}
               </div>
-              <div style={{ textAlign: 'right', fontSize: '0.75rem', color: '#64748B', marginTop: '6px', fontWeight: 600 }}>
-                {level.progressPct}% to next level
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
+                Project team learners
               </div>
-            </div>
-
-            {/* Level road */}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-              {LEVELS.map((l, i) => {
-                const reached = totalPoints >= l.min;
-                return (
-                  <div key={i} style={{ flex: 1, textAlign: 'center' }}>
-                    <div style={{
-                      height: '6px', borderRadius: '4px',
-                      background: reached ? l.color : '#E2E8F0',
-                      marginBottom: '6px',
-                      transition: 'background 0.3s ease'
-                    }} />
-                    <div style={{ fontSize: '0.72rem', color: reached ? l.color : '#94A3B8', fontWeight: 700 }}>
-                      {l.icon} {l.name}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           </div>
 
-          {/* Achievement Stats & Leaderboard Row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px' }}>
-            {/* Achievement Stats */}
-            <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)' }}>
-              <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 20px 0', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.1rem', color: '#0F172A' }}>
-                <TrendingUp size={20} color="#00C896" /> Achievement Stats
-              </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {[
-                  { label: 'Sessions Participated', value: stats.sessionsParticipated ?? '0', icon: <Zap size={18} />, color: '#FF6B35' },
-                  { label: 'Badges Earned',          value: stats.badgesEarned ?? '0',          icon: <Award size={18} />, color: '#F59E0B' },
-                  { label: 'Avg. Finalized Score',   value: stats.avgScore ?? 'N/A',            icon: <Target size={18} />, color: '#10B981' },
-                  { label: 'Fastest Answer Time',    value: stats.fastestAnswer ?? 'N/A',       icon: <Clock size={18} />, color: '#2563EB' },
-                ].map((s, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '14px', padding: '12px 14px', borderRadius: '12px', background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
-                    <div style={{
-                      width: '42px', height: '42px', borderRadius: '12px',
-                      background: `${s.color}15`, border: `1.5px solid ${s.color}30`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: s.color, flexShrink: 0
-                    }}>
-                      {s.icon}
-                    </div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 600 }}>{s.label}</div>
-                      <div style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.2rem', color: s.color }}>{s.value}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Project Leaderboard */}
-            <div style={{ background: '#FFFFFF', borderRadius: '16px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: 0, fontSize: '1.1rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Trophy size={20} color="#F59E0B" /> Project Leaderboard
-                </h3>
-                <span style={{ fontSize: '0.78rem', color: '#64748B', fontWeight: 600 }}>Top {leaderboard.length}</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {leaderboard.slice(0, 5).map((p, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '10px 14px', borderRadius: '10px', background: '#F8FAFC', border: '1px solid #E2E8F0' }}>
-                    <span style={{ fontWeight: 800, width: '24px', color: i === 0 ? '#2563EB' : '#64748B' }}>#{i + 1}</span>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: '0.88rem', color: '#0F172A' }}>{p.name}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748B' }}>{p.zone} • {p.quizScore}</div>
-                    </div>
-                    <span style={{ fontWeight: 800, color: '#FF6B35', fontSize: '0.9rem' }}>{p.arenaPoints} pts</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── NON-EMPLOYEE: TOP KPI CARDS & TEAM SUMMARY ── */}
-      {!isEmployee && (
-        <>
-          {/* Top 4 KPI Cards */}
+          {/* Card 2: Quizzes Completed */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '16px',
-            marginBottom: '24px'
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px'
           }}>
-            {/* Card 1: Eligible Participants */}
             <div style={{
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid #E2E8F0',
-              padding: '20px 22px',
-              boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
+              width: '46px', height: '46px', borderRadius: '12px',
+              background: '#ECFDF5', color: '#10B981',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
             }}>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '12px',
-                background: '#EFF6FF', color: '#2563EB',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Users size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Eligible Participants
-                </div>
-                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
-                  {summary.totalParticipants || 0}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '3px' }}>
-                  Project team learners
-                </div>
-              </div>
+              <CheckCircle2 size={22} />
             </div>
-
-            {/* Card 2: Participant Submissions */}
-            <div style={{
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid #E2E8F0',
-              padding: '20px 22px',
-              boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
-            }}>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '12px',
-                background: '#ECFDF5', color: '#10B981',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <CheckCircle2 size={24} />
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Quizzes Completed
               </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Participant Submissions
-                </div>
-                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
-                  {summary.completedAttempts ?? summary.quizzesCompleted ?? 0}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#64748B', marginTop: '3px' }}>
-                  {summary.completedAttempts ?? summary.quizzesCompleted ?? 0} of {summary.totalAttempts ?? 0} completed • {summary.distinctSessionsCount ?? 1} sessions • {summary.distinctQuizzesCount ?? 1} quizzes
-                </div>
+              <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.55rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
+                {summary.completedAttempts ?? summary.quizzesCompleted ?? 0}
               </div>
-            </div>
-
-            {/* Card 3: Average Quiz Score */}
-            <div style={{
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid #E2E8F0',
-              padding: '20px 22px',
-              boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
-            }}>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '12px',
-                background: '#FFFBEB', color: '#F59E0B',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Target size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Average Quiz Score
-                </div>
-                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
-                  {summary.avgScore || 'N/A'}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '3px' }}>
-                  Finalized assessment accuracy
-                </div>
-              </div>
-            </div>
-
-            {/* Card 4: Total Arena Points */}
-            <div style={{
-              background: '#FFFFFF',
-              borderRadius: '14px',
-              border: '1px solid #E2E8F0',
-              padding: '20px 22px',
-              boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '16px'
-            }}>
-              <div style={{
-                width: '48px', height: '48px', borderRadius: '12px',
-                background: '#FFF7ED', color: '#FF6B35',
-                display: 'flex', alignItems: 'center', justifyContent: 'center'
-              }}>
-                <Trophy size={24} />
-              </div>
-              <div>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  Total Arena Points
-                </div>
-                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.65rem', fontWeight: 900, color: '#FF6B35', lineHeight: 1.1 }}>
-                  {(summary.totalArenaPoints ?? 0).toLocaleString()}
-                </div>
-                <div style={{ fontSize: '0.75rem', color: '#94A3B8', marginTop: '3px' }}>
-                  Live Arena score tally
-                </div>
+              <div style={{ fontSize: '0.72rem', color: '#64748B', marginTop: '2px' }}>
+                {summary.completedAttempts ?? summary.quizzesCompleted ?? 0} of {summary.totalAttempts ?? 0} completed • {summary.distinctQuizzesCount ?? 1} topics
               </div>
             </div>
           </div>
-        </>
+
+          {/* Card 3: Average Quiz Score */}
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px'
+          }}>
+            <div style={{
+              width: '46px', height: '46px', borderRadius: '12px',
+              background: '#FFFBEB', color: '#F59E0B',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+            }}>
+              <Target size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Average Quiz Score
+              </div>
+              <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.55rem', fontWeight: 900, color: '#0F172A', lineHeight: 1.1 }}>
+                {summary.avgScore || 'N/A'}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
+                Finalized assessment accuracy
+              </div>
+            </div>
+          </div>
+
+          {/* Card 4: Total Arena Points */}
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            border: '1px solid #E2E8F0',
+            padding: '18px 20px',
+            boxShadow: '0 1px 3px rgba(15,23,42,0.04)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '14px'
+          }}>
+            <div style={{
+              width: '46px', height: '46px', borderRadius: '12px',
+              background: '#FFF7ED', color: '#FF6B35',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0
+            }}>
+              <Trophy size={22} />
+            </div>
+            <div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                Total Arena Points
+              </div>
+              <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.55rem', fontWeight: 900, color: '#FF6B35', lineHeight: 1.1 }}>
+                {(summary.totalArenaPoints ?? 0).toLocaleString()}
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#94A3B8', marginTop: '2px' }}>
+                Live Arena score tally
+              </div>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── VIEW A: PROJECT PERFORMANCE SUMMARY ── */}
@@ -1038,32 +992,32 @@ export default function Gamification() {
           marginBottom: '24px'
         }}>
           {/* Header & Controls */}
-          <div style={{ padding: '24px 28px', borderBottom: '1px solid #E2E8F0' }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
               <div>
-                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.2rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.18rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <BarChart2 size={20} color="#2563EB" />
                   Project Performance Summary
                 </h3>
                 <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
-                  Cumulative participant performance across all quizzes in {selectedProjectName}. One row per unique participant.
+                  Cumulative participant performance across all quizzes in {selectedProjectName}. Exactly one row per unique participant.
                 </p>
               </div>
 
               {/* Search Bar */}
-              <div style={{ position: 'relative', minWidth: '280px' }}>
-                <Search size={16} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+              <div style={{ position: 'relative', minWidth: '260px' }}>
+                <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
                 <input
                   type="text"
-                  placeholder="Search by name, ID, zone..."
+                  placeholder="Search name, ID, zone..."
                   value={summarySearch}
                   onChange={e => { setSummarySearch(e.target.value); setSummaryPage(1); }}
                   style={{
                     width: '100%',
-                    padding: '8px 14px 8px 36px',
+                    padding: '8px 14px 8px 34px',
                     borderRadius: '8px',
                     border: '1.5px solid #CBD5E1',
-                    fontSize: '0.85rem',
+                    fontSize: '0.84rem',
                     outline: 'none',
                     background: '#FFFFFF',
                     boxSizing: 'border-box'
@@ -1078,155 +1032,240 @@ export default function Gamification() {
               {summarySearch ? 'No participants match your search filter.' : 'No participant records exist for this project yet.'}
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {renderSortHeader('Rank', 'displayRank', summarySort, setSummarySort, 'center')}
+                    {renderSortHeader('Rank', 'displayRank', summarySort, setSummarySort, 'center', '70px')}
                     {renderSortHeader('Participant', 'name', summarySort, setSummarySort)}
-                    {renderSortHeader('Employee ID', 'employeeId', summarySort, setSummarySort)}
-                    {renderSortHeader('Zone / Store', 'zone', summarySort, setSummarySort)}
-                    {renderSortHeader('Quizzes Completed', 'quizzesCompleted', summarySort, setSummarySort, 'center')}
-                    {renderSortHeader('Cumulative Points', 'cumulativeArenaPoints', summarySort, setSummarySort, 'right')}
-                    {renderSortHeader('Overall Accuracy', 'rawPercentage', summarySort, setSummarySort, 'center')}
-                    <th style={{ padding: '12px 14px', textAlign: 'center' }}>Badges</th>
-                    {renderSortHeader('Recent Date', 'lastQuizDate', summarySort, setSummarySort, 'center')}
-                    {renderSortHeader('Latest Status', 'lastQuizStatus', summarySort, setSummarySort, 'center')}
-                    <th style={{ padding: '12px 14px', textAlign: 'center' }}>Drill-down</th>
+                    {renderSortHeader('Zone / Store', 'zone', summarySort, setSummarySort, 'left', '140px')}
+                    {renderSortHeader('Quizzes Completed', 'quizzesCompleted', summarySort, setSummarySort, 'center', '150px')}
+                    {renderSortHeader('Cumulative Points', 'cumulativeArenaPoints', summarySort, setSummarySort, 'right', '150px')}
+                    {renderSortHeader('Overall Accuracy', 'rawPercentage', summarySort, setSummarySort, 'center', '140px')}
+                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '120px' }}>Badges</th>
+                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '130px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedSummaries.map((p, idx) => (
-                    <tr key={p.userId || p.employeeId || idx} style={{
-                      borderBottom: '1px solid #F1F5F9',
-                      background: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
-                      transition: 'background 0.15s ease'
-                    }}>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '6px',
-                          fontWeight: 800,
-                          fontSize: '0.8rem',
-                          background: p.displayRank === 1 ? '#EFF6FF' : (p.displayRank <= 3 ? '#F1F5F9' : 'transparent'),
-                          color: p.displayRank === 1 ? '#2563EB' : (p.displayRank <= 3 ? '#0F172A' : '#64748B'),
-                          border: p.displayRank <= 3 ? '1px solid #CBD5E1' : 'none'
+                  {paginatedSummaries.map((p, idx) => {
+                    const rowKey = p.userId || p.employeeId || idx;
+                    const isExpanded = !!expandedSummaryRows[rowKey];
+
+                    return (
+                      <React.Fragment key={rowKey}>
+                        <tr style={{
+                          borderBottom: isExpanded ? 'none' : '1px solid #F1F5F9',
+                          background: isExpanded ? '#F8FAFC' : (idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'),
+                          transition: 'background 0.15s ease'
                         }}>
-                          #{p.displayRank}
-                        </span>
-                      </td>
+                          {/* Rank */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '26px',
+                              height: '26px',
+                              borderRadius: '6px',
+                              fontWeight: 800,
+                              fontSize: '0.8rem',
+                              background: p.displayRank === 1 ? '#EFF6FF' : (p.displayRank <= 3 ? '#F1F5F9' : 'transparent'),
+                              color: p.displayRank === 1 ? '#2563EB' : (p.displayRank <= 3 ? '#0F172A' : '#64748B'),
+                              border: p.displayRank <= 3 ? '1px solid #CBD5E1' : 'none'
+                            }}>
+                              #{p.displayRank}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>
-                        <button
-                          onClick={() => handleDrilldownToHistory(p)}
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            padding: 0,
-                            color: '#0F172A',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            fontSize: '0.88rem',
-                            textAlign: 'left'
-                          }}
-                          title="Click to view full quiz history"
-                        >
-                          <span style={{ textDecoration: 'underline', textDecorationColor: '#CBD5E1' }}>{p.name}</span>
-                        </button>
-                      </td>
+                          {/* Participant Name & Inline Subtitle */}
+                          <td style={{ padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                onClick={() => toggleSummaryRow(rowKey)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  color: '#2563EB',
+                                  flexShrink: 0
+                                }}
+                                title={isExpanded ? 'Collapse details' : 'Expand details'}
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </button>
+                              <div>
+                                <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
+                                  {p.name}
+                                </span>
+                                {p.employeeId && p.employeeId !== 'N/A' && (
+                                  <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                    ({p.employeeId})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', color: '#64748B', fontFamily: 'monospace' }}>
-                        {p.employeeId}
-                      </td>
+                          {/* Zone / Store */}
+                          <td style={{ padding: '10px 12px', color: '#475569' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              background: '#F1F5F9',
+                              fontSize: '0.8rem',
+                              fontWeight: 600
+                            }}>
+                              {p.zone}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>
-                        {p.zone}
-                      </td>
+                          {/* Quizzes Completed */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '3px 8px',
+                              borderRadius: '6px',
+                              background: p.quizzesCompleted > 0 ? '#ECFDF5' : '#F1F5F9',
+                              color: p.quizzesCompleted > 0 ? '#059669' : '#64748B',
+                              fontWeight: 700,
+                              fontSize: '0.8rem'
+                            }}>
+                              {p.quizzesCompleted} {p.quizzesCompleted === 1 ? 'quiz' : 'quizzes'}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#0F172A', fontWeight: 600 }}>
-                        <span style={{
-                          padding: '3px 8px',
-                          borderRadius: '6px',
-                          background: p.quizzesCompleted > 0 ? '#ECFDF5' : '#F1F5F9',
-                          color: p.quizzesCompleted > 0 ? '#059669' : '#64748B',
-                          fontWeight: 700
-                        }}>
-                          {p.quizzesCompleted} {p.quizzesCompleted === 1 ? 'quiz' : 'quizzes'}
-                        </span>
-                      </td>
+                          {/* Cumulative Arena Points */}
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem' }}>
+                            {p.cumulativeArenaPoints.toLocaleString()} pts
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem' }}>
-                        {p.cumulativeArenaPoints.toLocaleString()} pts
-                      </td>
+                          {/* Overall Accuracy */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '6px',
+                              background: p.rawPercentage >= 70 ? '#ECFDF5' : (p.rawPercentage >= 0 ? '#FEF2F2' : '#F1F5F9'),
+                              color: p.rawPercentage >= 70 ? '#059669' : (p.rawPercentage >= 0 ? '#DC2626' : '#64748B'),
+                              fontWeight: 700, fontSize: '0.82rem'
+                            }}>
+                              {p.overallAccuracy}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '4px 8px', borderRadius: '6px',
-                          background: p.rawPercentage >= 70 ? '#ECFDF5' : (p.rawPercentage >= 0 ? '#FEF2F2' : '#F1F5F9'),
-                          color: p.rawPercentage >= 70 ? '#059669' : (p.rawPercentage >= 0 ? '#DC2626' : '#64748B'),
-                          fontWeight: 700, fontSize: '0.82rem'
-                        }}>
-                          {p.overallAccuracy}
-                        </span>
-                      </td>
+                          {/* Badges Earned */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            {p.earnedBadges && p.earnedBadges.length > 0 ? (
+                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
+                                {p.earnedBadges.map(bId => {
+                                  const bIcons = { champion: '🏆', fastest: '⚡', streak: '🔥', expert: '📦', team: '🎯', perfect: '💯' };
+                                  return (
+                                    <span key={bId} style={{ fontSize: '0.95rem' }}>{bIcons[bId] || '🏅'}</span>
+                                  );
+                                })}
+                              </div>
+                            ) : (
+                              <span style={{ color: '#94A3B8' }}>—</span>
+                            )}
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {p.earnedBadges && p.earnedBadges.length > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                            {p.earnedBadges.map(bId => {
-                              const bIcons = { champion: '🏆', fastest: '⚡', streak: '🔥', expert: '📦', team: '🎯', perfect: '💯' };
-                              return (
-                                <span key={bId} style={{ fontSize: '1rem' }}>{bIcons[bId] || '🏅'}</span>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#94A3B8' }}>—</span>
+                          {/* Actions: History & Expand */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                              <button
+                                onClick={() => handleDrilldownToHistory(p)}
+                                style={{
+                                  background: '#EFF6FF',
+                                  color: '#2563EB',
+                                  border: '1px solid #BFDBFE',
+                                  borderRadius: '6px',
+                                  padding: '4px 8px',
+                                  fontSize: '0.75rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title="View chronological quiz history for this participant"
+                              >
+                                <span>History</span>
+                                <ExternalLink size={12} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Expandable Secondary Details Panel */}
+                        {isExpanded && (
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                            <td colSpan={8} style={{ padding: '12px 20px' }}>
+                              <div style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '10px',
+                                padding: '14px 18px',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                gap: '14px',
+                                fontSize: '0.82rem'
+                              }}>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Employee ID</span>
+                                  <span style={{ fontWeight: 700, color: '#0F172A', fontFamily: 'monospace' }}>{p.employeeId || 'N/A'}</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Most Recent Quiz Date</span>
+                                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{p.lastQuizDate || 'N/A'}</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Latest Attempt Status</span>
+                                  <span style={{
+                                    display: 'inline-block',
+                                    padding: '2px 8px',
+                                    borderRadius: '10px',
+                                    background: p.lastQuizStatus === 'Completed' ? '#ECFDF5' : '#FFFBEB',
+                                    color: p.lastQuizStatus === 'Completed' ? '#059669' : '#D97706',
+                                    fontWeight: 700,
+                                    fontSize: '0.72rem',
+                                    marginTop: '2px'
+                                  }}>
+                                    {p.lastQuizStatus || 'N/A'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Total Attempts</span>
+                                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{p.totalAttempts || 0} attempts ({p.quizzesCompleted} completed)</span>
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center' }}>
+                                  <button
+                                    onClick={() => handleDrilldownToHistory(p)}
+                                    style={{
+                                      background: '#2563EB',
+                                      color: '#FFFFFF',
+                                      border: 'none',
+                                      borderRadius: '6px',
+                                      padding: '6px 12px',
+                                      fontSize: '0.78rem',
+                                      fontWeight: 700,
+                                      cursor: 'pointer',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      gap: '6px'
+                                    }}
+                                  >
+                                    <span>Open Full Attempt History</span>
+                                    <ChevronRight size={14} />
+                                  </button>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>
-                        {p.lastQuizDate}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '3px 8px', borderRadius: '12px',
-                          background: p.lastQuizStatus === 'Completed' ? '#ECFDF5' : '#FFFBEB',
-                          color: p.lastQuizStatus === 'Completed' ? '#059669' : '#D97706',
-                          fontSize: '0.72rem', fontWeight: 700
-                        }}>
-                          {p.lastQuizStatus}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <button
-                          onClick={() => handleDrilldownToHistory(p)}
-                          style={{
-                            background: '#EFF6FF',
-                            color: '#2563EB',
-                            border: '1px solid #BFDBFE',
-                            borderRadius: '6px',
-                            padding: '4px 10px',
-                            fontSize: '0.75rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          <span>History</span>
-                          <ExternalLink size={12} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1247,10 +1286,10 @@ export default function Gamification() {
           marginBottom: '24px'
         }}>
           {/* Controls Bar */}
-          <div style={{ padding: '24px 28px', borderBottom: '1px solid #E2E8F0' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ padding: '20px 24px', borderBottom: '1px solid #E2E8F0' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.2rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.18rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Target size={20} color="#2563EB" />
                   Topic / Quiz Performance Arena
                 </h3>
@@ -1270,7 +1309,7 @@ export default function Gamification() {
                 fontWeight: 600
               }}>
                 {topicQuizId === 'all' 
-                  ? '🌐 All Topics View — Showing all quiz sessions' 
+                  ? '🌐 All Topics & Sessions View — Displaying individual quiz session attempts' 
                   : `🎯 Topic Scoped: ${availableQuizzes.find(q => q.id === topicQuizId)?.title || 'Selected Quiz'}`}
               </div>
             </div>
@@ -1307,9 +1346,9 @@ export default function Gamification() {
                 </select>
               </div>
 
-              {/* Session Select */}
+              {/* Session Select with clean readable labels (NO raw session IDs) */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Session:</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Session Scope:</label>
                 <select
                   value={topicSessionId}
                   onChange={(e) => { setTopicSessionId(e.target.value); setTopicPage(1); }}
@@ -1325,11 +1364,17 @@ export default function Gamification() {
                   }}
                 >
                   <option value="all">All Sessions ({filteredAvailableSessions.length})</option>
-                  {filteredAvailableSessions.map(s => (
-                    <option key={s.id} value={s.id}>
-                      {s.sessionName} ({s.roomCode || 'Session'})
-                    </option>
-                  ))}
+                  {filteredAvailableSessions.map(s => {
+                    const sessionDate = s.createdAt ? new Date(s.createdAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+                    const label = s.sessionName && !s.sessionName.startsWith('off-')
+                      ? s.sessionName
+                      : (s.roomCode ? `Live Session #${s.roomCode}` : `Offline Session ${sessionDate ? '(' + sessionDate + ')' : ''}`);
+                    return (
+                      <option key={s.id} value={s.id}>
+                        {label} — {s.quizTitle || 'Quiz'}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
 
@@ -1357,7 +1402,7 @@ export default function Gamification() {
               </div>
 
               {/* Search */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '200px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', flex: 1, minWidth: '180px' }}>
                 <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569' }}>Search Participant:</label>
                 <div style={{ position: 'relative' }}>
                   <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -1415,128 +1460,207 @@ export default function Gamification() {
               No quiz attempt records match the selected topic and session criteria.
             </div>
           ) : (
-            <div style={{ overflowX: 'auto' }}>
+            <div>
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {renderSortHeader('Rank', 'displayRank', topicSort, setTopicSort, 'center')}
+                    {renderSortHeader('Rank', 'displayRank', topicSort, setTopicSort, 'center', '70px')}
                     {renderSortHeader('Participant', 'name', topicSort, setTopicSort)}
-                    {renderSortHeader('Employee ID', 'employeeId', topicSort, setTopicSort)}
-                    {renderSortHeader('Zone / Store', 'zone', topicSort, setTopicSort)}
-                    {renderSortHeader('Quiz / Topic', 'quizTitle', topicSort, setTopicSort)}
-                    {renderSortHeader('Session', 'sessionName', topicSort, setTopicSort)}
-                    {renderSortHeader('Questions', 'questionsCount', topicSort, setTopicSort, 'center')}
-                    {renderSortHeader('Correct', 'correctCount', topicSort, setTopicSort, 'center')}
-                    {renderSortHeader('Quiz Score', 'rawPercentage', topicSort, setTopicSort, 'center')}
-                    {renderSortHeader('Arena Points', 'arenaPoints', topicSort, setTopicSort, 'right')}
-                    <th style={{ padding: '12px 14px', textAlign: 'center' }}>Achievements</th>
-                    {renderSortHeader('Status', 'status', topicSort, setTopicSort, 'center')}
+                    {renderSortHeader('Zone / Store', 'zone', topicSort, setTopicSort, 'left', '140px')}
+                    {renderSortHeader('Correct Answers', 'correctCount', topicSort, setTopicSort, 'center', '140px')}
+                    {renderSortHeader('Quiz Score', 'rawPercentage', topicSort, setTopicSort, 'center', '130px')}
+                    {renderSortHeader('Points Earned', 'arenaPoints', topicSort, setTopicSort, 'right', '140px')}
+                    {renderSortHeader('Status', 'status', topicSort, setTopicSort, 'center', '130px')}
+                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>Details</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedTopicAttempts.map((row, idx) => (
-                    <tr key={row.id || idx} style={{
-                      borderBottom: '1px solid #F1F5F9',
-                      background: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
-                      transition: 'background 0.15s ease'
-                    }}>
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '26px',
-                          height: '26px',
-                          borderRadius: '6px',
-                          fontWeight: 800,
-                          fontSize: '0.8rem',
-                          background: row.displayRank === 1 ? '#EFF6FF' : (row.displayRank <= 3 ? '#F1F5F9' : 'transparent'),
-                          color: row.displayRank === 1 ? '#2563EB' : (row.displayRank <= 3 ? '#0F172A' : '#64748B'),
-                          border: row.displayRank <= 3 ? '1px solid #CBD5E1' : 'none'
+                  {paginatedTopicAttempts.map((row, idx) => {
+                    const rowKey = row.id || idx;
+                    const isExpanded = !!expandedTopicRows[rowKey];
+
+                    return (
+                      <React.Fragment key={rowKey}>
+                        <tr style={{
+                          borderBottom: isExpanded ? 'none' : '1px solid #F1F5F9',
+                          background: isExpanded ? '#F8FAFC' : (idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'),
+                          transition: 'background 0.15s ease'
                         }}>
-                          #{row.displayRank}
-                        </span>
-                      </td>
+                          {/* Rank */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: '26px',
+                              height: '26px',
+                              borderRadius: '6px',
+                              fontWeight: 800,
+                              fontSize: '0.8rem',
+                              background: row.displayRank === 1 ? '#EFF6FF' : (row.displayRank <= 3 ? '#F1F5F9' : 'transparent'),
+                              color: row.displayRank === 1 ? '#2563EB' : (row.displayRank <= 3 ? '#0F172A' : '#64748B'),
+                              border: row.displayRank <= 3 ? '1px solid #CBD5E1' : 'none'
+                            }}>
+                              #{row.displayRank}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>
-                        {row.name}
-                      </td>
+                          {/* Participant Name & Inline Subtitle */}
+                          <td style={{ padding: '10px 12px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <button
+                                onClick={() => toggleTopicRow(rowKey)}
+                                style={{
+                                  background: 'none',
+                                  border: 'none',
+                                  padding: 0,
+                                  cursor: 'pointer',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  color: '#2563EB',
+                                  flexShrink: 0
+                                }}
+                                title={isExpanded ? 'Collapse' : 'Expand'}
+                              >
+                                {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </button>
+                              <div>
+                                <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
+                                  {row.name}
+                                </span>
+                                {row.employeeId && row.employeeId !== 'N/A' && (
+                                  <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                    ({row.employeeId})
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', color: '#64748B', fontFamily: 'monospace' }}>
-                        {row.employeeId}
-                      </td>
+                          {/* Zone / Store */}
+                          <td style={{ padding: '10px 12px', color: '#475569' }}>
+                            <span style={{
+                              display: 'inline-block',
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              background: '#F1F5F9',
+                              fontSize: '0.8rem',
+                              fontWeight: 600
+                            }}>
+                              {row.zone}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>
-                        {row.zone}
-                      </td>
+                          {/* Correct Answers */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center', color: '#475569', fontWeight: 600 }}>
+                            <span style={{ color: '#10B981', fontWeight: 700 }}>{row.correctCount}</span> / {row.questionsCount}
+                          </td>
 
-                      <td style={{ padding: '12px 14px', color: '#0F172A', fontWeight: 600 }}>
-                        {row.quizTitle}
-                      </td>
+                          {/* Quiz Score */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '6px',
+                              background: row.rawPercentage >= 70 ? '#ECFDF5' : (row.rawPercentage !== null ? '#FEF2F2' : '#F1F5F9'),
+                              color: row.rawPercentage >= 70 ? '#059669' : (row.rawPercentage !== null ? '#DC2626' : '#64748B'),
+                              fontWeight: 700, fontSize: '0.82rem'
+                            }}>
+                              {row.quizPercentage}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          fontSize: '0.75rem',
-                          color: '#475569',
-                          background: '#F1F5F9',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontFamily: 'monospace'
-                        }}>
-                          {row.sessionName}
-                        </span>
-                      </td>
+                          {/* Points Earned */}
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem' }}>
+                            {row.arenaPoints} pts
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#475569' }}>
-                        {row.answeredCount} / {row.questionsCount}
-                      </td>
+                          {/* Completion Status */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '12px',
+                              background: row.status === 'Completed' ? '#ECFDF5' : '#FFFBEB',
+                              color: row.status === 'Completed' ? '#059669' : '#D97706',
+                              fontSize: '0.72rem', fontWeight: 700
+                            }}>
+                              {row.status}
+                            </span>
+                          </td>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#10B981', fontWeight: 700 }}>
-                        {row.correctCount}
-                      </td>
+                          {/* Details Toggle */}
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => toggleTopicRow(rowKey)}
+                              style={{
+                                background: '#F1F5F9',
+                                color: '#475569',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                            >
+                              <span>{isExpanded ? 'Hide' : 'Details'}</span>
+                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+                          </td>
+                        </tr>
 
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '4px 8px', borderRadius: '6px',
-                          background: row.rawPercentage >= 70 ? '#ECFDF5' : (row.rawPercentage !== null ? '#FEF2F2' : '#F1F5F9'),
-                          color: row.rawPercentage >= 70 ? '#059669' : (row.rawPercentage !== null ? '#DC2626' : '#64748B'),
-                          fontWeight: 700, fontSize: '0.82rem'
-                        }}>
-                          {row.quizPercentage}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem' }}>
-                        {row.arenaPoints} pts
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        {row.earnedBadges && row.earnedBadges.length > 0 ? (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}>
-                            {row.earnedBadges.map(bId => {
-                              const bIcons = { champion: '🏆', fastest: '⚡', streak: '🔥', expert: '📦', team: '🎯', perfect: '💯' };
-                              return (
-                                <span key={bId} style={{ fontSize: '1rem' }}>{bIcons[bId] || '🏅'}</span>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <span style={{ color: '#94A3B8' }}>—</span>
+                        {/* Expandable Topic Row Details */}
+                        {isExpanded && (
+                          <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                            <td colSpan={8} style={{ padding: '12px 20px' }}>
+                              <div style={{
+                                background: '#FFFFFF',
+                                border: '1px solid #E2E8F0',
+                                borderRadius: '10px',
+                                padding: '14px 18px',
+                                display: 'grid',
+                                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                                gap: '14px',
+                                fontSize: '0.82rem'
+                              }}>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Topic / Quiz</span>
+                                  <span style={{ fontWeight: 700, color: '#0F172A' }}>{row.quizTitle}</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Submission Date</span>
+                                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{row.date || 'N/A'}</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Questions Answered</span>
+                                  <span style={{ fontWeight: 600, color: '#0F172A' }}>{row.answeredCount} of {row.questionsCount} answered ({row.correctCount} correct)</span>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Badges Earned</span>
+                                  <div>
+                                    {row.earnedBadges && row.earnedBadges.length > 0 ? (
+                                      <div style={{ display: 'flex', gap: '4px', marginTop: '2px' }}>
+                                        {row.earnedBadges.map(bId => {
+                                          const bIcons = { champion: '🏆', fastest: '⚡', streak: '🔥', expert: '📦', team: '🎯', perfect: '💯' };
+                                          return <span key={bId} style={{ fontSize: '1rem' }}>{bIcons[bId] || '🏅'}</span>;
+                                        })}
+                                      </div>
+                                    ) : (
+                                      <span style={{ color: '#94A3B8' }}>None on this attempt</span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.70rem', textTransform: 'uppercase', fontWeight: 700 }}>Technical Session Ref</span>
+                                  <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: '0.75rem' }}>{row.sessionId || row.sessionName || 'N/A'}</span>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
                         )}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '3px 8px', borderRadius: '12px',
-                          background: row.status === 'Completed' ? '#ECFDF5' : '#FFFBEB',
-                          color: row.status === 'Completed' ? '#059669' : '#D97706',
-                          fontSize: '0.72rem', fontWeight: 700
-                        }}>
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1546,7 +1670,7 @@ export default function Gamification() {
         </div>
       )}
 
-      {/* ── VIEW C: QUIZ ATTEMPT HISTORY ── */}
+      {/* ── VIEW C: QUIZ ATTEMPT HISTORY (DISTINCT AUDIT & DEVELOPMENT VIEW) ── */}
       {!isEmployee && activeTab === 'history' && (
         <div style={{
           background: '#FFFFFF',
@@ -1556,16 +1680,20 @@ export default function Gamification() {
           overflow: 'hidden',
           marginBottom: '24px'
         }}>
-          {/* Controls Bar */}
-          <div style={{ padding: '24px 28px', borderBottom: '1px solid #E2E8F0' }}>
+          {/* Top Historical KPI Volume Cards */}
+          <div style={{
+            padding: '20px 24px',
+            background: '#F8FAFC',
+            borderBottom: '1px solid #E2E8F0'
+          }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
               <div>
-                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.2rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.18rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <Layers size={20} color="#2563EB" />
-                  Quiz Attempt History
+                  Quiz Attempt History & Development
                 </h3>
                 <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
-                  Chronological, searchable history of all quiz sessions conducted under {selectedProjectName}.
+                  Chronological participation volume, timeline of attempts, and individual participant progression over time.
                 </p>
               </div>
 
@@ -1574,8 +1702,8 @@ export default function Gamification() {
                 onClick={() => exportToCSV(filteredHistoryAttempts, `quiz_history_${selectedProjectId}_${new Date().toISOString().split('T')[0]}.csv`)}
                 disabled={filteredHistoryAttempts.length === 0}
                 style={{
-                  padding: '9px 16px',
-                  borderRadius: '10px',
+                  padding: '8px 16px',
+                  borderRadius: '8px',
                   border: '1px solid #CBD5E1',
                   background: '#FFFFFF',
                   color: '#0F172A',
@@ -1593,213 +1721,465 @@ export default function Gamification() {
               </button>
             </div>
 
-            {/* Drill-down active notice banner */}
-            {historyParticipantFilter && (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '8px 14px',
-                borderRadius: '8px',
-                background: '#EFF6FF',
-                border: '1px solid #BFDBFE',
-                color: '#1D4ED8',
-                marginBottom: '16px',
-                fontSize: '0.85rem',
-                fontWeight: 600
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span>Drill-down Filter: Showing attempts for participant</span>
-                  <span style={{ fontWeight: 800, textDecoration: 'underline' }}>{historyParticipantFilter}</span>
+            {/* Clearly defined historical counts */}
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+              gap: '12px'
+            }}>
+              <div style={{ background: '#FFFFFF', padding: '12px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Unique Participants</span>
+                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>
+                  {summary.totalParticipants || 0}
                 </div>
-                <button
-                  onClick={() => setHistoryParticipantFilter('')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#2563EB',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontWeight: 700,
-                    fontSize: '0.8rem'
-                  }}
-                >
-                  <X size={14} /> Clear Drilldown
-                </button>
-              </div>
-            )}
-
-            {/* Filter Bar */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
-              {/* Search input */}
-              <div style={{ position: 'relative', flex: 1, minWidth: '240px' }}>
-                <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-                <input
-                  type="text"
-                  placeholder="Search by participant, employee ID, zone, quiz..."
-                  value={historySearch}
-                  onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 32px',
-                    borderRadius: '8px',
-                    border: '1.5px solid #CBD5E1',
-                    fontSize: '0.84rem',
-                    outline: 'none',
-                    background: '#FFFFFF',
-                    boxSizing: 'border-box'
-                  }}
-                />
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Enrolled project learners</span>
               </div>
 
-              {/* Topic Select */}
-              <select
-                value={historyQuizFilter}
-                onChange={(e) => { setHistoryQuizFilter(e.target.value); setHistoryPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  outline: 'none',
-                  minWidth: '180px'
-                }}
-              >
-                <option value="all">All Quizzes / Topics</option>
-                {availableQuizzes.map(q => (
-                  <option key={q.id} value={q.id}>{q.title}</option>
-                ))}
-              </select>
+              <div style={{ background: '#FFFFFF', padding: '12px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Distinct Quizzes Attempted</span>
+                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.35rem', fontWeight: 800, color: '#2563EB', marginTop: '2px' }}>
+                  {summary.distinctQuizzesCount || 0}
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Different quiz topics</span>
+              </div>
 
-              {/* Status Select */}
-              <select
-                value={historyStatusFilter}
-                onChange={(e) => { setHistoryStatusFilter(e.target.value); setHistoryPage(1); }}
-                style={{
-                  padding: '8px 12px',
-                  borderRadius: '8px',
-                  border: '1.5px solid #CBD5E1',
-                  background: '#FFFFFF',
-                  fontSize: '0.84rem',
-                  fontWeight: 600,
-                  outline: 'none',
-                  minWidth: '140px'
-                }}
-              >
-                <option value="all">All Statuses</option>
-                <option value="Completed">Completed</option>
-                <option value="In Progress">In Progress</option>
-              </select>
+              <div style={{ background: '#FFFFFF', padding: '12px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Distinct Sessions</span>
+                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', marginTop: '2px' }}>
+                  {summary.distinctSessionsCount || 0}
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#94A3B8' }}>Conducting session instances</span>
+              </div>
+
+              <div style={{ background: '#FFFFFF', padding: '12px 16px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Total Participant Attempts</span>
+                <div style={{ fontFamily: 'Manrope, sans-serif', fontSize: '1.35rem', fontWeight: 800, color: '#10B981', marginTop: '2px' }}>
+                  {summary.totalAttempts || 0}
+                </div>
+                <span style={{ fontSize: '0.7rem', color: '#64748B' }}>
+                  {summary.completedAttempts ?? summary.quizzesCompleted ?? 0} completed • {Math.max(0, (summary.totalAttempts || 0) - (summary.completedAttempts ?? summary.quizzesCompleted ?? 0))} in progress
+                </span>
+              </div>
             </div>
           </div>
 
-          {filteredHistoryAttempts.length === 0 ? (
-            <div style={{ padding: '48px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.9rem' }}>
-              No historical quiz attempt records match the filter criteria.
+          {/* Sub-view switcher: Development Summary vs Chronological Attempt Log */}
+          <div style={{ padding: '16px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '6px', background: '#F1F5F9', padding: '3px', borderRadius: '8px' }}>
+              <button
+                onClick={() => setHistorySubTab('timeline')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: historySubTab === 'timeline' ? '#FFFFFF' : 'transparent',
+                  color: historySubTab === 'timeline' ? '#0F172A' : '#64748B',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  boxShadow: historySubTab === 'timeline' ? '0 1px 2px rgba(15,23,42,0.06)' : 'none'
+                }}
+              >
+                Chronological Attempt Log ({filteredHistoryAttempts.length})
+              </button>
+              <button
+                onClick={() => setHistorySubTab('participants')}
+                style={{
+                  padding: '6px 14px',
+                  borderRadius: '6px',
+                  border: 'none',
+                  background: historySubTab === 'participants' ? '#FFFFFF' : 'transparent',
+                  color: historySubTab === 'participants' ? '#0F172A' : '#64748B',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  boxShadow: historySubTab === 'participants' ? '0 1px 2px rgba(15,23,42,0.06)' : 'none'
+                }}
+              >
+                Participant Development Summary ({participantHistoryList.length})
+              </button>
             </div>
-          ) : (
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
-                <thead>
-                  <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {renderSortHeader('Date', 'createdAt', historySort, setHistorySort)}
-                    {renderSortHeader('Participant', 'name', historySort, setHistorySort)}
-                    {renderSortHeader('Employee ID', 'employeeId', historySort, setHistorySort)}
-                    {renderSortHeader('Zone / Store', 'zone', historySort, setHistorySort)}
-                    {renderSortHeader('Quiz / Topic', 'quizTitle', historySort, setHistorySort)}
-                    {renderSortHeader('Session', 'sessionName', historySort, setHistorySort)}
-                    {renderSortHeader('Questions', 'questionsCount', historySort, setHistorySort, 'center')}
-                    {renderSortHeader('Correct', 'correctCount', historySort, setHistorySort, 'center')}
-                    {renderSortHeader('Score', 'rawPercentage', historySort, setHistorySort, 'center')}
-                    {renderSortHeader('Points', 'arenaPoints', historySort, setHistorySort, 'right')}
-                    {renderSortHeader('Status', 'status', historySort, setHistorySort, 'center')}
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedHistoryAttempts.map((row, idx) => (
-                    <tr key={row.id || idx} style={{
-                      borderBottom: '1px solid #F1F5F9',
-                      background: idx % 2 === 0 ? '#FFFFFF' : '#F8FAFC',
-                      transition: 'background 0.15s ease'
-                    }}>
-                      <td style={{ padding: '12px 14px', color: '#64748B', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
-                        {row.date || (row.createdAt ? new Date(row.createdAt).toISOString().split('T')[0] : 'N/A')}
-                      </td>
 
-                      <td style={{ padding: '12px 14px', fontWeight: 700, color: '#0F172A' }}>
-                        {row.name}
-                      </td>
+            {/* Drilldown active notice banner */}
+            {historyParticipantFilter && (
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                background: '#EFF6FF',
+                border: '1px solid #BFDBFE',
+                color: '#1D4ED8',
+                fontSize: '0.8rem',
+                fontWeight: 600
+              }}>
+                <span>Filtered by: <strong>{historyParticipantFilter}</strong></span>
+                <button
+                  onClick={() => setHistoryParticipantFilter('')}
+                  style={{ background: 'none', border: 'none', color: '#2563EB', cursor: 'pointer', padding: 0 }}
+                  title="Clear filter"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+            )}
+          </div>
 
-                      <td style={{ padding: '12px 14px', color: '#64748B', fontFamily: 'monospace' }}>
-                        {row.employeeId}
-                      </td>
+          {/* Sub-Tab 1: Chronological Attempt Log */}
+          {historySubTab === 'timeline' && (
+            <div>
+              {/* Filter controls */}
+              <div style={{ padding: '14px 24px', borderBottom: '1px solid #E2E8F0', display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+                <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                  <Search size={15} color="#94A3B8" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search by participant, employee ID, zone, quiz..."
+                    value={historySearch}
+                    onChange={(e) => { setHistorySearch(e.target.value); setHistoryPage(1); }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px 8px 32px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #CBD5E1',
+                      fontSize: '0.84rem',
+                      outline: 'none',
+                      background: '#FFFFFF',
+                      boxSizing: 'border-box'
+                    }}
+                  />
+                </div>
 
-                      <td style={{ padding: '12px 14px', color: '#475569' }}>
-                        {row.zone}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', fontWeight: 600, color: '#0F172A' }}>
-                        {row.quizTitle}
-                      </td>
-
-                      <td style={{ padding: '12px 14px' }}>
-                        <span style={{
-                          fontSize: '0.75rem',
-                          color: '#475569',
-                          background: '#F1F5F9',
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          fontFamily: 'monospace'
-                        }}>
-                          {row.sessionName}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#475569' }}>
-                        {row.answeredCount} / {row.questionsCount}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center', color: '#10B981', fontWeight: 700 }}>
-                        {row.correctCount}
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '4px 8px', borderRadius: '6px',
-                          background: row.rawPercentage >= 70 ? '#ECFDF5' : (row.rawPercentage !== null ? '#FEF2F2' : '#F1F5F9'),
-                          color: row.rawPercentage >= 70 ? '#059669' : (row.rawPercentage !== null ? '#DC2626' : '#64748B'),
-                          fontWeight: 700, fontSize: '0.82rem'
-                        }}>
-                          {row.quizPercentage}
-                        </span>
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 800, color: '#FF6B35' }}>
-                        {row.arenaPoints} pts
-                      </td>
-
-                      <td style={{ padding: '12px 14px', textAlign: 'center' }}>
-                        <span style={{
-                          padding: '3px 8px', borderRadius: '12px',
-                          background: row.status === 'Completed' ? '#ECFDF5' : '#FFFBEB',
-                          color: row.status === 'Completed' ? '#059669' : '#D97706',
-                          fontSize: '0.72rem', fontWeight: 700
-                        }}>
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
+                <select
+                  value={historyQuizFilter}
+                  onChange={(e) => { setHistoryQuizFilter(e.target.value); setHistoryPage(1); }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #CBD5E1',
+                    background: '#FFFFFF',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    outline: 'none',
+                    minWidth: '180px'
+                  }}
+                >
+                  <option value="all">All Quizzes / Topics</option>
+                  {availableQuizzes.map(q => (
+                    <option key={q.id} value={q.id}>{q.title}</option>
                   ))}
-                </tbody>
-              </table>
+                </select>
+
+                <select
+                  value={historyStatusFilter}
+                  onChange={(e) => { setHistoryStatusFilter(e.target.value); setHistoryPage(1); }}
+                  style={{
+                    padding: '8px 12px',
+                    borderRadius: '8px',
+                    border: '1.5px solid #CBD5E1',
+                    background: '#FFFFFF',
+                    fontSize: '0.84rem',
+                    fontWeight: 600,
+                    outline: 'none',
+                    minWidth: '140px'
+                  }}
+                >
+                  <option value="all">All Statuses</option>
+                  <option value="Completed">Completed</option>
+                  <option value="In Progress">In Progress</option>
+                </select>
+              </div>
+
+              {filteredHistoryAttempts.length === 0 ? (
+                <div style={{ padding: '48px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.9rem' }}>
+                  No historical quiz attempt records match the filter criteria.
+                </div>
+              ) : (
+                <div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        {renderSortHeader('Date', 'createdAt', historySort, setHistorySort, 'left', '110px')}
+                        {renderSortHeader('Participant', 'name', historySort, setHistorySort)}
+                        {renderSortHeader('Zone / Store', 'zone', historySort, setHistorySort, 'left', '130px')}
+                        {renderSortHeader('Quiz / Topic', 'quizTitle', historySort, setHistorySort)}
+                        {renderSortHeader('Questions', 'questionsCount', historySort, setHistorySort, 'center', '110px')}
+                        {renderSortHeader('Score', 'rawPercentage', historySort, setHistorySort, 'center', '110px')}
+                        {renderSortHeader('Points', 'arenaPoints', historySort, setHistorySort, 'right', '110px')}
+                        {renderSortHeader('Status', 'status', historySort, setHistorySort, 'center', '110px')}
+                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '90px' }}>Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedHistoryAttempts.map((row, idx) => {
+                        const rowKey = row.id || idx;
+                        const isExpanded = !!expandedHistoryRows[rowKey];
+
+                        return (
+                          <React.Fragment key={rowKey}>
+                            <tr style={{
+                              borderBottom: isExpanded ? 'none' : '1px solid #F1F5F9',
+                              background: isExpanded ? '#F8FAFC' : (idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'),
+                              transition: 'background 0.15s ease'
+                            }}>
+                              {/* Date */}
+                              <td style={{ padding: '10px 12px', color: '#64748B', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                                {row.date || (row.createdAt ? new Date(row.createdAt).toISOString().split('T')[0] : 'N/A')}
+                              </td>
+
+                              {/* Participant */}
+                              <td style={{ padding: '10px 12px' }}>
+                                <div>
+                                  <span style={{ fontWeight: 700, color: '#0F172A' }}>{row.name}</span>
+                                  {row.employeeId && row.employeeId !== 'N/A' && (
+                                    <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                      ({row.employeeId})
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Zone */}
+                              <td style={{ padding: '10px 12px', color: '#475569' }}>
+                                <span style={{
+                                  display: 'inline-block',
+                                  padding: '2px 8px',
+                                  borderRadius: '4px',
+                                  background: '#F1F5F9',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 600
+                                }}>
+                                  {row.zone}
+                                </span>
+                              </td>
+
+                              {/* Quiz Title (Readable Identifier) */}
+                              <td style={{ padding: '10px 12px', fontWeight: 600, color: '#0F172A' }}>
+                                {row.quizTitle}
+                              </td>
+
+                              {/* Questions */}
+                              <td style={{ padding: '10px 12px', textAlign: 'center', color: '#475569' }}>
+                                {row.answeredCount} / {row.questionsCount}
+                              </td>
+
+                              {/* Score */}
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                <span style={{
+                                  padding: '3px 8px', borderRadius: '6px',
+                                  background: row.rawPercentage >= 70 ? '#ECFDF5' : (row.rawPercentage !== null ? '#FEF2F2' : '#F1F5F9'),
+                                  color: row.rawPercentage >= 70 ? '#059669' : (row.rawPercentage !== null ? '#DC2626' : '#64748B'),
+                                  fontWeight: 700, fontSize: '0.82rem'
+                                }}>
+                                  {row.quizPercentage}
+                                </span>
+                              </td>
+
+                              {/* Points */}
+                              <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#FF6B35' }}>
+                                {row.arenaPoints} pts
+                              </td>
+
+                              {/* Status */}
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                <span style={{
+                                  padding: '3px 8px', borderRadius: '12px',
+                                  background: row.status === 'Completed' ? '#ECFDF5' : '#FFFBEB',
+                                  color: row.status === 'Completed' ? '#059669' : '#D97706',
+                                  fontSize: '0.72rem', fontWeight: 700
+                                }}>
+                                  {row.status}
+                                </span>
+                              </td>
+
+                              {/* Details button */}
+                              <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                                <button
+                                  onClick={() => toggleHistoryRow(rowKey)}
+                                  style={{
+                                    background: '#F1F5F9',
+                                    color: '#475569',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '6px',
+                                    padding: '4px 8px',
+                                    fontSize: '0.75rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {isExpanded ? 'Hide' : 'Info'}
+                                </button>
+                              </td>
+                            </tr>
+
+                            {/* Expandable History Details */}
+                            {isExpanded && (
+                              <tr style={{ background: '#F8FAFC', borderBottom: '1px solid #E2E8F0' }}>
+                                <td colSpan={9} style={{ padding: '12px 20px' }}>
+                                  <div style={{
+                                    background: '#FFFFFF',
+                                    border: '1px solid #E2E8F0',
+                                    borderRadius: '10px',
+                                    padding: '12px 16px',
+                                    display: 'flex',
+                                    flexWrap: 'wrap',
+                                    gap: '16px',
+                                    fontSize: '0.82rem'
+                                  }}>
+                                    <div>
+                                      <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Employee ID</span>
+                                      <span style={{ fontWeight: 700, fontFamily: 'monospace' }}>{row.employeeId || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                      <span style={{ color: '#64748B', display: 'block', fontSize: '0.72rem', textTransform: 'uppercase', fontWeight: 700 }}>Correct Answers</span>
+                                      <span style={{ fontWeight: 700, color: '#10B981' }}>{row.correctCount} of {row.questionsCount}</span>
+                                    </div>
+                                    <div>
+                                      <span style={{ color: '#94A3B8', display: 'block', fontSize: '0.70rem', textTransform: 'uppercase', fontWeight: 700 }}>Technical Session ID</span>
+                                      <span style={{ color: '#64748B', fontFamily: 'monospace', fontSize: '0.75rem' }}>{row.sessionId || row.sessionName || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                      <button
+                                        onClick={() => handleDrilldownToHistory(row)}
+                                        style={{
+                                          marginTop: '10px',
+                                          background: '#EFF6FF',
+                                          color: '#2563EB',
+                                          border: '1px solid #BFDBFE',
+                                          borderRadius: '6px',
+                                          padding: '4px 10px',
+                                          fontSize: '0.75rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer'
+                                        }}
+                                      >
+                                        Filter strictly to {row.name}
+                                      </button>
+                                    </div>
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {renderPagination(filteredHistoryAttempts.length, historyPage, historyPageSize, setHistoryPage, setHistoryPageSize, 'attempts')}
             </div>
           )}
 
-          {renderPagination(filteredHistoryAttempts.length, historyPage, historyPageSize, setHistoryPage, setHistoryPageSize, 'attempts')}
+          {/* Sub-Tab 2: Participant Development Summary */}
+          {historySubTab === 'participants' && (
+            <div>
+              <div style={{ padding: '14px 24px', borderBottom: '1px solid #E2E8F0', color: '#64748B', fontSize: '0.82rem' }}>
+                Cumulative participant progression overview across all attempted topics in {selectedProjectName}.
+              </div>
+
+              {participantHistoryList.length === 0 ? (
+                <div style={{ padding: '48px 16px', textAlign: 'center', color: '#94A3B8', fontSize: '0.9rem' }}>
+                  No participant history records available.
+                </div>
+              ) : (
+                <div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                        <th style={{ padding: '10px 12px' }}>Participant Name</th>
+                        <th style={{ padding: '10px 12px' }}>Employee ID</th>
+                        <th style={{ padding: '10px 12px' }}>Zone / Store</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Distinct Quizzes Attempted</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Completed Attempts</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right' }}>Cumulative Arena Points</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Overall Avg Score</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Latest Quiz Date</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center' }}>Timeline</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {paginatedParticipantHistory.map((p, idx) => (
+                        <tr key={p.userId || p.employeeId || idx} style={{
+                          borderBottom: '1px solid #F1F5F9',
+                          background: idx % 2 === 0 ? '#FFFFFF' : '#FAFAFA'
+                        }}>
+                          <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0F172A' }}>
+                            {p.name}
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#64748B', fontFamily: 'monospace' }}>
+                            {p.employeeId}
+                          </td>
+                          <td style={{ padding: '10px 12px', color: '#475569' }}>
+                            <span style={{ padding: '2px 8px', borderRadius: '4px', background: '#F1F5F9', fontSize: '0.8rem', fontWeight: 600 }}>
+                              {p.zone}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', fontWeight: 600, color: '#0F172A' }}>
+                            {p.distinctQuizzesAttempted || 1} {p.distinctQuizzesAttempted === 1 ? 'topic' : 'topics'}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '2px 8px',
+                              borderRadius: '6px',
+                              background: p.quizzesCompleted > 0 ? '#ECFDF5' : '#F1F5F9',
+                              color: p.quizzesCompleted > 0 ? '#059669' : '#64748B',
+                              fontWeight: 700,
+                              fontSize: '0.8rem'
+                            }}>
+                              {p.quizzesCompleted} of {p.totalAttempts}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#FF6B35' }}>
+                            {p.cumulativeArenaPoints.toLocaleString()} pts
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <span style={{
+                              padding: '3px 8px', borderRadius: '6px',
+                              background: p.rawPercentage >= 70 ? '#ECFDF5' : (p.rawPercentage >= 0 ? '#FEF2F2' : '#F1F5F9'),
+                              color: p.rawPercentage >= 70 ? '#059669' : (p.rawPercentage >= 0 ? '#DC2626' : '#64748B'),
+                              fontWeight: 700, fontSize: '0.82rem'
+                            }}>
+                              {p.overallAccuracy}
+                            </span>
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center', color: '#64748B', fontSize: '0.8rem' }}>
+                            {p.lastQuizDate || 'N/A'}
+                          </td>
+                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                            <button
+                              onClick={() => handleDrilldownToHistory(p)}
+                              style={{
+                                background: '#EFF6FF',
+                                color: '#2563EB',
+                                border: '1px solid #BFDBFE',
+                                borderRadius: '6px',
+                                padding: '4px 8px',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                cursor: 'pointer',
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '4px'
+                              }}
+                              title="Inspect full timeline of attempts for this participant"
+                            >
+                              <span>View Log</span>
+                              <ChevronRight size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {renderPagination(participantHistoryList.length, historySummaryPage, historySummaryPageSize, setHistorySummaryPage, setHistorySummaryPageSize, 'participants')}
+            </div>
+          )}
         </div>
       )}
 
@@ -1809,7 +2189,7 @@ export default function Gamification() {
           background: '#FFFFFF',
           borderRadius: '16px',
           border: '1px solid #E2E8F0',
-          padding: '28px',
+          padding: '24px 28px',
           marginTop: isEmployee ? '0' : '24px',
           boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)'
         }}>
@@ -1825,37 +2205,37 @@ export default function Gamification() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '16px' }}>
             {badges.map(b => (
               <div key={b.id} style={{
-                padding: '20px',
+                padding: '18px',
                 borderRadius: '14px',
                 background: b.unlocked ? `${b.color}0A` : '#F8FAFC',
                 border: `1.5px solid ${b.unlocked ? b.color + '40' : '#E2E8F0'}`,
                 display: 'flex',
                 alignItems: 'center',
-                gap: '16px',
+                gap: '14px',
                 opacity: b.unlocked ? 1 : 0.7,
                 transition: 'all 0.2s ease',
                 boxShadow: b.unlocked ? `0 2px 8px ${b.color}15` : 'none'
               }}>
                 <div style={{
-                  width: '52px', height: '52px', borderRadius: '14px',
+                  width: '50px', height: '50px', borderRadius: '12px',
                   background: b.unlocked ? `${b.color}15` : '#E2E8F0',
                   border: `2px solid ${b.unlocked ? b.color + '40' : '#CBD5E1'}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.65rem', flexShrink: 0
+                  fontSize: '1.5rem', flexShrink: 0
                 }}>
                   {b.icon}
                 </div>
                 <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.94rem', color: b.unlocked ? '#0F172A' : '#475569', marginBottom: '3px' }}>
+                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: b.unlocked ? '#0F172A' : '#475569', marginBottom: '3px' }}>
                     {b.label}
                   </div>
                   <div style={{ fontSize: '0.78rem', color: '#64748B', lineHeight: 1.4 }}>
                     {b.desc}
                   </div>
-                  <div style={{ marginTop: '8px' }}>
+                  <div style={{ marginTop: '6px' }}>
                     <span style={{
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -1878,7 +2258,7 @@ export default function Gamification() {
         </div>
       )}
 
-      {/* ── Team Performance by Zone / Store (Shown on Summary Tab or Base Dashboard) ── */}
+      {/* ── Team Performance by Zone / Store (Shown on Summary Tab) ── */}
       {!isEmployee && activeTab === 'summary' && zoneBreakdown.length > 0 && (
         <div style={{
           background: '#FFFFFF',

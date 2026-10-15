@@ -719,10 +719,15 @@ router.get('/gamification', requireAuth, async (req, res) => {
           hasPerfectSession: false,
           hasRegisteredZone: false,
           userId: p.userId,
+          quizzesSet: new Set(),
           lastQuizTimestamp: 0,
           lastQuizDate: 'N/A',
           lastQuizStatus: 'N/A'
         };
+      }
+
+      if (p.Session?.Quiz?.id && userAggregates[userKey].quizzesSet) {
+        userAggregates[userKey].quizzesSet.add(p.Session.Quiz.id);
       }
 
       // Score integrity: count each distinct session once per participant
@@ -842,6 +847,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
         employeeId: u.employeeId,
         zone: u.zone,
         quizzesCompleted: u.completedCount,
+        distinctQuizzesAttempted: u.quizzesSet && u.quizzesSet.size > 0 ? u.quizzesSet.size : (u.completedCount > 0 ? 1 : 0),
         totalAttempts: u.attempts,
         cumulativeArenaPoints: u.arenaPoints,
         avgScore: overallAccuracy !== null ? `${overallAccuracy}%` : 'N/A',
@@ -1108,6 +1114,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
         totalParticipants: totalLearners,
         quizzesCompleted: completedAttemptsCount,
         completedAttempts: completedAttemptsCount,
+        inProgressAttempts: Math.max(0, scopedParticipants.length - completedAttemptsCount),
         totalAttempts: scopedParticipants.length,
         distinctQuizzesCount: distinctQuizIds.size,
         distinctSessionsCount: distinctSessionIds.size,
