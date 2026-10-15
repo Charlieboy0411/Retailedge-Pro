@@ -19,6 +19,7 @@
  * - If no isolated PostgreSQL instance is configured/reachable, reports the limitation and halts safely.
  */
 
+const { URL } = require('url');
 const { Sequelize, DataTypes, Op } = require('sequelize');
 
 let PASS = 0;
