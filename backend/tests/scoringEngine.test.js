@@ -97,6 +97,9 @@ describe('scoringEngine.js Score Calculation', () => {
 
   test('defaults to 100 points when question has no explicit points configuration', () => {
     expect(calculatePoints(true, questionUnset, 5000)).toBe(100);
+    expect(calculatePoints(true, { points: undefined }, 5000)).toBe(100);
+    expect(calculatePoints(true, { points: null }, 5000)).toBe(100);
+    expect(calculatePoints(true, null, 5000)).toBe(100);
   });
 
   test('handles negative or invalid points gracefully by returning 0', () => {

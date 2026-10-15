@@ -8,6 +8,7 @@ const Participant = require('../models/Participant');
 const Response = require('../models/Response');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const { Op } = require('sequelize');
+const scoringEngine = require('../sockets/services/scoringEngine');
 
 const multer = require('multer');
 const fs = require('fs');
@@ -248,42 +249,9 @@ Schema per object:
   }
 });
 
-// Helper function to check if answer is correct
+// Helper function to check if answer is correct (delegates to authoritative scoringEngine)
 const isCorrectAnswer = (question, submittedAnswer) => {
-  if (!question || question.type === 'poll' || question.type === 'word_cloud' || question.type === 'rating') {
-    return false; // Opinion-based/polls have no correct answer
-  }
-  
-  const correct = question.correct_answer;
-  if (!correct) return false;
-
-  if (question.type === 'multi_select') {
-    let correctArr = [];
-    if (Array.isArray(correct)) correctArr = correct;
-    else if (typeof correct === 'string') {
-      try { correctArr = JSON.parse(correct); }
-      catch (e) { correctArr = correct.split(',').map(s => s.trim()); }
-    }
-
-    let submittedArr = [];
-    if (Array.isArray(submittedAnswer)) submittedArr = submittedAnswer;
-    else if (typeof submittedAnswer === 'string') {
-      try { submittedArr = JSON.parse(submittedAnswer); }
-      catch (e) { submittedArr = submittedAnswer.split(',').map(s => s.trim()); }
-    }
-
-    if (!Array.isArray(correctArr) || !Array.isArray(submittedArr)) return false;
-    if (correctArr.length !== submittedArr.length) return false;
-    
-    const sortedCorrect = [...correctArr].sort();
-    const sortedSubmitted = [...submittedArr].sort();
-    return sortedCorrect.every((val, index) => val === sortedSubmitted[index]);
-  }
-
-  if (typeof correct === 'string' && typeof submittedAnswer === 'string') {
-    return correct.trim().toLowerCase() === submittedAnswer.trim().toLowerCase();
-  }
-  return correct === submittedAnswer;
+  return scoringEngine.isCorrectAnswer(question, submittedAnswer);
 };
 
 // POST /api/quizzes/:id/offline - Enable & configure offline mode
@@ -536,10 +504,8 @@ router.post('/:id/offline-submit', async (req, res) => {
     (answers || []).forEach(ans => {
       const question = dbQuestionsMap[ans.questionId];
       if (question) {
-        let points = 0;
-        if (isCorrectAnswer(question, ans.answer)) {
-          points = question.points !== undefined ? question.points : 1;
-        }
+        const isCorrect = scoringEngine.isCorrectAnswer(question, ans.answer);
+        const points = scoringEngine.calculatePoints(isCorrect, question, ans.timeTaken);
         finalScore += points;
 
         responsesToCreate.push({
