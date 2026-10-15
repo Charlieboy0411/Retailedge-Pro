@@ -66,7 +66,10 @@ export default function LiveQuiz() {
   const [correctAnswerIndex, setCorrectAnswerIndex] = useState(null);
   const [questionPoints, setQuestionPoints] = useState(100);
   const [tipIndex, setTipIndex] = useState(0);
-  const [lobbyCountdown, setLobbyCountdown] = useState(60);
+  const [isServerConfirmed, setIsServerConfirmed] = useState(false);
+  const [tappedReaction, setTappedReaction] = useState(null);
+  const [quizTotalQuestions, setQuizTotalQuestions] = useState(null);
+  const [joinError, setJoinError] = useState('');
 
   const EMOJIS_POOL = ['😊', '😎', '🤩', '🥳', '🦁', '🦊', '🐨', '🦖', '🚀', '🎨', '🎯', '⚡', '🌈', '👾', '🐼', '🐯', '🤖', '👑', '🔥', '🦄'];
   const getSmileyForName = (name) => {
@@ -77,8 +80,6 @@ export default function LiveQuiz() {
     }
     return EMOJIS_POOL[hash % EMOJIS_POOL.length];
   };
-
-  const [joinError, setJoinError] = useState('');
 
   useEffect(() => {
     socket = io(window.location.origin, {
@@ -91,7 +92,6 @@ export default function LiveQuiz() {
 
     const onConnect = () => {
       setJoinError('');
-      // Emit canonical participant_join event
       socket.emit('participant_join', {
         roomCode: cleanCode,
         name: playerName,
@@ -103,12 +103,18 @@ export default function LiveQuiz() {
       });
     };
 
+    const onDisconnect = () => {
+      setIsServerConfirmed(false);
+    };
+
     const onError = (msg) => {
+      setIsServerConfirmed(false);
       setJoinError(typeof msg === 'string' ? msg : msg?.message || 'Failed to connect to room');
     };
 
     const onJoinedSession = (data) => {
       setJoinError('');
+      setIsServerConfirmed(true);
       currentPartId = data.participantId;
       setParticipantId(data.participantId);
       if (data.score !== undefined) setMyScore(data.score);
@@ -222,13 +228,25 @@ export default function LiveQuiz() {
       setCorrectAnswerIndex(null);
     };
 
-    const onQuizEnded = () => setStatus('ended');
+    const onQuizEnded = (data) => {
+      setStatus('ended');
+      if (data?.leaderboard) setLeaderboard(data.leaderboard);
+      if (data?.totalQuestions) setQuizTotalQuestions(data.totalQuestions);
+    };
+
+    const onSessionCompleted = (data) => {
+      setStatus('ended');
+      if (data?.leaderboard) setLeaderboard(data.leaderboard);
+      if (data?.totalQuestions) setQuizTotalQuestions(data.totalQuestions);
+    };
+
     const onTimerTick = ({ remaining }) => setTimeLeft(remaining);
     const onTimerExpired = () => {
       setTimeLeft(0);
     };
 
     socket.on('connect', onConnect);
+    socket.on('disconnect', onDisconnect);
     socket.on('error', onError);
     socket.on('joined_session', onJoinedSession);
     socket.on('participant_joined', onParticipantJoined);
@@ -240,6 +258,7 @@ export default function LiveQuiz() {
     socket.on('leaderboard_update', onLeaderboardUpdate);
     socket.on('lobby_reset', onLobbyReset);
     socket.on('quiz_ended', onQuizEnded);
+    socket.on('session_completed', onSessionCompleted);
     socket.on('timer_tick', onTimerTick);
     socket.on('timer_expired', onTimerExpired);
 
@@ -278,13 +297,6 @@ export default function LiveQuiz() {
     return false;
   };
 
-  const getOptionVotes = (opt) => {
-    return liveAnswers.filter(a => {
-      if (Array.isArray(a.answer)) return a.answer.includes(opt);
-      return a.answer === opt;
-    }).length;
-  };
-
   const submitAnswer = (answerText) => {
     if (!answerText || status === 'revealed' || (timeLeft <= 0 && status !== 'waiting') || submissionStatus === 'submitting') return;
     setSubmissionStatus('submitting');
@@ -302,10 +314,20 @@ export default function LiveQuiz() {
   };
 
   const sendEmojiReaction = (emoji) => {
+    setTappedReaction(emoji);
+    setTimeout(() => setTappedReaction(null), 800);
     if (socket && cleanCode) {
       socket.emit('emoji_reaction', { roomCode: cleanCode, emoji });
     }
   };
+
+  // Resolve personal result for final rank
+  const myParticipant = leaderboard.find(p => p.id === participantId) ||
+    (participantId ? null : leaderboard.find(p => p.name === playerName));
+  const myRank = myParticipant ? (myParticipant.rank || (leaderboard.indexOf(myParticipant) + 1)) : null;
+  const myFinalScore = myParticipant ? (myParticipant.score || 0) : myScore;
+  const myCorrect = myParticipant?.correctCount ?? null;
+  const totalQ = myParticipant?.totalQuestions || quizTotalQuestions || (currentQuestion ? 1 : null);
 
   return (
     <div style={{
@@ -313,83 +335,125 @@ export default function LiveQuiz() {
       flexDirection: 'column',
       minHeight: '100dvh',
       width: '100vw',
-      background: '#0B1220',
-      color: '#FFFFFF',
+      background: '#F8FAFC',
+      color: '#0F172A',
       position: 'relative',
       overflowX: 'hidden',
       overflowY: 'auto',
-      fontFamily: 'Manrope, Inter, sans-serif'
+      fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
     }}>
       
-      {/* ─── WAITING LOBBY STATE ─── */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes popIn {
+          0% { transform: translate(-50%, 10px) scale(0.7); opacity: 0; }
+          60% { transform: translate(-50%, -8px) scale(1.15); opacity: 1; }
+          100% { transform: translate(-50%, 0) scale(1); opacity: 1; }
+        }
+      `}</style>
+
+      {/* Floating feedback for tapped emoji */}
+      {tappedReaction && (
+        <div style={{
+          position: 'fixed',
+          bottom: '72px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: '#FFFFFF',
+          border: '1.5px solid #CBD5E1',
+          borderRadius: '24px',
+          padding: '6px 16px',
+          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.15)',
+          fontSize: '1.6rem',
+          zIndex: 200,
+          animation: 'popIn 0.3s ease-out'
+        }}>
+          {tappedReaction}
+        </div>
+      )}
+
+      {/* ─── WAITING LOBBY STATE (Light Enterprise) ─── */}
       {status === 'waiting' && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', padding: '24px 16px', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: '460px', padding: '36px 24px', textAlign: 'center', background: '#111827', border: '1px solid #1E293B', borderRadius: '20px', boxShadow: '0 20px 40px rgba(0,0,0,0.4)', boxSizing: 'border-box' }}>
+          <div style={{ width: '100%', maxWidth: '440px', padding: '36px 24px', textAlign: 'center', background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '20px', boxShadow: '0 10px 30px rgba(15, 23, 42, 0.06)', boxSizing: 'border-box' }}>
             
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(37, 99, 235, 0.12)', border: '1px solid rgba(37, 99, 235, 0.25)', padding: '6px 14px', borderRadius: '20px', marginBottom: '20px' }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#06B6D4' }} />
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#60A5FA', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Live Learning Arena</span>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: '#EFF6FF', border: '1px solid #BFDBFE', padding: '6px 14px', borderRadius: '20px', marginBottom: '20px' }}>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB' }} />
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Live Learning Arena</span>
             </div>
 
-            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: '0 0 8px 0' }}>Ready for Session</h2>
-            <p style={{ color: '#94A3B8', fontSize: '0.9rem', marginBottom: '24px' }}>The host will initiate the quiz shortly.</p>
+            <h2 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0F172A', margin: '0 0 8px 0' }}>Ready for Session</h2>
+            <p style={{ color: '#64748B', fontSize: '0.9rem', marginBottom: '24px' }}>The trainer will initiate the live quiz shortly.</p>
 
             {joinError && (
-              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #EF4444', borderRadius: '12px', padding: '12px 16px', marginBottom: '20px', color: '#F87171', fontSize: '0.85rem', textAlign: 'center' }}>
+              <div style={{ background: '#FEF2F2', border: '1px solid #F87171', borderRadius: '12px', padding: '12px 16px', marginBottom: '20px', color: '#991B1B', fontSize: '0.85rem', textAlign: 'center' }}>
                 {joinError}
               </div>
             )}
 
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '24px' }}>
-              <div style={{ background: '#0B1220', padding: '12px', borderRadius: '12px', border: '1px solid #1E293B' }}>
-                <span style={{ fontSize: '0.68rem', color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>PIN</span>
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: '2px', fontWeight: 700 }}>PIN</span>
                 <span style={{ fontSize: '1.4rem', fontWeight: 900, color: '#2563EB', fontFamily: 'monospace' }}>{cleanCode}</span>
               </div>
-              <div style={{ background: '#0B1220', padding: '12px', borderRadius: '12px', border: '1px solid #1E293B' }}>
-                <span style={{ fontSize: '0.68rem', color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: '2px' }}>Status</span>
-                <span style={{ fontSize: '0.95rem', fontWeight: 700, color: joinError ? '#EF4444' : '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
-                  {joinError ? 'Connection Error' : <><CheckCircle2 size={14} /> Connected</>}
+              <div style={{ background: '#F8FAFC', padding: '12px', borderRadius: '12px', border: '1px solid #E2E8F0' }}>
+                <span style={{ fontSize: '0.68rem', color: '#64748B', textTransform: 'uppercase', display: 'block', marginBottom: '2px', fontWeight: 700 }}>Status</span>
+                <span style={{ fontSize: '0.92rem', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: '4px' }}>
+                  {joinError ? (
+                    <span style={{ color: '#EF4444' }}>Error</span>
+                  ) : isServerConfirmed ? (
+                    <span style={{ color: '#10B981', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <CheckCircle2 size={14} /> Connected
+                    </span>
+                  ) : (
+                    <span style={{ color: '#F59E0B', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{ width: '10px', height: '10px', borderRadius: '50%', border: '2px solid #F59E0B', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} /> Connecting...
+                    </span>
+                  )}
                 </span>
               </div>
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', background: '#162033', padding: '10px 18px', borderRadius: '24px', margin: '0 auto 24px', width: 'fit-content', border: '1px solid #1E293B' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', justifyContent: 'center', background: '#F8FAFC', padding: '10px 18px', borderRadius: '24px', margin: '0 auto 24px', width: 'fit-content', border: '1px solid #E2E8F0' }}>
               <span style={{ fontSize: '1.3rem' }}>{myAvatar}</span>
-              <span style={{ fontSize: '0.9rem', fontWeight: 600 }}>Associate: <strong style={{ color: '#60A5FA' }}>{playerName}</strong></span>
+              <span style={{ fontSize: '0.9rem', fontWeight: 600, color: '#334155' }}>Associate: <strong style={{ color: '#2563EB' }}>{playerName}</strong></span>
             </div>
 
-            <div style={{ background: '#0B1220', border: '1px solid #1E293B', borderRadius: '12px', padding: '14px', textAlign: 'left' }}>
-              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#F59E0B', textTransform: 'uppercase', marginBottom: '4px' }}>Pro Tip</div>
-              <div style={{ fontSize: '0.82rem', color: '#CBD5E1', lineHeight: 1.4 }}>{SHELFY_TIPS[tipIndex]}</div>
+            <div style={{ background: '#FFFBEB', border: '1px solid #FCD34D', borderRadius: '12px', padding: '14px', textAlign: 'left' }}>
+              <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#B45309', textTransform: 'uppercase', marginBottom: '4px' }}>Pro Tip</div>
+              <div style={{ fontSize: '0.82rem', color: '#78350F', lineHeight: 1.4 }}>{SHELFY_TIPS[tipIndex]}</div>
             </div>
 
           </div>
         </div>
       )}
 
-      {/* ─── ACTIVE QUESTION / ANSWERED / REVEALED STATES ─── */}
+      {/* ─── ACTIVE QUESTION / REVEALED STATES (Light Enterprise) ─── */}
       {['question', 'answered', 'revealed'].includes(status) && currentQuestion && (
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', boxSizing: 'border-box' }}>
           
           {/* Header Bar */}
-          <div style={{ background: '#0F172A', borderBottom: '1px solid #1E293B', padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0 }}>
+          <div style={{ background: '#FFFFFF', borderBottom: '1px solid #E2E8F0', padding: '12px 18px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexShrink: 0, boxShadow: '0 2px 4px rgba(15, 23, 42, 0.02)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <span style={{ fontSize: '1.2rem' }}>{myAvatar}</span>
-              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playerName}</span>
+              <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A', maxWidth: '140px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{playerName}</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <div style={{ background: 'rgba(37, 99, 235, 0.15)', border: '1px solid #2563EB', borderRadius: '8px', padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700, color: '#60A5FA' }}>
+              <div style={{ background: '#EFF6FF', border: '1px solid #BFDBFE', borderRadius: '8px', padding: '4px 8px', fontSize: '0.78rem', fontWeight: 700, color: '#2563EB' }}>
                 {questionPoints} pts
               </div>
-              <div style={{ background: '#162033', border: '1px solid #1E293B', borderRadius: '8px', padding: '4px 10px', fontSize: '0.8rem', fontWeight: 700, color: '#10B981' }}>
+              <div style={{ background: '#ECFDF5', border: '1px solid #A7F3D0', borderRadius: '8px', padding: '4px 10px', fontSize: '0.8rem', fontWeight: 700, color: '#065F46' }}>
                 {myScore} pts
               </div>
               {timeLeft > 0 && status === 'question' && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: '4px',
-                  background: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                  border: `1px solid ${timeLeft <= 5 ? '#EF4444' : '#F59E0B'}`,
-                  color: timeLeft <= 5 ? '#EF4444' : '#F59E0B',
+                  background: timeLeft <= 5 ? '#FEF2F2' : '#FFFBEB',
+                  border: `1px solid ${timeLeft <= 5 ? '#F87171' : '#FCD34D'}`,
+                  color: timeLeft <= 5 ? '#DC2626' : '#B45309',
                   padding: '4px 10px', borderRadius: '8px', fontSize: '0.85rem', fontWeight: 800
                 }}>
                   <Clock size={13} />
@@ -409,8 +473,8 @@ export default function LiveQuiz() {
             boxSizing: 'border-box'
           }}>
             <div style={{
-              background: '#111827',
-              border: '1px solid #1E293B',
+              background: '#FFFFFF',
+              border: '1px solid #E2E8F0',
               padding: '20px 18px',
               borderRadius: '16px',
               marginBottom: '20px',
@@ -418,12 +482,13 @@ export default function LiveQuiz() {
               wordBreak: 'break-word',
               overflowWrap: 'break-word',
               width: '100%',
-              boxSizing: 'border-box'
+              boxSizing: 'border-box',
+              boxShadow: '0 4px 12px rgba(15, 23, 42, 0.04)'
             }}>
               <h2 style={{
                 fontSize: '1.25rem',
                 fontWeight: 700,
-                color: '#FFFFFF',
+                color: '#0F172A',
                 margin: 0,
                 lineHeight: 1.45,
                 wordBreak: 'break-word',
@@ -449,31 +514,31 @@ export default function LiveQuiz() {
                         const isSubmitted = submittedAnswer === opt;
                         const isCorrect = isCorrectOpt(opt, i);
 
-                        let btnBg = '#111827';
-                        let btnBorder = '#1E293B';
-                        let btnColor = '#FFFFFF';
+                        let btnBg = '#FFFFFF';
+                        let btnBorder = '#E2E8F0';
+                        let btnColor = '#0F172A';
                         let badgeText = null;
 
                         if (status === 'revealed') {
                           if (isCorrect) {
-                            btnBg = 'rgba(16, 185, 129, 0.2)';
+                            btnBg = '#ECFDF5';
                             btnBorder = '#10B981';
-                            btnColor = '#10B981';
+                            btnColor = '#065F46';
                             badgeText = isSubmitted ? `Your Choice · Correct (+${questionPoints} pts)` : 'Correct Answer';
                           } else if (isSubmitted) {
-                            btnBg = 'rgba(239, 68, 68, 0.2)';
+                            btnBg = '#FEF2F2';
                             btnBorder = '#EF4444';
-                            btnColor = '#EF4444';
+                            btnColor = '#991B1B';
                             badgeText = 'Your Choice · Incorrect (0 pts)';
                           } else {
-                            btnBg = '#0B1220';
-                            btnBorder = '#1E293B';
-                            btnColor = '#64748B';
+                            btnBg = '#F8FAFC';
+                            btnBorder = '#E2E8F0';
+                            btnColor = '#94A3B8';
                           }
                         } else if (isSelected) {
-                          btnBg = 'rgba(37, 99, 235, 0.2)';
-                          btnBorder = '#3B82F6';
-                          btnColor = '#93C5FD';
+                          btnBg = '#EFF6FF';
+                          btnBorder = '#2563EB';
+                          btnColor = '#1D4ED8';
                           badgeText = isSubmitted ? 'Submitted Answer' : 'Selected Choice';
                         }
 
@@ -504,15 +569,16 @@ export default function LiveQuiz() {
                               textAlign: 'left',
                               transition: 'all 0.15s ease',
                               width: '100%',
-                              boxSizing: 'border-box'
+                              boxSizing: 'border-box',
+                              boxShadow: isSelected ? '0 4px 12px rgba(37, 99, 235, 0.1)' : '0 2px 6px rgba(15, 23, 42, 0.03)'
                             }}
                           >
                             <span style={{
                               width: '30px',
                               height: '30px',
                               borderRadius: '6px',
-                              background: status === 'revealed' ? (isCorrect ? '#10B981' : (isSubmitted ? '#EF4444' : '#1E293B')) : (isSelected ? '#2563EB' : '#1E293B'),
-                              color: '#FFFFFF',
+                              background: status === 'revealed' ? (isCorrect ? '#10B981' : (isSubmitted ? '#EF4444' : '#E2E8F0')) : (isSelected ? '#2563EB' : '#F1F5F9'),
+                              color: status === 'revealed' ? (isCorrect || isSubmitted ? '#FFFFFF' : '#64748B') : (isSelected ? '#FFFFFF' : '#475569'),
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
@@ -535,7 +601,7 @@ export default function LiveQuiz() {
                                   fontSize: '0.72rem',
                                   fontWeight: 700,
                                   marginTop: '2px',
-                                  color: status === 'revealed' ? (isCorrect ? '#34D399' : '#F87171') : (isSubmitted ? '#60A5FA' : '#FBBF24')
+                                  color: status === 'revealed' ? (isCorrect ? '#065F46' : '#DC2626') : (isSubmitted ? '#2563EB' : '#D97706')
                                 }}>
                                   {badgeText}
                                 </span>
@@ -567,20 +633,18 @@ export default function LiveQuiz() {
                           fontWeight: 800,
                           cursor: (isLocked || submissionStatus === 'submitting' || !selectedAnswer || (submissionStatus === 'confirmed' && !hasUnsavedChanges)) ? 'not-allowed' : 'pointer',
                           background: isLocked
-                            ? '#334155'
+                            ? '#94A3B8'
                             : (hasUnsavedChanges
-                              ? 'linear-gradient(135deg, #F59E0B, #D97706)'
+                              ? '#D97706'
                               : (submissionStatus === 'confirmed' && !hasUnsavedChanges
-                                ? '#059669'
-                                : (selectedAnswer
-                                  ? 'linear-gradient(135deg, #2563EB, #1D4ED8)'
-                                  : '#1E293B'))),
-                          color: (isLocked || (!selectedAnswer && submissionStatus !== 'confirmed')) ? '#94A3B8' : '#FFFFFF',
+                                ? '#10B981'
+                                : (selectedAnswer ? '#2563EB' : '#CBD5E1'))),
+                          color: (isLocked || (!selectedAnswer && submissionStatus !== 'confirmed')) ? '#64748B' : '#FFFFFF',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
                           gap: '10px',
-                          boxShadow: (!isLocked && selectedAnswer && (hasUnsavedChanges || submissionStatus !== 'confirmed')) ? '0 4px 16px rgba(37, 99, 235, 0.4)' : 'none',
+                          boxShadow: (!isLocked && selectedAnswer && (hasUnsavedChanges || submissionStatus !== 'confirmed')) ? '0 4px 16px rgba(37, 99, 235, 0.3)' : 'none',
                           transition: 'all 0.2s ease',
                           minHeight: '52px'
                         }}
@@ -608,11 +672,11 @@ export default function LiveQuiz() {
 
                       {hasUnsavedChanges && !isLocked && (
                         <div style={{
-                          background: 'rgba(245, 158, 11, 0.15)',
-                          border: '1px solid #F59E0B',
+                          background: '#FFFBEB',
+                          border: '1px solid #FCD34D',
                           borderRadius: '10px',
                           padding: '10px 14px',
-                          color: '#FCD34D',
+                          color: '#B45309',
                           fontSize: '0.85rem',
                           fontWeight: 600,
                           textAlign: 'center'
@@ -623,11 +687,11 @@ export default function LiveQuiz() {
 
                       {submissionStatus === 'confirmed' && !hasUnsavedChanges && (
                         <div style={{
-                          background: 'rgba(16, 185, 129, 0.12)',
+                          background: '#ECFDF5',
                           border: '1px solid #10B981',
                           borderRadius: '10px',
                           padding: '12px 14px',
-                          color: '#34D399',
+                          color: '#065F46',
                           fontSize: '0.88rem',
                           fontWeight: 600,
                           textAlign: 'center',
@@ -643,11 +707,11 @@ export default function LiveQuiz() {
 
                       {submissionStatus === 'rejected' && (
                         <div style={{
-                          background: 'rgba(239, 68, 68, 0.15)',
-                          border: '1px solid #EF4444',
+                          background: '#FEF2F2',
+                          border: '1px solid #F87171',
                           borderRadius: '10px',
                           padding: '12px 14px',
-                          color: '#FCA5A5',
+                          color: '#991B1B',
                           fontSize: '0.88rem',
                           textAlign: 'center'
                         }}>
@@ -675,11 +739,11 @@ export default function LiveQuiz() {
 
                       {isLocked && (
                         <div style={{
-                          background: '#162033',
-                          border: '1px solid #1E293B',
+                          background: '#F8FAFC',
+                          border: '1px solid #E2E8F0',
                           borderRadius: '10px',
                           padding: '12px 14px',
-                          color: '#94A3B8',
+                          color: '#64748B',
                           fontSize: '0.88rem',
                           textAlign: 'center'
                         }}>
@@ -692,17 +756,17 @@ export default function LiveQuiz() {
                   {status === 'revealed' && (
                     <div style={{
                       marginTop: '20px',
-                      background: 'rgba(16, 185, 129, 0.12)',
+                      background: '#ECFDF5',
                       border: '1px solid #10B981',
                       borderRadius: '12px',
                       padding: '16px',
                       textAlign: 'center'
                     }}>
-                      <div style={{ color: '#34D399', fontWeight: 800, fontSize: '1rem', marginBottom: '4px' }}>
+                      <div style={{ color: '#065F46', fontWeight: 800, fontSize: '1rem', marginBottom: '4px' }}>
                         ✓ Correct Answer Revealed
                       </div>
-                      <div style={{ color: '#94A3B8', fontSize: '0.85rem' }}>
-                        Configured Question Value: <strong style={{ color: '#F59E0B' }}>{questionPoints} points</strong>
+                      <div style={{ color: '#475569', fontSize: '0.85rem' }}>
+                        Configured Question Value: <strong style={{ color: '#D97706' }}>{questionPoints} points</strong>
                       </div>
                     </div>
                   )}
@@ -713,55 +777,126 @@ export default function LiveQuiz() {
         </div>
       )}
 
-      {/* ─── LEADERBOARD / PODIUM STATE ─── */}
+      {/* ─── LEADERBOARD / PODIUM STATE & FINAL PERSONAL RANK (Phase 6) ─── */}
       {(status === 'leaderboard' || status === 'ended') && (
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', overflowY: 'auto' }}>
-          <div style={{ width: '100%', maxWidth: '440px', textAlign: 'center' }}>
-            <span style={{ fontSize: '3.5rem', display: 'block', marginBottom: '8px' }}>🏆</span>
-            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '20px' }}>
-              {status === 'ended' ? 'Final Standings' : 'Current Standings'}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px 16px', overflowY: 'auto' }}>
+          <div style={{ width: '100%', maxWidth: '460px', textAlign: 'center' }}>
+            
+            <span style={{ fontSize: '3rem', display: 'block', marginBottom: '6px' }}>🏆</span>
+            <h2 style={{ fontSize: '1.8rem', fontWeight: 800, color: '#0F172A', marginBottom: '16px' }}>
+              {status === 'ended' ? 'Session Completed' : 'Current Standings'}
             </h2>
 
+            {/* Final Personal Result Card (Phase 6 Authoritative Display) */}
+            {status === 'ended' && (
+              <div style={{
+                background: '#EFF6FF',
+                border: '2px solid #2563EB',
+                borderRadius: '16px',
+                padding: '22px 18px',
+                marginBottom: '24px',
+                textAlign: 'center',
+                boxShadow: '0 8px 24px rgba(37, 99, 235, 0.1)'
+              }}>
+                <div style={{ fontSize: '0.75rem', fontWeight: 800, color: '#2563EB', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '4px' }}>
+                  Your Official Result
+                </div>
+                <div style={{ fontSize: '2.1rem', fontWeight: 900, color: '#0F172A', margin: '4px 0' }}>
+                  {myRank ? `Your Final Rank: #${myRank}` : 'Your Final Rank: N/A'}
+                </div>
+                <div style={{ fontSize: '1.2rem', fontWeight: 800, color: '#2563EB', marginBottom: '10px' }}>
+                  Your Score: {myFinalScore} points
+                </div>
+                {myCorrect !== null && totalQ && (
+                  <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#065F46', background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '5px 14px', borderRadius: '20px', width: 'fit-content', margin: '0 auto 10px' }}>
+                    ✓ Correct Answers: {myCorrect} of {totalQ}
+                  </div>
+                )}
+                <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#475569', lineHeight: 1.4 }}>
+                  {myRank === 1
+                    ? '👑 Champion Performance! You achieved the top ranking in this session.'
+                    : myRank && myRank <= 3
+                      ? '🌟 Podium Finish! Outstanding knowledge execution.'
+                      : '👏 Solid effort! Review session highlights to strengthen your competencies.'}
+                </div>
+              </div>
+            )}
+
+            {/* Standings List */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {leaderboard.slice(0, 5).map((p, i) => {
-                const isMe = p.id === participantId;
+                const isMe = p.id === participantId || (p.name === playerName && !participantId);
                 return (
                   <div
                     key={p.id || i}
                     style={{
-                      background: isMe ? '#162033' : '#111827',
-                      border: `1.5px solid ${isMe ? '#2563EB' : '#1E293B'}`,
+                      background: isMe ? '#EFF6FF' : '#FFFFFF',
+                      border: `1.5px solid ${isMe ? '#2563EB' : '#E2E8F0'}`,
                       borderRadius: '12px', padding: '12px 18px',
-                      display: 'flex', justifyContent: 'space-between', alignItems: 'center'
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)'
                     }}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontWeight: 800, color: i === 0 ? '#F59E0B' : '#94A3B8' }}>#{i + 1}</span>
+                      <span style={{ fontWeight: 800, color: i === 0 ? '#D97706' : '#64748B', width: '28px' }}>#{p.rank || (i + 1)}</span>
                       <span>{getSmileyForName(p.name)}</span>
-                      <span style={{ fontWeight: 600, color: '#FFFFFF' }}>{p.name} {isMe && '(You)'}</span>
+                      <span style={{ fontWeight: isMe ? 800 : 600, color: isMe ? '#1D4ED8' : '#0F172A' }}>
+                        {p.name} {isMe && <span style={{ fontSize: '0.72rem', background: '#2563EB', color: '#FFFFFF', padding: '2px 8px', borderRadius: '10px', marginLeft: '6px' }}>YOU</span>}
+                      </span>
                     </div>
-                    <span style={{ fontWeight: 800, color: '#60A5FA' }}>{p.score} pts</span>
+                    <span style={{ fontWeight: 800, color: '#2563EB' }}>{p.score} pts</span>
                   </div>
                 );
               })}
+
+              {/* Outside top 5 participant personal row */}
+              {status === 'ended' && myRank && myRank > 5 && myParticipant && (
+                <>
+                  <div style={{ textAlign: 'center', color: '#94A3B8', fontSize: '0.8rem', margin: '2px 0' }}>• • •</div>
+                  <div
+                    style={{
+                      background: '#EFF6FF',
+                      border: '2px solid #2563EB',
+                      borderRadius: '12px', padding: '12px 18px',
+                      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                      boxShadow: '0 4px 12px rgba(37, 99, 235, 0.1)'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontWeight: 800, color: '#2563EB', width: '28px' }}>#{myRank}</span>
+                      <span>{getSmileyForName(myParticipant.name)}</span>
+                      <span style={{ fontWeight: 800, color: '#1D4ED8' }}>
+                        {myParticipant.name}
+                        <span style={{ fontSize: '0.72rem', background: '#2563EB', color: '#FFFFFF', padding: '2px 8px', borderRadius: '10px', marginLeft: '6px' }}>YOU</span>
+                      </span>
+                    </div>
+                    <span style={{ fontWeight: 800, color: '#2563EB' }}>{myFinalScore} pts</span>
+                  </div>
+                </>
+              )}
             </div>
+
           </div>
         </div>
       )}
 
-      {/* ─── FLOATING REACTION BAR ─── */}
+      {/* ─── FLOATING REACTION BAR (Light Enterprise) ─── */}
       {status !== 'ended' && (
         <div style={{
           position: 'fixed', bottom: '20px', left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(15, 23, 42, 0.9)', border: '1px solid #1E293B',
+          background: '#FFFFFF', border: '1.5px solid #E2E8F0',
           borderRadius: '30px', padding: '6px 14px', display: 'flex', gap: '10px',
-          boxShadow: '0 8px 30px rgba(0,0,0,0.5)', zIndex: 100
+          boxShadow: '0 8px 24px rgba(15, 23, 42, 0.12)', zIndex: 100
         }}>
           {['👍', '❤️', '🔥', '🎉', '👏'].map(emoji => (
             <button
               key={emoji}
               onClick={() => sendEmojiReaction(emoji)}
-              style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', padding: '2px' }}
+              style={{ background: 'none', border: 'none', fontSize: '1.4rem', cursor: 'pointer', padding: '2px', transition: 'transform 0.15s ease' }}
+              onMouseDown={(e) => e.currentTarget.style.transform = 'scale(1.25)'}
+              onMouseUp={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              onTouchStart={(e) => e.currentTarget.style.transform = 'scale(1.25)'}
+              onTouchEnd={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
               {emoji}
             </button>

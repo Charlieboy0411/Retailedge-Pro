@@ -64,7 +64,8 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
 
   // Real regional details helper fallback if not explicitly provided
   const getParticipantRegion = (p) => {
-    return p.region || p.zone || '—';
+    const val = p.zone || p.region || p.storeName || p.store;
+    return (val && String(val).trim() !== '' && String(val).trim() !== '—') ? String(val).trim() : 'N/A';
   };
   const getParticipantStore = (p) => {
     return p.storeName || p.location || p.store || '—';
@@ -1064,44 +1065,70 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
   const addQuizResponsesSheet = () => {
     if (workbookType === 'quiz') {
       const tableHeader = [
-        'Participant', 'Employee ID', 'Zone', 'Question',
-        'Final Accepted Answer', 'Result', 'Configured Points',
-        'Points Earned', 'Submission Status'
+        'Participant', 'Employee ID', 'Zone'
       ];
+      questionsList.forEach((q, idx) => {
+        tableHeader.push(`Q${idx + 1} Answer: ${q.text || ''}`);
+        tableHeader.push(`Q${idx + 1} Result`);
+        tableHeader.push(`Q${idx + 1} Points`);
+      });
+      tableHeader.push('Total Points', 'Correct Answers', 'Questions Answered', 'Completion Status');
 
-      const dataRows = [];
-      participants.forEach(p => {
+      const dataRows = leaderboardParticipants.map(p => {
         const zoneStr = getParticipantRegion(p);
-        questionsList.forEach((q, idx) => {
+        const row = [
+          p.name || 'Participant',
+          p.employeeId || 'N/A',
+          zoneStr
+        ];
+
+        questionsList.forEach(q => {
           const resp = (p.responses || []).find(r => r.questionId === q.id);
           const hasAnswer = resp && resp.answer !== undefined && resp.answer !== null && resp.answer !== '' && resp.answer !== 'No Answer';
-          const ansText = hasAnswer ? resp.answer : 'No Answer';
-          const isRight = hasAnswer && ((resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) || checkIsCorrect(q, ansText));
+          const ansText = hasAnswer ? resp.answer : 'Unanswered';
+          const isRight = hasAnswer && ((resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) || checkIsCorrect(q, resp.answer));
           const qPoints = q.points !== undefined && q.points !== null ? Number(q.points) : 100;
           const earned = isRight ? ((resp.points_awarded !== undefined && Number(resp.points_awarded) > 0) ? Number(resp.points_awarded) : qPoints) : 0;
           const result = isRight ? 'Correct' : (hasAnswer ? 'Incorrect' : 'Unanswered');
-          const subStatus = hasAnswer ? 'Submitted' : 'Unanswered';
 
-          dataRows.push([
-            p.name || 'Participant',
-            p.employeeId || 'N/A',
-            zoneStr,
-            `Q${idx + 1}: ${q.text || ''}`,
-            ansText,
-            result,
-            qPoints,
-            earned,
-            subStatus
-          ]);
+          row.push(ansText);
+          row.push(result);
+          row.push(earned);
         });
+
+        row.push(
+          p.earnedPoints,
+          p.correctCount,
+          p.answeredCount,
+          p.statusText
+        );
+
+        return row;
       });
 
       if (dataRows.length === 0) {
-        dataRows.push(['No participants', '—', '—', '—', '—', 'Unanswered', 0, 0, 'Unanswered']);
+        const emptyRow = ['No participants', '—', '—'];
+        questionsList.forEach(() => {
+          emptyRow.push('Unanswered', 'Unanswered', 0);
+        });
+        emptyRow.push(0, 0, 0, 'No Responses');
+        dataRows.push(emptyRow);
       }
 
       const ws = XLSX.utils.aoa_to_sheet([tableHeader, ...dataRows]);
       applyTableFillsAndBorders(ws, 1, 0);
+
+      // Auto-filter
+      ws['!autofilter'] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: 0, c: 0 },
+          e: { r: Math.max(1, dataRows.length), c: tableHeader.length - 1 }
+        })
+      };
+
+      // Freeze header row and identity columns (Participant, Employee ID, Zone)
+      ws['!views'] = [{ state: 'frozen', xSplit: 3, ySplit: 1 }];
+
       XLSX.utils.book_append_sheet(wb, ws, 'Quiz Responses');
       return;
     }
@@ -1372,7 +1399,11 @@ export const generateExcelReport = async (workbookType, sessionData, brandingOpt
       colW.push({ wch: 15 }, { wch: 22 }, { wch: 15 }, { wch: 25 }, { wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 12 }, { wch: 18 }, { wch: 12 });
     } else if (sheetName === 'Quiz Responses') {
       if (workbookType === 'quiz') {
-        colW.push({ wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 45 }, { wch: 28 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 20 });
+        colW.push({ wch: 22 }, { wch: 16 }, { wch: 16 });
+        questionsList.forEach(() => {
+          colW.push({ wch: 32 }, { wch: 14 }, { wch: 12 });
+        });
+        colW.push({ wch: 14 }, { wch: 16 }, { wch: 20 }, { wch: 18 });
       } else {
         colW.push({ wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 20 }, { wch: 22 });
         for (let i = 6; i < 35; i++) {

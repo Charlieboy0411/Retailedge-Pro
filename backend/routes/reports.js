@@ -948,6 +948,8 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
         arenaPoints: p.score !== undefined && p.score !== null ? p.score : pointsEarned,
         timeSpent: `${timeSpentSec}s`,
         completion: `${completionPercentage}%`,
+        zone: p.storeName || null,
+        region: p.storeName || null,
         storeName: p.storeName || null,
         responses: responses.map(r => ({
           questionId: r.questionId,

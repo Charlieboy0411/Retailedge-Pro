@@ -6,7 +6,7 @@ import {
   Play, Users, SkipForward, Square, Trophy, ArrowLeft, ArrowRight, 
   Settings, Maximize2, Minimize, ChevronLeft, ChevronRight, Award, 
   Check, Clock, Sparkles, Shield, Radio, CheckCircle2, AlertCircle,
-  Copy, ExternalLink
+  Copy, ExternalLink, Volume2, VolumeX
 } from 'lucide-react';
 import axios from 'axios';
 import QRCode from 'qrcode';
@@ -58,6 +58,8 @@ export default function HostControlRoom() {
   const [lanBaseUrl, setLanBaseUrl] = useState('');
   const [useLanQr, setUseLanQr] = useState(false);
   const [floatingEmojis, setFloatingEmojis] = useState([]);
+  const [soundEnabled, setSoundEnabled] = useState(false);
+  const celebrationPlayedRef = useRef(false);
 
   // Participant connection metrics
   const [metrics, setMetrics] = useState({ total: 0, waiting: 0, active: 0, disconnected: 0, rejoined: 0 });
@@ -73,7 +75,39 @@ export default function HostControlRoom() {
   const sessionStarted  = useRef(false);
   const roomCodeRef     = useRef('');
 
-  // Fetch public tunnel URL (or LAN fallback)
+  // Audio Fanfare synthesizer (no external assets required, fully browser safe)
+  const playCelebrationFanfare = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const notes = [
+        { freq: 523.25, time: 0.0, dur: 0.14 }, // C5
+        { freq: 659.25, time: 0.14, dur: 0.14 }, // E5
+        { freq: 783.99, time: 0.28, dur: 0.18 }, // G5
+        { freq: 1046.50, time: 0.46, dur: 0.45 }, // C6
+      ];
+      notes.forEach(n => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(n.freq, ctx.currentTime + n.time);
+        gain.gain.setValueAtTime(0.16, ctx.currentTime + n.time);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + n.time + n.dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + n.time);
+        osc.stop(ctx.currentTime + n.time + n.dur);
+      });
+    } catch (e) {
+      // Audio autoplay blocked or unsupported
+    }
+  };
+
+  // Check LAN mode
   useEffect(() => {
     if (!isLocalHost) {
       setJoinBaseUrl(window.location.origin);
@@ -109,7 +143,7 @@ export default function HostControlRoom() {
     return () => clearInterval(interval);
   }, [isLocalHost]);
 
-  // QR fallback timer — only triggers if roomCode actually exists and QR failed to render
+  // QR fallback timer
   useEffect(() => {
     if (qrDataUrl) {
       setQrError(false);
@@ -164,7 +198,6 @@ export default function HostControlRoom() {
       }
     });
 
-    // Canonical session creation event (with legacy fallback)
     const handleSessionCreated = (data) => {
       if (data && data.roomCode) {
         setHostError(null);
@@ -194,7 +227,6 @@ export default function HostControlRoom() {
       setQrError(true);
     });
 
-    // Safety retry interval if connected but roomCode not yet assigned
     const retryTimer = setInterval(() => {
       if (socket && socket.connected && !roomCodeRef.current && !hostErrorRef.current) {
         emitHostStartQuiz(socket);
@@ -218,16 +250,16 @@ export default function HostControlRoom() {
       setParticipants(prev => {
         const exists = prev.find(p => p.id === data.id);
         if (exists) {
-          return prev.map(p => p.id === data.id ? { ...p, ...data, disconnected: false } : p);
+          return prev.map(p => p.id === data.id ? { ...p, ...data, disconnected: false, isOnline: true } : p);
         }
-        return [...prev, { ...data, disconnected: false }];
+        return [...prev, { ...data, disconnected: false, isOnline: true }];
       });
     });
 
     socket.on('participant_disconnected', (data) => {
       setParticipants(prev =>
         prev.map(p => (p.id === data.participantId || p.socketId === data.socketId)
-          ? { ...p, disconnected: true }
+          ? { ...p, disconnected: true, isOnline: false }
           : p
         )
       );
@@ -236,13 +268,12 @@ export default function HostControlRoom() {
     socket.on('participant_reconnected', (data) => {
       setParticipants(prev =>
         prev.map(p => p.id === data.participantId
-          ? { ...p, socketId: data.socketId, disconnected: false }
+          ? { ...p, socketId: data.socketId, disconnected: false, isOnline: true }
           : p
         )
       );
     });
 
-    // Canonical new question event
     const handleNewQuestion = (data) => {
       setStatus('active');
       setCurrentQuestionIndex(data.questionIndex);
@@ -264,7 +295,6 @@ export default function HostControlRoom() {
       setTimeLeft(0);
     });
 
-    // Canonical answer received event (deduplicated by participantId: 1 participant = 1 vote)
     const handleAnswer = (data) => {
       if (!data || !data.participantId) return;
       setLiveAnswers(prev => {
@@ -292,23 +322,38 @@ export default function HostControlRoom() {
       setLeaderboard(data.leaderboard || data || []);
     });
 
-    socket.on('quiz_ended', (data) => {
+    const handleQuizEnded = (data) => {
       setStatus('ended');
       setShowQuestionLeaderboard(true);
       setLeaderboard(data?.leaderboard || []);
-    });
+      if (!celebrationPlayedRef.current) {
+        celebrationPlayedRef.current = true;
+        playCelebrationFanfare();
+      }
+    };
+    socket.on('quiz_ended', handleQuizEnded);
+    socket.on('session_completed', handleQuizEnded);
 
-    // Canonical reaction event
+    // Canonical reaction event: floating emoji with sender name
     const handleReaction = (data) => {
+      if (!data || !data.emoji) return;
       const id = Date.now() + Math.random();
-      const x = Math.floor(Math.random() * 80) + 10;
-      const duration = Math.floor(Math.random() * 2) + 2.5;
-      const scale = (Math.random() * 0.4 + 0.8).toFixed(2);
+      const x = Math.floor(Math.random() * 70) + 15;
+      const duration = 3.0;
+      const scale = (Math.random() * 0.25 + 0.9).toFixed(2);
       
-      setFloatingEmojis(prev => [...prev, { id, emoji: data.emoji, x, duration, scale }]);
+      setFloatingEmojis(prev => [...prev.slice(-14), { 
+        id, 
+        emoji: data.emoji, 
+        senderName: data.senderName || 'Learner', 
+        x, 
+        duration, 
+        scale 
+      }]);
+
       setTimeout(() => {
         setFloatingEmojis(prev => prev.filter(e => e.id !== id));
-      }, duration * 1000 + 200);
+      }, duration * 1000 + 100);
     };
     socket.on('emoji_received', handleReaction);
 
@@ -318,7 +363,6 @@ export default function HostControlRoom() {
     };
   }, [quizId]);
 
-  // Regenerate QR code if roomCode, joinBaseUrl, useLanQr, or lanBaseUrl changes
   useEffect(() => {
     if (roomCode) {
       generateQr(roomCode);
@@ -336,7 +380,6 @@ export default function HostControlRoom() {
       const joinUrl = `${effectiveBase}/join?code=${code}`;
 
       const qrMethod = QRCode?.toDataURL ? QRCode : (QRCode?.default || QRCode);
-      // Step 1: Try Canvas toDataURL
       try {
         if (qrMethod && typeof qrMethod.toDataURL === 'function') {
           const dataUrl = await qrMethod.toDataURL(joinUrl, {
@@ -358,7 +401,6 @@ export default function HostControlRoom() {
         console.warn('Canvas toDataURL failed, attempting SVG fallback:', canvasErr);
       }
 
-      // Step 2: Fallback to SVG string generation (pure vector math, no canvas context required)
       try {
         if (qrMethod && typeof qrMethod.toString === 'function') {
           const svgString = await qrMethod.toString(joinUrl, {
@@ -382,7 +424,6 @@ export default function HostControlRoom() {
         console.warn('SVG toString QR fallback failed:', svgErr);
       }
 
-      // If both methods fail
       setQrError(true);
       setQrLoading(false);
     } catch (err) {
@@ -409,9 +450,11 @@ export default function HostControlRoom() {
   };
 
   const activeQuestion = quiz && currentQuestionIndex >= 0 ? quiz.questions[currentQuestionIndex] : null;
+  const isLastQuestion = quiz && quiz.questions && currentQuestionIndex >= quiz.questions.length - 1;
+  const isFinalLeaderboard = (isLastQuestion && showQuestionLeaderboard) || status === 'ended';
 
   const handleNextQuestion = () => {
-    if (!quiz || !quiz.questions) return;
+    if (!quiz || !quiz.questions || status === 'ended') return;
     const nextIdx = currentQuestionIndex + 1;
     if (nextIdx < quiz.questions.length) {
       socket.emit('host_next_question', {
@@ -431,11 +474,16 @@ export default function HostControlRoom() {
       handleNextQuestion();
       return;
     }
+    if (status === 'ended') {
+      return; // Terminal state
+    }
     if (status === 'active') {
       if (!answerRevealed) {
         revealAnswer();
       } else if (!showQuestionLeaderboard) {
         handleShowLeaderboard();
+      } else if (isLastQuestion) {
+        socket.emit('host_end_session', { roomCode });
       } else {
         handleNextQuestion();
       }
@@ -443,6 +491,7 @@ export default function HostControlRoom() {
   };
 
   const handleLogicalPrev = () => {
+    if (status === 'ended') return;
     if (showQuestionLeaderboard) {
       setShowQuestionLeaderboard(false);
     } else if (answerRevealed) {
@@ -453,7 +502,7 @@ export default function HostControlRoom() {
   };
 
   const handleJumpToQuestion = (idx) => {
-    if (!quiz || !quiz.questions) return;
+    if (!quiz || !quiz.questions || status === 'ended') return;
     socket.emit('host_next_question', {
       roomCode,
       sessionId,
@@ -537,12 +586,22 @@ export default function HostControlRoom() {
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
+  const getNextActionLabel = () => {
+    if (!roomCode) return 'Preparing Live Arena...';
+    if (status === 'waiting') return 'Start Session';
+    if (status === 'ended') return 'Quiz Completed';
+    if (!answerRevealed) return 'Reveal Answer';
+    if (!showQuestionLeaderboard) return 'Leaderboard';
+    if (isLastQuestion) return 'Complete Quiz';
+    return 'Next Question';
+  };
+
   if (!quiz) {
     return (
-      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0B1220', color: '#FFFFFF' }}>
+      <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F8FAFC', color: '#0F172A' }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '16px' }}>
           <div style={{ width: '48px', height: '48px', borderRadius: '50%', border: '3px solid #2563EB', borderTopColor: 'transparent', animation: 'spin 1s linear infinite' }} />
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#93C5FD' }}>Initializing Host Command Center...</h2>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#1E293B' }}>Initializing Host Command Center...</h2>
         </div>
       </div>
     );
@@ -555,17 +614,118 @@ export default function HostControlRoom() {
   const fullJoinLink = roomCode ? `${effectiveBase}/join?code=${roomCode}` : '';
 
   return (
-    <div ref={containerRef} style={{ height: '100vh', width: '100vw', display: 'flex', background: '#0B1220', color: '#FFFFFF', overflow: 'hidden', position: 'relative', fontFamily: 'Manrope, Inter, sans-serif' }}>
+    <div ref={containerRef} style={{ height: '100vh', width: '100vw', display: 'flex', background: '#F8FAFC', color: '#0F172A', overflow: 'hidden', position: 'relative', fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}>
       
+      {/* Inline styles for keyframe animations */}
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes floatUp {
+          0% {
+            opacity: 0;
+            transform: translateY(20px) scale(0.85);
+          }
+          15% {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+          }
+          80% {
+            opacity: 0.95;
+          }
+          100% {
+            opacity: 0;
+            transform: translateY(-380px) scale(1.05);
+          }
+        }
+        @keyframes confettiFall {
+          0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+          100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .confetti-particle { animation: none !important; display: none !important; }
+        }
+      `}</style>
+
+      {/* Floating Reactions Overlay */}
+      <div style={{
+        position: 'absolute',
+        inset: 0,
+        pointerEvents: 'none',
+        overflow: 'hidden',
+        zIndex: 9999
+      }}>
+        {floatingEmojis.map(item => (
+          <div
+            key={item.id}
+            style={{
+              position: 'absolute',
+              bottom: '80px',
+              left: `${item.x}%`,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '6px 12px',
+              borderRadius: '20px',
+              background: '#FFFFFF',
+              border: '1.5px solid #E2E8F0',
+              boxShadow: '0 10px 25px rgba(15, 23, 42, 0.12)',
+              animation: `floatUp ${item.duration}s cubic-bezier(0.22, 1, 0.36, 1) forwards`,
+              transform: `scale(${item.scale})`,
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <span style={{ fontSize: '1.5rem', lineHeight: 1 }}>{item.emoji}</span>
+            {item.senderName && (
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#1E293B' }}>
+                {item.senderName}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* Confetti Celebration for Final Leaderboard */}
+      {status === 'ended' && (
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden', zIndex: 50 }}>
+          {Array.from({ length: 28 }).map((_, i) => {
+            const colors = ['#2563EB', '#10B981', '#F59E0B', '#EC4899', '#8B5CF6', '#06B6D4'];
+            const bg = colors[i % colors.length];
+            const left = `${(i * 3.6 + (i % 5) * 2) % 96}%`;
+            const animDelay = `${(i * 0.16) % 3}s`;
+            const animDuration = `${2.6 + (i % 4) * 0.5}s`;
+            const size = 8 + (i % 3) * 4;
+            return (
+              <span
+                key={i}
+                className="confetti-particle"
+                style={{
+                  position: 'absolute',
+                  top: '-20px',
+                  left,
+                  width: `${size}px`,
+                  height: `${size * 0.75}px`,
+                  background: bg,
+                  borderRadius: i % 2 === 0 ? '2px' : '50%',
+                  opacity: 0.85,
+                  animation: `confettiFall ${animDuration} linear ${animDelay} infinite`
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
       {/* Toast Feedback for Copied Link */}
       {copiedLink && (
         <div style={{
           position: 'fixed',
           top: '24px',
           right: '28px',
-          background: '#065F46',
-          color: '#ECFDF5',
-          border: '1px solid #10B981',
+          background: '#ECFDF5',
+          color: '#065F46',
+          border: '1.5px solid #10B981',
           borderRadius: '10px',
           padding: '12px 20px',
           fontSize: '0.85rem',
@@ -573,11 +733,11 @@ export default function HostControlRoom() {
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          boxShadow: '0 10px 25px rgba(15, 23, 42, 0.12)',
           zIndex: 99999,
           pointerEvents: 'none'
         }}>
-          <Check size={18} style={{ color: '#34D399' }} />
+          <Check size={18} style={{ color: '#10B981' }} />
           <span>Live Arena Join Link Copied to Clipboard!</span>
         </div>
       )}
@@ -588,9 +748,9 @@ export default function HostControlRoom() {
           position: 'fixed',
           top: '24px',
           right: '28px',
-          background: '#065F46',
-          color: '#ECFDF5',
-          border: '1px solid #10B981',
+          background: '#ECFDF5',
+          color: '#065F46',
+          border: '1.5px solid #10B981',
           borderRadius: '10px',
           padding: '12px 20px',
           fontSize: '0.85rem',
@@ -598,28 +758,29 @@ export default function HostControlRoom() {
           display: 'flex',
           alignItems: 'center',
           gap: '10px',
-          boxShadow: '0 10px 25px rgba(0,0,0,0.5)',
+          boxShadow: '0 10px 25px rgba(15, 23, 42, 0.12)',
           zIndex: 99999,
           pointerEvents: 'none'
         }}>
-          <Check size={18} style={{ color: '#34D399' }} />
+          <Check size={18} style={{ color: '#10B981' }} />
           <span>Session PIN ({formattedRoomCode}) Copied to Clipboard!</span>
         </div>
       )}
 
-      {/* ─── LEFT SIDEBAR (Dark Navy #0F172A) ─── */}
+      {/* ─── LEFT SIDEBAR (Light Enterprise Corporate Card) ─── */}
       <aside style={{
-        width: '320px', background: '#0F172A', borderRight: '1px solid #1E293B',
+        width: '320px', background: '#FFFFFF', borderRight: '1px solid #E2E8F0',
         display: 'flex', flexDirection: 'column', alignItems: 'center',
-        padding: '36px 24px', flexShrink: 0, zIndex: 10, justifyContent: 'space-between'
+        padding: '32px 24px', flexShrink: 0, zIndex: 10, justifyContent: 'space-between',
+        boxShadow: '2px 0 16px rgba(15, 23, 42, 0.04)'
       }}>
         {/* Brand & QR Container */}
         <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '24px' }}>
-            <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.1rem', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '22px' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 900, fontSize: '1.15rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
               RETAILEDGE
             </span>
-            <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 900, fontSize: '1.1rem', color: '#2563EB' }}>
+            <span style={{ fontFamily: 'Inter, sans-serif', fontWeight: 900, fontSize: '1.15rem', color: '#2563EB' }}>
               PRO
             </span>
           </div>
@@ -630,7 +791,8 @@ export default function HostControlRoom() {
             title={fullJoinLink ? "Click to open Live Arena Join page directly in a new tab" : "QR Code"}
             style={{
               background: '#FFFFFF', padding: '16px', borderRadius: '16px',
-              boxShadow: '0 10px 30px rgba(0, 0, 0, 0.4)', display: 'flex',
+              border: '1px solid #E2E8F0',
+              boxShadow: '0 6px 20px rgba(15, 23, 42, 0.08)', display: 'flex',
               flexDirection: 'column', alignItems: 'center', marginBottom: '10px',
               cursor: fullJoinLink ? 'pointer' : 'default',
               transition: 'transform 0.15s ease, box-shadow 0.15s ease'
@@ -680,16 +842,16 @@ export default function HostControlRoom() {
             )}
           </div>
 
-          <div style={{ fontSize: '0.72rem', color: '#94A3B8', fontWeight: 600, textAlign: 'center', marginBottom: '14px' }}>
-            Scan with smartphone camera or <span onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')} style={{ color: '#38BDF8', textDecoration: 'underline', cursor: 'pointer' }}>click to open ↗</span>
+          <div style={{ fontSize: '0.75rem', color: '#64748B', fontWeight: 600, textAlign: 'center', marginBottom: '16px' }}>
+            Scan with camera or <span onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')} style={{ color: '#2563EB', textDecoration: 'underline', cursor: 'pointer', fontWeight: 700 }}>open directly ↗</span>
           </div>
 
           {/* Room PIN Display */}
-          <div style={{ background: '#162033', border: '1px solid #1E293B', borderRadius: '12px', padding: '12px 20px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '12px 18px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
             <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '2px' }}>
               Session PIN
             </div>
-            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#2563EB', letterSpacing: '3px', fontFamily: 'monospace' }}>
+            <div style={{ fontSize: '2rem', fontWeight: 900, color: '#2563EB', letterSpacing: '2px', fontFamily: 'monospace' }}>
               {formattedRoomCode}
             </div>
             {roomCode && (
@@ -702,26 +864,26 @@ export default function HostControlRoom() {
                   style={{
                     marginTop: '10px',
                     width: '100%',
-                    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                    background: '#2563EB',
                     border: 'none',
                     borderRadius: '8px',
                     padding: '9px 10px',
                     color: '#FFFFFF',
                     fontSize: '0.78rem',
-                    fontWeight: 800,
+                    fontWeight: 700,
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '6px',
-                    boxShadow: '0 4px 12px rgba(37, 99, 235, 0.35)',
+                    boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)',
                     transition: 'all 0.15s'
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.92'}
-                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                  onMouseEnter={(e) => e.currentTarget.style.background = '#1D4ED8'}
+                  onMouseLeave={(e) => e.currentTarget.style.background = '#2563EB'}
                 >
                   <ExternalLink size={14} />
-                  <span>Open Join Link (New Tab) ↗</span>
+                  <span>Open Join Link ↗</span>
                 </button>
 
                 {/* Secondary: Copy Link Button */}
@@ -735,11 +897,11 @@ export default function HostControlRoom() {
                   style={{
                     marginTop: '6px',
                     width: '100%',
-                    background: copiedLink ? '#065F46' : 'rgba(37, 99, 235, 0.12)',
-                    border: `1px solid ${copiedLink ? '#10B981' : 'rgba(37, 99, 235, 0.3)'}`,
+                    background: copiedLink ? '#ECFDF5' : '#F1F5F9',
+                    border: `1px solid ${copiedLink ? '#10B981' : '#CBD5E1'}`,
                     borderRadius: '8px',
                     padding: '7px 10px',
-                    color: copiedLink ? '#34D399' : '#93C5FD',
+                    color: copiedLink ? '#065F46' : '#1E293B',
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -751,28 +913,28 @@ export default function HostControlRoom() {
                   }}
                 >
                   {copiedLink ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedLink ? 'Link Copied to Clipboard!' : 'Copy Live Join Link'}</span>
+                  <span>{copiedLink ? 'Link Copied!' : 'Copy Join Link'}</span>
                 </button>
 
-                {/* Direct Link Preview with quick open */}
+                {/* Direct Link Preview */}
                 <div 
                   onClick={() => fullJoinLink && window.open(fullJoinLink, '_blank', 'noopener,noreferrer')}
                   title="Click to directly open join page in a new tab"
                   style={{ 
-                    marginTop: '6px', padding: '6px 10px', background: '#0F172A', borderRadius: '6px', 
-                    border: '1px solid #1E293B', display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+                    marginTop: '6px', padding: '6px 10px', background: '#FFFFFF', borderRadius: '6px', 
+                    border: '1px solid #E2E8F0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
                     gap: '6px', cursor: 'pointer', transition: 'border-color 0.2s' 
                   }}
-                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#38BDF8'}
-                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#1E293B'}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = '#2563EB'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = '#E2E8F0'}
                 >
                   <span 
                     title={fullJoinLink}
-                    style={{ fontSize: '0.68rem', color: '#94A3B8', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', flex: 1 }}
+                    style={{ fontSize: '0.68rem', color: '#64748B', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'left', flex: 1 }}
                   >
                     {fullJoinLink.replace(/^https?:\/\//, '')}
                   </span>
-                  <ExternalLink size={13} style={{ color: '#38BDF8', flexShrink: 0 }} />
+                  <ExternalLink size={13} style={{ color: '#2563EB', flexShrink: 0 }} />
                 </div>
               </>
             )}
@@ -780,41 +942,41 @@ export default function HostControlRoom() {
         </div>
 
         {/* Live Metrics Counter */}
-        <div style={{ width: '100%', background: '#162033', borderRadius: '12px', border: '1px solid #1E293B', padding: '14px' }}>
+        <div style={{ width: '100%', background: '#F8FAFC', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '14px', boxSizing: 'border-box' }}>
           <div style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: '10px', textAlign: 'center' }}>
             Live Participant Roster
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-            <div style={{ background: '#0F172A', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #1E293B' }}>
-              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#06B6D4' }}>{Math.max(metrics.total || 0, participants.length)}</div>
-              <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 600 }}>Total Joined</div>
+            <div style={{ background: '#FFFFFF', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
+              <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#2563EB' }}>{Math.max(metrics.total || 0, participants.length)}</div>
+              <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600 }}>Total Joined</div>
             </div>
-            <div style={{ background: '#0F172A', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #1E293B' }}>
+            <div style={{ background: '#FFFFFF', borderRadius: '8px', padding: '8px', textAlign: 'center', border: '1px solid #E2E8F0' }}>
               <div style={{ fontSize: '1.25rem', fontWeight: 800, color: '#10B981' }}>{Math.max(metrics.active || 0, participants.filter(p => !p.disconnected).length)}</div>
-              <div style={{ fontSize: '0.65rem', color: '#94A3B8', fontWeight: 600 }}>Active Now</div>
+              <div style={{ fontSize: '0.65rem', color: '#64748B', fontWeight: 600 }}>Active Now</div>
             </div>
           </div>
         </div>
       </aside>
 
-      {/* ─── MAIN PRESENTATION CANVAS ─── */}
+      {/* ─── MAIN PRESENTATION CANVAS (Light Enterprise Theme) ─── */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '36px 48px', overflow: 'hidden', position: 'relative' }}>
         
         {/* Top Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
             <button 
               onClick={() => navigate('/dashboard')}
               style={{
-                width: '40px', height: '40px', borderRadius: '50%', background: '#162033',
-                border: '1px solid #1E293B', color: '#FFFFFF', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer'
+                width: '40px', height: '40px', borderRadius: '10px', background: '#FFFFFF',
+                border: '1px solid #E2E8F0', color: '#1E293B', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)'
               }}
               title="Exit Presenter Room"
             >
               <ChevronLeft size={20} />
             </button>
-            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#FFFFFF', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0F172A', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
               {status === 'waiting' && 'Live Arena Lobby'}
               {status === 'active' && !showQuestionLeaderboard && `Question ${currentQuestionIndex + 1} of ${quiz.questions.length}`}
               {(showQuestionLeaderboard || status === 'ended') && 'Session Leaderboard'}
@@ -822,7 +984,27 @@ export default function HostControlRoom() {
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#162033', border: '1px solid #1E293B', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700, color: '#10B981' }}>
+            {/* Sound Toggle */}
+            <button
+              onClick={() => {
+                const nextVal = !soundEnabled;
+                setSoundEnabled(nextVal);
+                if (nextVal) playCelebrationFanfare();
+              }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', background: '#FFFFFF',
+                border: '1px solid #E2E8F0', padding: '6px 12px', borderRadius: '20px',
+                fontSize: '0.82rem', fontWeight: 600, color: soundEnabled ? '#2563EB' : '#64748B',
+                cursor: 'pointer', boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)'
+              }}
+              title={soundEnabled ? "Mute celebration fanfare" : "Enable celebration fanfare"}
+            >
+              {soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+              <span>{soundEnabled ? 'Fanfare On' : 'Sound Off'}</span>
+            </button>
+
+            {/* Learners Badge */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', background: '#ECFDF5', border: '1px solid #A7F3D0', padding: '6px 14px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 700, color: '#065F46' }}>
               <Users size={16} />
               <span>{participants.length} Learners</span>
             </div>
@@ -836,13 +1018,13 @@ export default function HostControlRoom() {
           {status === 'waiting' && (
             hostError ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', textAlign: 'center' }}>
-                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(239, 68, 68, 0.15)', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' }}>
+                <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: '#FEF2F2', color: '#EF4444', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px', border: '1px solid #FCA5A5' }}>
                   <AlertCircle size={32} />
                 </div>
-                <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#F87171', marginBottom: '12px' }}>
+                <h1 style={{ fontSize: '1.85rem', fontWeight: 800, color: '#991B1B', marginBottom: '12px' }}>
                   Unable to Initialize Live Arena
                 </h1>
-                <p style={{ fontSize: '1.05rem', color: '#94A3B8', maxWidth: '560px', marginBottom: '28px', lineHeight: 1.6 }}>
+                <p style={{ fontSize: '1rem', color: '#64748B', maxWidth: '560px', marginBottom: '28px', lineHeight: 1.6 }}>
                   {hostError}
                 </p>
                 <div style={{ display: 'flex', gap: '12px' }}>
@@ -860,7 +1042,7 @@ export default function HostControlRoom() {
                       setQrError(false);
                       emitHostStartQuiz(socket);
                     }}
-                    style={{ background: 'transparent', color: '#93C5FD', border: '1px solid #3B82F6', borderRadius: '8px', padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' }}
+                    style={{ background: '#FFFFFF', color: '#2563EB', border: '1px solid #CBD5E1', borderRadius: '8px', padding: '10px 24px', fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer' }}
                   >
                     Retry Connection
                   </button>
@@ -873,50 +1055,52 @@ export default function HostControlRoom() {
                     width: '84px',
                     height: '84px',
                     borderRadius: '24px',
-                    background: 'rgba(37, 99, 235, 0.1)',
-                    border: '1.5px solid rgba(37, 99, 235, 0.25)',
-                    color: '#60A5FA',
+                    background: '#EFF6FF',
+                    border: '1.5px solid #BFDBFE',
+                    color: '#2563EB',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    marginBottom: '24px'
+                    marginBottom: '24px',
+                    boxShadow: '0 8px 24px rgba(37, 99, 235, 0.08)'
                   }}>
                     <Radio size={40} />
                   </div>
-                  <h1 style={{ fontSize: '2.5rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '12px', letterSpacing: '-0.02em' }}>
+                  <h1 style={{ fontSize: '2.4rem', fontWeight: 800, color: '#0F172A', marginBottom: '12px', letterSpacing: '-0.02em' }}>
                     Live Presentation Lobby
                   </h1>
-                  <p style={{ fontSize: '1.15rem', color: '#94A3B8', maxWidth: '540px', lineHeight: 1.6, margin: '0 0 32px 0' }}>
+                  <p style={{ fontSize: '1.1rem', color: '#64748B', maxWidth: '540px', lineHeight: 1.6, margin: '0 0 32px 0' }}>
                     Scan the QR code on the sidebar or enter Session PIN to connect to the Live Arena.
                   </p>
                   <div style={{
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: '10px',
-                    background: '#162033',
-                    border: '1px solid #1E293B',
+                    background: '#FFFFFF',
+                    border: '1px solid #E2E8F0',
                     borderRadius: '30px',
                     padding: '8px 24px',
-                    color: '#60A5FA',
+                    color: '#2563EB',
                     fontSize: '0.9rem',
-                    fontWeight: 600
+                    fontWeight: 700,
+                    boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)'
                   }}>
-                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#3B82F6', display: 'inline-block' }} />
+                    <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#2563EB', display: 'inline-block' }} />
                     <span>Awaiting learner connections...</span>
                   </div>
                 </div>
               ) : (
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', width: '100%', padding: '10px 0', boxSizing: 'border-box' }}>
                   {/* Header status strip */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #1E293B' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', paddingBottom: '16px', borderBottom: '1px solid #E2E8F0' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                      <span style={{ fontSize: '1.5rem', fontWeight: 800, color: '#FFFFFF' }}>
+                      <span style={{ fontSize: '1.45rem', fontWeight: 800, color: '#0F172A' }}>
                         Connected Associates
                       </span>
                       <span style={{
-                        background: 'rgba(37, 99, 235, 0.2)',
-                        border: '1px solid #2563EB',
-                        color: '#93C5FD',
+                        background: '#EFF6FF',
+                        border: '1px solid #BFDBFE',
+                        color: '#2563EB',
                         fontSize: '0.9rem',
                         fontWeight: 800,
                         padding: '3px 12px',
@@ -925,7 +1109,7 @@ export default function HostControlRoom() {
                         {participants.length}
                       </span>
                     </div>
-                    <div style={{ fontSize: '0.9rem', color: '#94A3B8', fontWeight: 600 }}>
+                    <div style={{ fontSize: '0.9rem', color: '#64748B', fontWeight: 600 }}>
                       Click <strong>Start Session</strong> below when all participants are ready
                     </div>
                   </div>
@@ -935,41 +1119,41 @@ export default function HostControlRoom() {
                     const count = participants.length;
                     let gridStyle = {
                       display: 'grid',
-                      gap: '20px',
+                      gap: '16px',
                       width: '100%',
                       alignContent: 'center',
                       justifyContent: 'center',
-                      gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))'
+                      gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))'
                     };
-                    let nameSize = '2.4rem';
-                    let avatarSize = '3rem';
-                    let cardPadding = '24px 32px';
-                    let cardMinHeight = '110px';
+                    let nameSize = '2.1rem';
+                    let avatarSize = '2.8rem';
+                    let cardPadding = '22px 28px';
+                    let cardMinHeight = '100px';
 
                     if (count <= 3) {
                       gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(360px, 1fr))';
-                      nameSize = '2.5rem';
-                      avatarSize = '3.4rem';
+                      nameSize = '2.4rem';
+                      avatarSize = '3.2rem';
                       cardPadding = '28px 36px';
-                      cardMinHeight = '130px';
+                      cardMinHeight = '120px';
                     } else if (count <= 8) {
-                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(300px, 1fr))';
-                      nameSize = '1.85rem';
-                      avatarSize = '2.5rem';
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(290px, 1fr))';
+                      nameSize = '1.75rem';
+                      avatarSize = '2.4rem';
                       cardPadding = '18px 24px';
-                      cardMinHeight = '90px';
+                      cardMinHeight = '86px';
                     } else if (count <= 20) {
-                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(230px, 1fr))';
-                      nameSize = '1.35rem';
+                      gridStyle.gridTemplateColumns = 'repeat(auto-fit, minmax(220px, 1fr))';
+                      nameSize = '1.3rem';
                       avatarSize = '1.8rem';
                       cardPadding = '14px 18px';
-                      cardMinHeight = '70px';
+                      cardMinHeight = '68px';
                     } else {
                       gridStyle.gridTemplateColumns = 'repeat(auto-fill, minmax(170px, 1fr))';
-                      nameSize = '1.1rem';
+                      nameSize = '1.05rem';
                       avatarSize = '1.4rem';
                       cardPadding = '10px 14px';
-                      cardMinHeight = '54px';
+                      cardMinHeight = '52px';
                     }
 
                     return (
@@ -980,14 +1164,13 @@ export default function HostControlRoom() {
                             style={{
                               display: 'flex',
                               alignItems: 'center',
-                              gap: '16px',
-                              background: p.disconnected ? 'rgba(30, 41, 59, 0.45)' : 'rgba(22, 32, 51, 0.75)',
-                              border: `1.5px solid ${p.disconnected ? '#334155' : 'rgba(59, 130, 246, 0.25)'}`,
+                              gap: '14px',
+                              background: p.disconnected ? '#F8FAFC' : '#FFFFFF',
+                              border: `1.5px solid ${p.disconnected ? '#E2E8F0' : '#CBD5E1'}`,
                               borderRadius: '16px',
                               padding: cardPadding,
                               minHeight: cardMinHeight,
-                              boxShadow: '0 8px 24px rgba(0, 0, 0, 0.3)',
-                              backdropFilter: 'blur(8px)',
+                              boxShadow: '0 4px 14px rgba(15, 23, 42, 0.05)',
                               transition: 'all 0.2s ease',
                               boxSizing: 'border-box'
                             }}
@@ -1000,7 +1183,7 @@ export default function HostControlRoom() {
                                 <span style={{
                                   fontSize: nameSize,
                                   fontWeight: 800,
-                                  color: p.disconnected ? '#94A3B8' : '#FFFFFF',
+                                  color: p.disconnected ? '#94A3B8' : '#0F172A',
                                   letterSpacing: '-0.02em',
                                   overflow: 'hidden',
                                   textOverflow: 'ellipsis',
@@ -1008,11 +1191,11 @@ export default function HostControlRoom() {
                                 }}>
                                   {p.name}
                                 </span>
-                                {p.disconnected && (
+                                {p.disconnected ? (
                                   <span style={{
                                     fontSize: '0.68rem',
-                                    background: '#EF4444',
-                                    color: '#FFF',
+                                    background: '#FEE2E2',
+                                    color: '#991B1B',
                                     padding: '2px 8px',
                                     borderRadius: '10px',
                                     fontWeight: 800,
@@ -1020,12 +1203,21 @@ export default function HostControlRoom() {
                                   }}>
                                     Offline
                                   </span>
+                                ) : (
+                                  <span style={{
+                                    width: '8px',
+                                    height: '8px',
+                                    borderRadius: '50%',
+                                    background: '#10B981',
+                                    display: 'inline-block',
+                                    flexShrink: 0
+                                  }} title="Online" />
                                 )}
                               </div>
                               {(p.employeeId || p.zone || p.storeName) && (
                                 <div style={{
                                   fontSize: count <= 8 ? '0.85rem' : '0.72rem',
-                                  color: '#94A3B8',
+                                  color: '#64748B',
                                   fontWeight: 600,
                                   marginTop: '4px',
                                   overflow: 'hidden',
@@ -1046,23 +1238,23 @@ export default function HostControlRoom() {
             )
           )}
 
-          {/* B. ACTIVE QUESTION CANVAS */}
+          {/* B. ACTIVE QUESTION CANVAS (Light Enterprise) */}
           {status === 'active' && !showQuestionLeaderboard && activeQuestion && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '28px', maxWidth: '900px', margin: '0 auto', width: '100%' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '920px', margin: '0 auto', width: '100%' }}>
               
               {/* Question Header Card */}
-              <div style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '16px', padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', boxShadow: '0 10px 30px rgba(0,0,0,0.3)' }}>
-                <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: '#FFFFFF', margin: 0, lineHeight: 1.3, flex: 1 }}>
+              <div style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px', padding: '28px 32px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '20px', boxShadow: '0 6px 20px rgba(15, 23, 42, 0.05)' }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 800, color: '#0F172A', margin: 0, lineHeight: 1.35, flex: 1 }}>
                   {activeQuestion.text}
                 </h1>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                   <div style={{
-                    background: 'rgba(37, 99, 235, 0.15)',
-                    border: '1.5px solid #2563EB',
-                    color: '#60A5FA',
+                    background: '#EFF6FF',
+                    border: '1.5px solid #BFDBFE',
+                    color: '#2563EB',
                     padding: '8px 16px',
                     borderRadius: '12px',
-                    fontSize: '1.05rem',
+                    fontSize: '1rem',
                     fontWeight: 800
                   }}>
                     {activeQuestion.points ?? 100} Points
@@ -1070,10 +1262,10 @@ export default function HostControlRoom() {
                   {activeQuestion.time_limit && !answerRevealed && (
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: '8px',
-                      background: timeLeft <= 5 ? 'rgba(239, 68, 68, 0.15)' : 'rgba(245, 158, 11, 0.15)',
-                      border: `1.5px solid ${timeLeft <= 5 ? '#EF4444' : '#F59E0B'}`,
-                      color: timeLeft <= 5 ? '#EF4444' : '#F59E0B',
-                      padding: '8px 16px', borderRadius: '12px', fontSize: '1.3rem', fontWeight: 800
+                      background: timeLeft <= 5 ? '#FEF2F2' : '#FFFBEB',
+                      border: `1.5px solid ${timeLeft <= 5 ? '#F87171' : '#FCD34D'}`,
+                      color: timeLeft <= 5 ? '#DC2626' : '#B45309',
+                      padding: '8px 16px', borderRadius: '12px', fontSize: '1.25rem', fontWeight: 800
                     }}>
                       <Clock size={20} />
                       <span>{timeLeft}s</span>
@@ -1095,20 +1287,21 @@ export default function HostControlRoom() {
                     <div
                       key={i}
                       style={{
-                        background: '#111827',
-                        border: `2px solid ${answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#1E293B'}`,
-                        borderRadius: '12px', padding: '16px 20px',
+                        background: answerRevealed ? (isCorrect ? '#ECFDF5' : '#FFFFFF') : '#FFFFFF',
+                        border: `2px solid ${answerRevealed ? (isCorrect ? '#10B981' : '#E2E8F0') : '#E2E8F0'}`,
+                        borderRadius: '14px', padding: '16px 22px',
                         display: 'flex', flexDirection: 'column', gap: '10px',
-                        boxShadow: answerRevealed && isCorrect ? '0 0 25px rgba(16, 185, 129, 0.25)' : 'none',
+                        boxShadow: answerRevealed && isCorrect ? '0 0 20px rgba(16, 185, 129, 0.2)' : '0 2px 8px rgba(15, 23, 42, 0.04)',
                         transition: 'all 0.2s ease'
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '1.1rem', fontWeight: 700, color: answerRevealed && isCorrect ? '#10B981' : '#FFFFFF' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', fontSize: '1.1rem', fontWeight: 700, color: answerRevealed && isCorrect ? '#065F46' : '#0F172A' }}>
                           <span style={{
                             width: '32px', height: '32px', borderRadius: '8px',
-                            background: answerRevealed ? (isCorrect ? '#10B981' : '#1E293B') : '#2563EB',
-                            color: '#FFFFFF', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            background: answerRevealed ? (isCorrect ? '#10B981' : '#F1F5F9') : '#2563EB',
+                            color: answerRevealed ? (isCorrect ? '#FFFFFF' : '#64748B') : '#FFFFFF', 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
                             fontSize: '0.9rem', fontWeight: 800
                           }}>
                             {letter}
@@ -1119,7 +1312,7 @@ export default function HostControlRoom() {
                           )}
                         </div>
                         {answerRevealed && (
-                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: isCorrect ? '#10B981' : '#94A3B8' }}>
+                          <div style={{ fontSize: '0.95rem', fontWeight: 700, color: isCorrect ? '#065F46' : '#64748B' }}>
                             {percentage}% ({votes} {votes === 1 ? 'vote' : 'votes'})
                           </div>
                         )}
@@ -1127,11 +1320,11 @@ export default function HostControlRoom() {
 
                       {/* Live Distribution Progress Bar */}
                       {answerRevealed && (
-                        <div style={{ width: '100%', height: '8px', background: '#0B1220', borderRadius: '4px', overflow: 'hidden' }}>
+                        <div style={{ width: '100%', height: '8px', background: '#F1F5F9', borderRadius: '4px', overflow: 'hidden' }}>
                           <div 
                             style={{
                               width: `${percentage}%`, height: '100%',
-                              background: isCorrect ? '#10B981' : '#3B82F6',
+                              background: isCorrect ? '#10B981' : '#94A3B8',
                               borderRadius: '4px', transition: 'width 0.6s ease'
                             }} 
                           />
@@ -1145,13 +1338,13 @@ export default function HostControlRoom() {
             </div>
           )}
 
-          {/* C. LEADERBOARD / PODIUM */}
+          {/* C. LEADERBOARD / PODIUM (Light Enterprise) */}
           {(showQuestionLeaderboard || status === 'ended') && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '800px', margin: '0 auto', width: '100%' }}>
-              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: 'rgba(245, 158, 11, 0.15)', color: '#F59E0B', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' }}>
-                <Trophy size={32} />
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', maxWidth: '840px', margin: '0 auto', width: '100%' }}>
+              <div style={{ width: '56px', height: '56px', borderRadius: '16px', background: '#FEF3C7', color: '#D97706', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', border: '1px solid #FCD34D' }}>
+                <Trophy size={30} />
               </div>
-              <h1 style={{ fontSize: '2.2rem', fontWeight: 800, color: '#FFFFFF', marginBottom: '32px', textAlign: 'center' }}>
+              <h1 style={{ fontSize: '2.1rem', fontWeight: 800, color: '#0F172A', marginBottom: '28px', textAlign: 'center' }}>
                 {status === 'ended' ? 'Final Session Champions' : 'Interim Leaderboard Standings'}
               </h1>
 
@@ -1159,31 +1352,31 @@ export default function HostControlRoom() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.15fr 1fr', gap: '16px', width: '100%', marginBottom: '28px', alignItems: 'flex-end' }}>
                 {/* Rank 2: Silver */}
                 {leaderboard[1] && (
-                  <div style={{ background: '#111827', border: '2px solid #94A3B8', borderRadius: '14px', padding: '20px 16px', textAlign: 'center' }}>
+                  <div style={{ background: '#FFFFFF', border: '2px solid #CBD5E1', borderRadius: '16px', padding: '20px 16px', textAlign: 'center', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)' }}>
                     <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>🥈</div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94A3B8', textTransform: 'uppercase' }}>Rank 2</div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF', margin: '6px 0 2px' }}>{leaderboard[1].name}</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#93C5FD' }}>{leaderboard[1].score} pts</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase' }}>Rank 2</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0F172A', margin: '6px 0 2px' }}>{leaderboard[1].name}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563EB' }}>{leaderboard[1].score} pts</div>
                   </div>
                 )}
 
-                {/* Rank 1: Gold */}
+                {/* Rank 1: Gold Champion */}
                 {leaderboard[0] && (
-                  <div style={{ background: '#162033', border: '2.5px solid #F59E0B', borderRadius: '16px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 10px 30px rgba(245, 158, 11, 0.2)' }}>
-                    <div style={{ fontSize: '2rem', marginBottom: '4px' }}>👑</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#F59E0B', textTransform: 'uppercase' }}>Champion · Rank 1</div>
-                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#FFFFFF', margin: '8px 0 2px' }}>{leaderboard[0].name}</div>
-                    <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#F59E0B' }}>{leaderboard[0].score} pts</div>
+                  <div style={{ background: '#FFFBEB', border: '2.5px solid #F59E0B', borderRadius: '18px', padding: '28px 20px', textAlign: 'center', boxShadow: '0 12px 30px rgba(245, 158, 11, 0.18)' }}>
+                    <div style={{ fontSize: '2.2rem', marginBottom: '4px' }}>👑</div>
+                    <div style={{ fontSize: '0.8rem', fontWeight: 800, color: '#B45309', textTransform: 'uppercase' }}>Champion · Rank 1</div>
+                    <div style={{ fontSize: '1.35rem', fontWeight: 900, color: '#0F172A', margin: '8px 0 2px' }}>{leaderboard[0].name}</div>
+                    <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#B45309' }}>{leaderboard[0].score} pts</div>
                   </div>
                 )}
 
                 {/* Rank 3: Bronze */}
                 {leaderboard[2] && (
-                  <div style={{ background: '#111827', border: '2px solid #D97706', borderRadius: '14px', padding: '20px 16px', textAlign: 'center' }}>
+                  <div style={{ background: '#FFFFFF', border: '2px solid #FDBA74', borderRadius: '16px', padding: '20px 16px', textAlign: 'center', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.05)' }}>
                     <div style={{ fontSize: '1.4rem', marginBottom: '4px' }}>🥉</div>
-                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#D97706', textTransform: 'uppercase' }}>Rank 3</div>
-                    <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#FFFFFF', margin: '6px 0 2px' }}>{leaderboard[2].name}</div>
-                    <div style={{ fontSize: '1.2rem', fontWeight: 900, color: '#93C5FD' }}>{leaderboard[2].score} pts</div>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#C2410C', textTransform: 'uppercase' }}>Rank 3</div>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#0F172A', margin: '6px 0 2px' }}>{leaderboard[2].name}</div>
+                    <div style={{ fontSize: '1.25rem', fontWeight: 900, color: '#2563EB' }}>{leaderboard[2].score} pts</div>
                   </div>
                 )}
               </div>
@@ -1191,12 +1384,12 @@ export default function HostControlRoom() {
               {/* Ranks 4+ Table */}
               <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {leaderboard.slice(3, 10).map((p, i) => (
-                  <div key={p.id || i} style={{ background: '#111827', border: '1px solid #1E293B', borderRadius: '10px', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={p.id || i} style={{ background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '12px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 8px rgba(15, 23, 42, 0.04)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                       <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#64748B', width: '24px' }}>#{i + 4}</span>
-                      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#FFFFFF' }}>{p.name}</span>
+                      <span style={{ fontSize: '0.95rem', fontWeight: 700, color: '#0F172A' }}>{p.name}</span>
                     </div>
-                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#93C5FD' }}>{p.score} pts</span>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: '#2563EB' }}>{p.score} pts</span>
                   </div>
                 ))}
               </div>
@@ -1206,13 +1399,14 @@ export default function HostControlRoom() {
 
         </div>
 
-        {/* ─── FLOATING BOTTOM CONTROLS TOOLBAR ─── */}
+        {/* ─── FLOATING BOTTOM CONTROLS TOOLBAR (Light Enterprise) ─── */}
         <div style={{
           position: 'absolute', bottom: '24px', left: '50%', transform: 'translateX(-50%)',
-          background: '#111827', border: '1px solid #1E293B', borderRadius: '16px',
+          background: '#FFFFFF', border: '1px solid #E2E8F0', borderRadius: '16px',
           padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '12px',
-          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5)', zIndex: 100
+          boxShadow: '0 10px 30px rgba(15, 23, 42, 0.12)', zIndex: 100
         }}>
+          {/* Stop / End Session Button */}
           <button 
             onClick={() => {
               if (window.confirm("End the live quiz session?")) {
@@ -1226,38 +1420,70 @@ export default function HostControlRoom() {
             <Square size={14} fill="#FFFFFF" />
           </button>
 
-          <div style={{ width: '1px', height: '20px', background: '#1E293B' }} />
+          <div style={{ width: '1px', height: '20px', background: '#E2E8F0' }} />
 
+          {/* Prev Action Button */}
           <button 
             onClick={handleLogicalPrev} 
-            disabled={status === 'waiting'}
-            style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 12px', borderRadius: '8px', background: '#162033', border: '1px solid #1E293B', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', opacity: status === 'waiting' ? 0.3 : 1 }}
+            disabled={status === 'waiting' || status === 'ended'}
+            style={{
+              display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '8px',
+              background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#1E293B', fontSize: '0.82rem', fontWeight: 600,
+              cursor: (status === 'waiting' || status === 'ended') ? 'not-allowed' : 'pointer',
+              opacity: (status === 'waiting' || status === 'ended') ? 0.35 : 1
+            }}
           >
             <ArrowLeft size={14} /> Prev
           </button>
 
-          <button 
-            onClick={handleLogicalNext}
-            disabled={!roomCode}
-            style={{
-              display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 18px', borderRadius: '8px',
-              background: !roomCode ? '#334155' : '#2563EB',
-              border: 'none', color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 700,
-              cursor: !roomCode ? 'not-allowed' : 'pointer',
-              opacity: !roomCode ? 0.6 : 1,
-              boxShadow: !roomCode ? 'none' : '0 2px 10px rgba(37, 99, 235, 0.4)'
-            }}
-            title={!roomCode ? "Preparing Live Arena..." : status === 'waiting' ? "Start Session" : "Next Action"}
-          >
-            <span>{!roomCode ? 'Preparing Live Arena...' : status === 'waiting' ? 'Start Session' : !answerRevealed ? 'Reveal Answer' : !showQuestionLeaderboard ? 'Leaderboard' : 'Next Question'}</span>
-            <ArrowRight size={14} />
-          </button>
+          {/* Primary Action Button */}
+          {status === 'ended' ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 20px', borderRadius: '8px',
+              background: '#10B981', color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 800,
+              boxShadow: '0 2px 10px rgba(16, 185, 129, 0.35)'
+            }}>
+              <CheckCircle2 size={16} />
+              <span>Quiz Completed</span>
+            </div>
+          ) : (
+            <button 
+              onClick={handleLogicalNext}
+              disabled={!roomCode}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 20px', borderRadius: '8px',
+                background: !roomCode ? '#94A3B8' : (isFinalLeaderboard ? '#10B981' : '#2563EB'),
+                border: 'none', color: '#FFFFFF', fontSize: '0.85rem', fontWeight: 700,
+                cursor: !roomCode ? 'not-allowed' : 'pointer',
+                opacity: !roomCode ? 0.6 : 1,
+                boxShadow: !roomCode ? 'none' : '0 2px 10px rgba(37, 99, 235, 0.35)'
+              }}
+              title={!roomCode ? "Preparing Live Arena..." : status === 'waiting' ? "Start Session" : isFinalLeaderboard ? "Complete Session" : "Next Action"}
+            >
+              <span>{getNextActionLabel()}</span>
+              {isFinalLeaderboard ? <CheckCircle2 size={15} /> : <ArrowRight size={14} />}
+            </button>
+          )}
 
-          <div style={{ width: '1px', height: '20px', background: '#1E293B' }} />
+          {status === 'ended' && (
+            <button
+              onClick={() => navigate('/dashboard')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '6px', padding: '8px 16px', borderRadius: '8px',
+                background: '#2563EB', border: 'none', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700,
+                cursor: 'pointer', boxShadow: '0 2px 8px rgba(37, 99, 235, 0.25)'
+              }}
+            >
+              <span>Exit to Dashboard</span>
+            </button>
+          )}
 
+          <div style={{ width: '1px', height: '20px', background: '#E2E8F0' }} />
+
+          {/* Fullscreen Button */}
           <button 
             onClick={toggleFullscreen}
-            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#162033', border: '1px solid #1E293B', color: '#94A3B8', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ width: '36px', height: '36px', borderRadius: '8px', background: '#F1F5F9', border: '1px solid #CBD5E1', color: '#475569', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             title="Toggle Fullscreen"
           >
             <Maximize2 size={16} />

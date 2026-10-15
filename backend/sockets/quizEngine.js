@@ -56,12 +56,22 @@ const broadcastMetrics = (io, roomCode, sessionId) => {
   metricsDebounce[roomCode] = setTimeout(() => {
     Participant.findAll({ where: { sessionId } })
       .then(all => {
-        const waiting      = all.filter(p => p.connectionStatus === 'waiting').length;
-        const active       = all.filter(p => p.connectionStatus !== 'disconnected').length;
-        const disconnected = all.filter(p => p.connectionStatus === 'disconnected').length;
-        const rejoined     = all.filter(p => p.connectionStatus === 'rejoined').length;
-        const total        = all.length;
-        io.to(roomCode).emit('participant_metrics', { total, waiting, active, disconnected, rejoined });
+        const activeSockets = roomSockets[roomCode] || {};
+        const activeParticipantIds = new Set(Object.values(activeSockets));
+        const total = all.length;
+        const active = all.filter(p => activeParticipantIds.has(p.id)).length;
+        const disconnected = total - active;
+        const waiting = active;
+        const rejoined = all.filter(p => p.connectionStatus === 'rejoined' && activeParticipantIds.has(p.id)).length;
+        io.to(roomCode).emit('participant_metrics', {
+          total,
+          waiting,
+          active,
+          disconnected,
+          rejoined,
+          totalJoined: total,
+          activeNow: active,
+        });
       })
       .catch(() => {});
   }, 300);
@@ -333,12 +343,19 @@ function quizEngine(io) {
             await session.save();
           }
 
+          const activeSockets = roomSockets[roomCode] || {};
+          const activeParticipantIds = new Set(Object.values(activeSockets));
+
           const participants = await Participant.findAll({ where: { sessionId: session.id } });
           participantsData   = participants.map(p => ({
             id:           p.id,
             name:         p.name,
+            employeeId:   p.employeeId,
+            zone:         p.storeName,
             avatar:       p.avatar || '🙂',
-            disconnected: p.connectionStatus === 'disconnected',
+            score:        p.score || 0,
+            disconnected: !activeParticipantIds.has(p.id),
+            isOnline:     activeParticipantIds.has(p.id),
           }));
 
           if (session.status === 'active' && quiz.questions) {
@@ -426,6 +443,9 @@ function quizEngine(io) {
         if (!roomSockets[cleanCode]) roomSockets[cleanCode] = {};
         socket.join(cleanCode);
 
+        const activeSockets = roomSockets[cleanCode] || {};
+        const activeParticipantIds = new Set(Object.values(activeSockets));
+
         const participants = await Participant.findAll({ where: { sessionId: session.id } });
         const participantsData = participants.map(p => ({
           id:           p.id,
@@ -433,8 +453,9 @@ function quizEngine(io) {
           employeeId:   p.employeeId,
           zone:         p.storeName,
           avatar:       p.avatar || '🙂',
-          score:        p.score,
-          disconnected: p.connectionStatus === 'disconnected',
+          score:        p.score || 0,
+          disconnected: !activeParticipantIds.has(p.id),
+          isOnline:     activeParticipantIds.has(p.id),
         }));
 
         // Send authoritative roster and status update back to host socket
@@ -484,7 +505,19 @@ function quizEngine(io) {
           }
         }
 
+        const quiz = await Quiz.findByPk(session.quizId, {
+          include: [{ model: Question, as: 'questions' }]
+        });
+        const allQuestions = (quiz && quiz.questions) ? [...quiz.questions].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt)) : [];
+        const totalQCount = allQuestions.length || totalQuestions || 1;
+
         const targetIndex = questionIndex !== undefined ? questionIndex : session.current_question_index;
+
+        if (targetIndex >= totalQCount) {
+          logger.info('QuizEngine', cleanCode, session.id, 'Terminal question reached — completing session', { targetIndex, totalQCount });
+          return handleHostEndSession({ roomCode: cleanCode });
+        }
+
         session.status = 'active';
         session.current_question_index = targetIndex + 1;
         if (!session.startedAt) {
@@ -497,17 +530,10 @@ function quizEngine(io) {
           { where: { sessionId: session.id, connectionStatus: 'waiting' } }
         );
 
-        // Authoritative question retrieval: defensive fallback if question is missing/incomplete
-        let activeQuestion = question;
+        let activeQuestion = question || allQuestions[targetIndex];
         if (!activeQuestion || !activeQuestion.id || !activeQuestion.text) {
-          const quiz = await Quiz.findByPk(session.quizId, {
-            include: [{ model: Question, as: 'questions' }]
-          });
-          if (quiz && quiz.questions && quiz.questions.length > 0) {
-            const sorted = [...quiz.questions].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-            activeQuestion = sorted[targetIndex] || sorted[0];
-            totalQuestions = sorted.length;
-          }
+          activeQuestion = allQuestions[targetIndex] || allQuestions[0];
+          totalQuestions = allQuestions.length;
         }
 
         if (!activeQuestion) {
@@ -949,10 +975,19 @@ function quizEngine(io) {
     });
 
     // Participant sends emoji reaction (CANONICAL)
-    socket.on('emoji_reaction', ({ roomCode, emoji }) => {
+    socket.on('emoji_reaction', async ({ roomCode, emoji }) => {
       const cleanCode = (roomCode || '').replace(/\s+/g, '');
-      io.to(cleanCode).emit('emoji_received', { emoji });
-      io.to(cleanCode).emit('reaction_received', { emoji }); // legacy alias
+      const info = socketRoom[socket.id];
+      const participantId = info?.participantId;
+      let senderName = 'Learner';
+      if (participantId) {
+        try {
+          const p = await Participant.findByPk(participantId, { attributes: ['id', 'name'] });
+          if (p && p.name) senderName = p.name;
+        } catch (e) {}
+      }
+      io.to(cleanCode).emit('emoji_received', { emoji, participantId, senderName });
+      io.to(cleanCode).emit('reaction_received', { emoji, participantId, senderName }); // legacy alias
     });
 
     // Handle participant disconnect
@@ -972,6 +1007,15 @@ function quizEngine(io) {
       }
       delete socketRoom[socket.id];
 
+      // Check if participant has another active socket in this room (e.g. refreshed or reconnected)
+      const remainingSockets = roomSockets[roomCode] || {};
+      const stillConnected = Object.values(remainingSockets).includes(participantId);
+
+      if (stillConnected) {
+        logger.info('QuizEngine', roomCode, sessionId, 'Superceded socket disconnected; participant remains online', { participantId, socketId: socket.id });
+        return;
+      }
+
       try {
         const participant = await Participant.findByPk(participantId);
         if (participant && participant.connectionStatus !== 'disconnected') {
@@ -979,7 +1023,7 @@ function quizEngine(io) {
           await participant.save();
         }
         broadcastMetrics(io, roomCode, sessionId);
-        io.to(roomCode).emit('participant_disconnected', { participantId, name: participant?.name });
+        io.to(roomCode).emit('participant_disconnected', { participantId, name: participant?.name, isOnline: false, disconnected: true });
         logger.info('QuizEngine', roomCode, sessionId, 'Participant disconnected', { participantId });
       } catch (err) {
         logger.error('QuizEngine', roomCode, sessionId, 'disconnect handler error', err);
@@ -1015,24 +1059,47 @@ function quizEngine(io) {
           await session.save();
           logger.info('QuizEngine', cleanCode, session.id, 'Quiz session ended');
 
-          const participants = await Participant.findAll({
+          const allParticipants = await Participant.findAll({
             where: { sessionId: session.id },
-            order: [['score', 'DESC']],
-            limit: 10,
+            order: [['score', 'DESC'], ['createdAt', 'ASC']],
           });
-          const leaderboard = participants.map(p => ({
-            id:               p.id,
-            name:             p.name,
-            employeeId:       p.employeeId,
-            zone:             p.storeName,
-            avatar:           p.avatar || '🙂',
-            score:            p.score,
-            connectionStatus: p.connectionStatus,
-          }));
+          const questionsCount = await Question.count({ where: { quizId: session.quizId } });
 
-          // 1. Notify the quiz room that the quiz ended
+          // Compute accurate per-participant correct count and rank
+          const participantIds = allParticipants.map(p => p.id);
+          const allResponses = await Response.findAll({
+            where: { participantId: participantIds }
+          });
+
+          const activeSockets = roomSockets[cleanCode] || {};
+          const activeParticipantIds = new Set(Object.values(activeSockets));
+
+          const leaderboard = allParticipants.map((p, idx) => {
+            const userResponses = allResponses.filter(r => r.participantId === p.id);
+            const correctCount = userResponses.filter(r => (Number(r.points_awarded) > 0) || r.is_correct).length;
+            const answeredCount = userResponses.length;
+
+            return {
+              rank: idx + 1,
+              id: p.id,
+              name: p.name,
+              employeeId: p.employeeId,
+              zone: p.storeName,
+              avatar: p.avatar || '🙂',
+              score: p.score || 0,
+              correctCount,
+              answeredCount,
+              totalQuestions: questionsCount,
+              connectionStatus: p.connectionStatus,
+              disconnected: !activeParticipantIds.has(p.id),
+              isOnline: activeParticipantIds.has(p.id)
+            };
+          });
+
+          // 1. Notify the quiz room that the quiz ended with full leaderboard
           io.to(cleanCode).emit('live_session_finished', { sessionId: session.id, roomCode: cleanCode });
-          io.to(cleanCode).emit('quiz_ended', { leaderboard });
+          io.to(cleanCode).emit('quiz_ended', { leaderboard, totalQuestions: questionsCount, status: 'ended' });
+          io.to(cleanCode).emit('session_completed', { sessionId: session.id, roomCode: cleanCode, leaderboard, totalQuestions: questionsCount });
 
           // 2. Notify all dashboard clients via a dedicated `dashboard_sync` event
           io.emit('dashboard_sync', {
