@@ -120,8 +120,13 @@ export default function ProjectParticipantsPage() {
   const sortedParticipants = [...filteredParticipants].sort((a, b) => {
     let aVal = a[sortField];
     let bVal = b[sortField];
-    if (typeof aVal === 'string') aVal = aVal.toLowerCase();
-    if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+    if (sortField === 'attendanceRate') {
+      aVal = aVal !== null && aVal !== undefined ? aVal : -1;
+      bVal = bVal !== null && bVal !== undefined ? bVal : -1;
+    } else {
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+    }
     if (aVal < bVal) return sortAsc ? -1 : 1;
     if (aVal > bVal) return sortAsc ? 1 : -1;
     return 0;
@@ -141,10 +146,15 @@ export default function ProjectParticipantsPage() {
   const avgScore = totalCount > 0 
     ? Math.round(participants.reduce((sum, p) => sum + (p.quizPercentage || 0), 0) / totalCount) 
     : 0;
-  const avgAttendance = totalCount > 0 
-    ? Math.round(participants.reduce((sum, p) => sum + (p.attendanceRate || 0), 0) / totalCount) 
-    : 0;
+
+  // Only calculate average attendance across participants with authoritative attendance records
+  const participantsWithAttendance = participants.filter(p => p.attendanceRate !== null && p.attendanceRate !== undefined);
+  const avgAttendance = participantsWithAttendance.length > 0 
+    ? Math.round(participantsWithAttendance.reduce((sum, p) => sum + p.attendanceRate, 0) / participantsWithAttendance.length) 
+    : null;
+
   const eligibleCount = participants.filter(p => p.readinessStatus === 'Certification Eligible').length;
+  const pendingAttendanceCount = participants.filter(p => p.readinessStatus === 'Pending Attendance').length;
   const atRiskCount = participants.filter(p => p.readinessStatus === 'At Risk').length;
 
   // Extract unique zones / stores for filter dropdown
@@ -255,10 +265,10 @@ export default function ProjectParticipantsPage() {
           <KpiCard
             icon={MapPin}
             label="ATTENDANCE RATE"
-            value={`${avgAttendance}%`}
-            variant={avgAttendance >= 75 ? 'green' : 'amber'}
-            radialProgress={avgAttendance}
-            subtext="Live & Session Telemetry"
+            value={avgAttendance !== null ? `${avgAttendance}%` : 'N/A'}
+            variant={avgAttendance !== null ? (avgAttendance >= 75 ? 'green' : 'amber') : 'blue'}
+            radialProgress={avgAttendance !== null ? avgAttendance : undefined}
+            subtext={avgAttendance !== null ? "Live & Session Telemetry" : "Telemetry Not Recorded"}
             loading={loading && participants.length === 0}
           />
           <KpiCard
@@ -266,7 +276,11 @@ export default function ProjectParticipantsPage() {
             label="CERTIFICATION ELIGIBLE"
             value={eligibleCount}
             variant="purple"
-            subtext={`${atRiskCount} At Risk for Coaching`}
+            subtext={
+              pendingAttendanceCount > 0
+                ? `${pendingAttendanceCount} Pending Attendance`
+                : `${atRiskCount} At Risk for Coaching`
+            }
             loading={loading && participants.length === 0}
           />
         </div>
@@ -365,6 +379,7 @@ export default function ProjectParticipantsPage() {
                 { id: 'ATTENDED', label: 'Attended (≥75%)' },
                 { id: 'PASSED', label: 'Passed (≥60%)' },
                 { id: 'ELIGIBLE', label: 'Cert Eligible' },
+                { id: 'PENDING', label: 'Pending Attendance' },
                 { id: 'AT_RISK', label: 'At Risk' }
               ].map(f => (
                 <button
@@ -509,12 +524,13 @@ export default function ProjectParticipantsPage() {
                 </thead>
                 <tbody>
                   {sortedParticipants.map((p, idx) => {
-                    const att = p.attendanceRate ?? 100;
+                    const att = p.attendanceRate;
                     const score = p.quizPercentage ?? 0;
                     const isPassed = p.quizPassed;
                     const isCertEligible = p.readinessStatus === 'Certification Eligible';
                     const isAtRisk = p.readinessStatus === 'At Risk';
-                    const statusVariant = isCertEligible ? 'success' : isAtRisk ? 'danger' : 'info';
+                    const isPending = p.readinessStatus === 'Pending Attendance';
+                    const statusVariant = isCertEligible ? 'success' : isAtRisk ? 'danger' : isPending ? 'warning' : 'info';
 
                     return (
                       <tr key={p.id || idx} style={{ borderBottom: '1px solid #E2E8F0', transition: 'background 0.1s' }} className="re-table-row">
@@ -588,17 +604,38 @@ export default function ProjectParticipantsPage() {
 
                         {/* 5. Attendance Rate */}
                         <td style={{ padding: '12px 16px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span style={{
-                              fontWeight: 800,
-                              color: att >= 75 ? '#10B981' : '#F59E0B'
-                            }}>
-                              {att}%
-                            </span>
-                            <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
-                              ({p.trainingStatus || 'Attended'})
-                            </span>
-                          </div>
+                          {att !== null && att !== undefined ? (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{
+                                fontWeight: 800,
+                                color: att >= 75 ? '#10B981' : '#F59E0B'
+                              }}>
+                                {att}%
+                              </span>
+                              <span style={{ fontSize: '0.72rem', color: '#94A3B8' }}>
+                                ({p.trainingStatus || 'Attended'})
+                              </span>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span style={{
+                                fontWeight: 700,
+                                color: '#64748B'
+                              }}>
+                                N/A
+                              </span>
+                              <span style={{
+                                fontSize: '0.72rem',
+                                padding: '2px 7px',
+                                borderRadius: '4px',
+                                background: '#F1F5F9',
+                                color: '#64748B',
+                                fontWeight: 600
+                              }}>
+                                {p.trainingStatus || 'Not Recorded'}
+                              </span>
+                            </div>
+                          )}
                         </td>
 
                         {/* 6. Assessment Performance */}

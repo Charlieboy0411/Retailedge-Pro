@@ -289,11 +289,23 @@ router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'P
       const scorePct = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : (p.score || 0);
 
       const jitsi = (p.employeeId && jitsiMap[p.employeeId]) || (p.name && jitsiMap[p.name]) || (p.userId && jitsiMap[p.userId]);
-      const attendancePct = jitsi?.attendancePercentage !== undefined ? jitsi.attendancePercentage : (p.connectionStatus === 'active' ? 100 : 85);
+      const hasAuthoritativeAttendance = Boolean(jitsi && jitsi.attendancePercentage !== undefined && jitsi.attendancePercentage !== null);
+      const attendancePct = hasAuthoritativeAttendance ? Number(jitsi.attendancePercentage) : null;
+      const trainingStatus = hasAuthoritativeAttendance 
+        ? (jitsi.status || (attendancePct >= 75 ? 'Attended' : 'Incomplete'))
+        : 'Not Recorded';
+
       const passed = scorePct >= 60;
-      const isEligible = attendancePct >= 80 && scorePct >= 70;
-      const isAtRisk = attendancePct < 75 || scorePct < 60;
-      const readinessStatus = isEligible ? 'Certification Eligible' : isAtRisk ? 'At Risk' : 'In Progress';
+
+      let readinessStatus;
+      if (hasAuthoritativeAttendance) {
+        const isEligible = attendancePct >= 80 && scorePct >= 70;
+        const isAtRisk = attendancePct < 75 || scorePct < 60;
+        readinessStatus = isEligible ? 'Certification Eligible' : isAtRisk ? 'At Risk' : 'In Progress';
+      } else {
+        // Telemetry absent: do not infer 100% attendance or certify, but do not falsely penalize quiz passers as genuine 0% attendance
+        readinessStatus = scorePct < 60 ? 'At Risk' : 'Pending Attendance';
+      }
 
       return {
         id: p.id,
@@ -304,7 +316,7 @@ router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'P
         projectId: p.Session?.projectId || p.User?.projectId || projectIds[0],
         projectName: p.Session?.Project?.name || p.User?.Project?.name || 'Assigned Project',
         zoneStore: p.storeName || p.User?.location || 'General',
-        trainingStatus: jitsi?.status || (p.connectionStatus === 'active' ? 'Attended' : 'Registered'),
+        trainingStatus: trainingStatus,
         sessionName: p.Session?.Quiz?.title || p.Session?.Training?.title || 'Launchpad Session',
         quizScore: `${correctCount}/${totalQ}`,
         quizScoreNumber: correctCount,
@@ -312,6 +324,7 @@ router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'P
         quizPercentage: scorePct,
         quizPassed: passed,
         attendanceRate: attendancePct,
+        hasAttendanceRecord: hasAuthoritativeAttendance,
         readinessStatus: readinessStatus,
         createdAt: p.createdAt
       };
@@ -329,10 +342,11 @@ router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'P
     }
     if (status && status !== 'ALL') {
       const s = status.toUpperCase();
-      if (s === 'ATTENDED') list = list.filter(item => item.attendanceRate >= 75);
+      if (s === 'ATTENDED') list = list.filter(item => item.attendanceRate !== null && item.attendanceRate !== undefined && item.attendanceRate >= 75);
       else if (s === 'PASSED') list = list.filter(item => item.quizPassed);
       else if (s === 'ELIGIBLE') list = list.filter(item => item.readinessStatus === 'Certification Eligible');
       else if (s === 'AT_RISK') list = list.filter(item => item.readinessStatus === 'At Risk');
+      else if (s === 'PENDING') list = list.filter(item => item.readinessStatus === 'Pending Attendance');
     }
     if (zone && zone !== 'ALL') {
       list = list.filter(item => item.zoneStore.toLowerCase() === zone.toLowerCase());
