@@ -413,6 +413,11 @@ router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super
 
     const roomCode = `off-${quiz.id.substring(0, 8)}`;
     if (isOffline) {
+      const now = new Date();
+      const isFutureScheduled = finalStartMode === 'scheduled' && finalStartTime && new Date(finalStartTime) > now;
+      const targetStatus = isFutureScheduled ? 'waiting' : 'active';
+      const targetStartedAt = isFutureScheduled ? null : now;
+
       let session = await Session.findOne({ where: { quizId: quiz.id, roomCode } });
       if (!session) {
         await Session.create({
@@ -422,13 +427,23 @@ router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super
           trainingId: quiz.trainingId || null,
           session_name: quiz.title || 'Offline Quiz',
           roomCode: roomCode,
-          status: 'active',
+          status: targetStatus,
           current_question_index: 0,
-          startedAt: new Date()
+          startedAt: targetStartedAt
         });
       } else {
-        if (session.status !== 'active') {
-          session.status = 'active';
+        if (isFutureScheduled) {
+          session.status = 'waiting';
+          session.startedAt = null;
+          session.endedAt = null;
+        } else {
+          if (session.status !== 'active') {
+            session.status = 'active';
+          }
+          if (!session.startedAt) {
+            session.startedAt = now;
+          }
+          session.endedAt = null;
         }
         if (quiz.projectId && session.projectId !== quiz.projectId) {
           session.projectId = quiz.projectId;
@@ -442,7 +457,9 @@ router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super
       const session = await Session.findOne({ where: { quizId: quiz.id, roomCode } });
       if (session && session.status !== 'finished') {
         session.status = 'finished';
-        session.endedAt = new Date();
+        if (!session.endedAt) {
+          session.endedAt = new Date();
+        }
         await session.save();
       }
     }
@@ -580,6 +597,15 @@ router.post('/:id/offline-check-eligibility', async (req, res) => {
       return res.json({ eligible: false, message: 'You have already completed this quiz. Only one submission is allowed.' });
     }
 
+    // Authoritative start event: transition waiting session to active when participant is verified and begins
+    if (session.status === 'waiting') {
+      session.status = 'active';
+      if (!session.startedAt) {
+        session.startedAt = new Date();
+      }
+      await session.save();
+    }
+
     res.json({ eligible: true });
   } catch (err) {
     console.error('Eligibility check error:', err);
@@ -626,6 +652,15 @@ router.post('/:id/offline-submit', async (req, res) => {
     const session = await Session.findOne({ where: { quizId: quiz.id, roomCode } });
     if (!session) {
       return res.status(400).json({ error: 'Offline session not active.' });
+    }
+
+    // Ensure session is marked active upon submission if not already transitioned
+    if (session.status === 'waiting') {
+      session.status = 'active';
+      if (!session.startedAt) {
+        session.startedAt = new Date();
+      }
+      await session.save();
     }
 
     // Check duplicate
