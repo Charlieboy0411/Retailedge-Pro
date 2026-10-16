@@ -28,12 +28,37 @@ router.get('/my-team', async (req, res) => {
   }
 });
 
-// GET /api/users - List all users
+// GET /api/users - List users (Strictly project-scoped for Program Manager)
 router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
-    const { search, role, project, status, designation, location, skills } = req.query;
+    const { search, role, project, projectId, status, designation, location, skills } = req.query;
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
     
     const where = {};
+
+    // Server-side project scoping for Program Manager
+    if (userRole === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const targetProj = projectId || project || 'all';
+
+      // If targetProj is a project name rather than UUID, resolve ID
+      let resolvedTarget = targetProj;
+      if (targetProj !== 'all' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetProj)) {
+        const pMatch = await Project.findOne({ where: { name: targetProj }, attributes: ['id'] });
+        if (pMatch) resolvedTarget = pMatch.id;
+      }
+
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, resolvedTarget, 'all');
+      if (accessibleProjectIds.length === 0) {
+        return res.json([]);
+      }
+      where.projectId = { [Op.in]: accessibleProjectIds };
+    } else {
+      if (projectId) {
+        where.projectId = projectId;
+      }
+    }
+
     if (search) {
       where[Op.or] = [
         { name: { [Op.like]: `%${search}%` } },
@@ -54,7 +79,7 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
     if (role) include.push({ model: Role, where: { role_name: role } });
     else include.push({ model: Role });
     
-    if (project) include.push({ model: Project, where: { name: project } });
+    if (project && userRole !== 'Program Manager') include.push({ model: Project, where: { name: project } });
     else include.push({ model: Project });
     
     include.push({ model: User, as: 'manager', attributes: ['id', 'name'] });
@@ -67,7 +92,9 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
 
     res.json(users);
   } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+    console.error('GET /api/users error:', error);
+    const statusCode = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
+    res.status(statusCode).json({ error: error.message || 'Server error', details: error.message });
   }
 });
 
@@ -162,8 +189,8 @@ router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trai
   }
 });
 
-// POST /api/users - Create new user
-router.post('/', requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+// POST /api/users - Create new user (Admin only)
+router.post('/', requireRole(['Admin', 'Super Admin']), async (req, res) => {
   try {
     let { 
       name, email, password, employee_id, roleName, projectId, 
@@ -216,6 +243,15 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
     
+    // Enforce project authorization for Program Manager
+    if (req.user.role === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!user.projectId || !accessibleProjectIds.includes(user.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to modify users outside your assigned project.' });
+      }
+    }
+
     const updateData = { ...req.body };
     
     if (updateData.roleName) {
@@ -253,8 +289,8 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
   }
 });
 
-// DELETE /api/users/:id - Delete user
-router.delete('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+// DELETE /api/users/:id - Delete user (Admin only)
+router.delete('/:id', requireRole(['Admin', 'Super Admin']), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -297,8 +333,8 @@ router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manag
   }
 });
 
-// POST /api/users/bulk-upload - Parse and import CSV rows
-router.post('/bulk-upload', requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+// POST /api/users/bulk-upload - Parse and import CSV rows (Admin only)
+router.post('/bulk-upload', requireRole(['Admin', 'Super Admin']), async (req, res) => {
   try {
     const { users } = req.body; 
     if (!Array.isArray(users)) return res.status(400).json({ error: 'Invalid data format. Expected array of users.' });

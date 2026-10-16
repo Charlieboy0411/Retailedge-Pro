@@ -776,6 +776,46 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     console.warn('User lookup warning in getParticipant360:', err.message);
   }
 
+  // 2b. If participant is in Participant table (e.g. joined training/quiz session), look up Participant record
+  let participantRecord = null;
+  if (isUuid) {
+    try {
+      participantRecord = await Participant.findByPk(participantId, {
+        include: [
+          { model: Session, include: [{ model: Project, attributes: ['id', 'name', 'parentId'] }] },
+          { model: User, attributes: ['id', 'name', 'employee_id', 'designation', 'projectId'] }
+        ]
+      });
+    } catch (err) {
+      console.warn('Participant lookup warning in getParticipant360:', err.message);
+    }
+  }
+
+  if (!participantRecord && !user) {
+    try {
+      participantRecord = await Participant.findOne({
+        where: {
+          [Op.or]: [
+            { employeeId: participantId },
+            { name: participantId }
+          ]
+        },
+        include: [
+          { model: Session, include: [{ model: Project, attributes: ['id', 'name', 'parentId'] }] },
+          { model: User, attributes: ['id', 'name', 'employee_id', 'designation', 'projectId'] }
+        ]
+      });
+    } catch (err) {
+      console.warn('Participant lookup warning by name/empId:', err.message);
+    }
+  }
+
+  const effectiveProjectId = user?.projectId || participantRecord?.Session?.projectId || participantRecord?.User?.projectId;
+  const effectiveProjectName = user?.Project?.name || participantRecord?.Session?.Project?.name || 'Assigned Project';
+  const effectiveName = user?.name || participantRecord?.name || participantId;
+  const effectiveEmpId = user?.employee_id || participantRecord?.employeeId || (String(participantId).startsWith('EMP-') || String(participantId).startsWith('GDA') || String(participantId).startsWith('IDO') ? participantId : '—');
+  const effectiveZone = participantRecord?.storeName || user?.location || '—';
+
   // 3a. Supervisor Team Isolation check: Supervisor can ONLY view direct reports
   if (requestingUser && requestingUser.role === 'Supervisor') {
     if (!user || user.managerId !== requestingUser.id) {
@@ -786,16 +826,15 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
   }
 
   // 3b. Client Scope Isolation check: Client can ONLY view participants in their explicitly assigned projects
-  // Enforces 3 dimensions: same authorized project = allowed; unauthorized project (same/diff client) = 403
   if (requestingUser && requestingUser.role === 'Client') {
     const clientService = require('./clientService');
     const clientProjectIds = await clientService.getAccessibleClientProjectIds(requestingUser, 'all', 'all');
-    if (!user || !user.projectId) {
+    if (!effectiveProjectId) {
       const err = new Error('Forbidden: You do not have permission to access this participant.');
       err.status = 403;
       throw err;
     }
-    const userProjects = String(user.projectId).split(',').map(s => s.trim());
+    const userProjects = String(effectiveProjectId).split(',').map(s => s.trim());
     const hasAccess = clientProjectIds.length > 0 && userProjects.some(pid => clientProjectIds.includes(pid));
     if (!hasAccess) {
       const err = new Error('Forbidden: You do not have permission to access this participant.');
@@ -804,20 +843,22 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
     }
   }
 
-  // 3c. Strict Data Isolation check: verify user belongs to an accessible project
-  if (requestingUser?.role !== 'Supervisor' && requestingUser?.role !== 'Client' && accessibleProjectIds && user && user.projectId) {
-    const userProjects = String(user.projectId).split(',').map(s => s.trim());
-    const hasAccess = accessibleProjectIds.length > 0 && userProjects.some(pid => accessibleProjectIds.includes(pid));
-    if (!hasAccess) {
-      const err = new Error('Forbidden: You do not have permission to access this participant.');
-      err.status = 403;
-      throw err;
+  // 3c. Strict Data Isolation check: verify user or participant belongs to an accessible project
+  if (requestingUser?.role !== 'Supervisor' && requestingUser?.role !== 'Client' && requestingUser?.role !== 'Admin' && requestingUser?.role !== 'Super Admin' && accessibleProjectIds && accessibleProjectIds.length > 0) {
+    if (effectiveProjectId) {
+      const userProjects = String(effectiveProjectId).split(',').map(s => s.trim());
+      const hasAccess = accessibleProjectIds.length > 0 && userProjects.some(pid => accessibleProjectIds.includes(pid));
+      if (!hasAccess) {
+        const err = new Error('Forbidden: You do not have permission to access this participant.');
+        err.status = 403;
+        throw err;
+      }
     }
   }
 
   const targetUserUuid = user ? user.id : (isUuid ? participantId : null);
-  const searchName = user ? user.name : participantId;
-  const searchEmpId = user ? user.employee_id : (String(participantId).startsWith('EMP-') ? participantId : null);
+  const searchName = effectiveName;
+  const searchEmpId = effectiveEmpId !== '—' ? effectiveEmpId : null;
 
   // 4. Safe Jitsi attendance lookup
   const jitsiOr = [];
@@ -827,7 +868,7 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
   if (searchEmpId) {
     jitsiOr.push({ employeeId: searchEmpId });
   }
-  if (searchName) {
+  if (searchName && searchName !== participantId) {
     jitsiOr.push({ participantName: searchName });
   }
 
@@ -849,10 +890,15 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
   if (targetUserUuid) {
     quizOr.push({ userId: targetUserUuid });
   }
+  if (participantRecord) {
+    quizOr.push({ id: participantRecord.id });
+  } else if (isUuid) {
+    quizOr.push({ id: participantId });
+  }
   if (searchEmpId) {
     quizOr.push({ employeeId: searchEmpId });
   }
-  if (searchName) {
+  if (searchName && searchName !== participantId) {
     quizOr.push({ name: searchName });
   }
 
@@ -1005,13 +1051,14 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
 
   return {
     profile: {
-      id: user?.id || participantId,
-      name: user ? user.name : participantId,
-      employeeId: user?.employee_id || 'EMP-101',
-      designation: user?.designation || 'Retail Sales Representative',
+      id: user?.id || participantRecord?.id || participantId,
+      name: effectiveName,
+      employeeId: effectiveEmpId,
+      designation: user?.designation || 'Retail Associate',
       client: 'RetailEdge Client',
-      project: user?.Project ? user.Project.name : 'Assigned Project',
-      subproject: user?.Project?.parentId ? user.Project.name : 'General Subproject'
+      project: effectiveProjectName,
+      zoneStore: effectiveZone,
+      subproject: user?.Project?.parentId ? user.Project.name : effectiveProjectName
     },
     training: {
       sessionsAssigned: jitsiHistory.length,

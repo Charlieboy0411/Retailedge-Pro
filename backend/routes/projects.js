@@ -4,6 +4,12 @@ const Project = require('../models/Project');
 const Client = require('../models/Client');
 const User = require('../models/User');
 const Quiz = require('../models/Quiz');
+const Question = require('../models/Question');
+const Session = require('../models/Session');
+const Participant = require('../models/Participant');
+const Response = require('../models/Response');
+const Training = require('../models/Training');
+const JitsiAttendance = require('../models/JitsiAttendance');
 const ExecutiveMetric = require('../models/ExecutiveMetric');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const multer = require('multer');
@@ -207,6 +213,136 @@ router.get('/participant-360', requireAuth, async (req, res) => {
     console.error('GET /api/projects/participant-360 error:', error);
     const status = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
     res.status(status).json({ error: error.message || 'Failed to fetch participant 360 profile', details: error.message });
+  }
+});
+
+// GET /api/projects/participants - Authoritative project-scoped participants list
+router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Trainer', 'Supervisor']), async (req, res) => {
+  try {
+    const { projectId = 'all', subProjectId = 'all', search, status, zone } = req.query;
+    
+    // Server-side strict authorization
+    const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
+
+    if (!projectIds || projectIds.length === 0) {
+      return res.json([]);
+    }
+
+    const { Op } = require('sequelize');
+
+    // Retrieve sessions within authorized projects
+    const sessions = await Session.findAll({
+      where: { projectId: { [Op.in]: projectIds } },
+      include: [
+        { model: Project, attributes: ['id', 'name', 'project_code'] },
+        { model: Quiz, attributes: ['id', 'title'], include: [{ model: Question, as: 'questions', attributes: ['id'] }] },
+        { model: Training, attributes: ['id', 'title'] }
+      ]
+    });
+    const sessionIds = sessions.map(s => s.id);
+
+    // Retrieve real participant records
+    const participants = sessionIds.length > 0 ? await Participant.findAll({
+      where: { sessionId: { [Op.in]: sessionIds } },
+      include: [
+        {
+          model: Session,
+          include: [
+            { model: Project, attributes: ['id', 'name', 'project_code'] },
+            { model: Quiz, attributes: ['id', 'title'], include: [{ model: Question, as: 'questions', attributes: ['id'] }] },
+            { model: Training, attributes: ['id', 'title'] }
+          ]
+        },
+        {
+          model: User,
+          attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location', 'projectId'],
+          include: [{ model: Project, attributes: ['id', 'name'] }]
+        },
+        {
+          model: Response,
+          attributes: ['id', 'points_awarded', 'answer']
+        }
+      ],
+      order: [['createdAt', 'DESC']]
+    }) : [];
+
+    // Also fetch Jitsi attendance telemetry
+    const jitsiRecords = await JitsiAttendance.findAll({
+      where: {
+        [Op.or]: [
+          { projectId: { [Op.in]: projectIds } },
+          { subProjectId: { [Op.in]: projectIds } }
+        ]
+      }
+    });
+    const jitsiMap = {};
+    jitsiRecords.forEach(j => {
+      if (j.employeeId) jitsiMap[j.employeeId] = j;
+      if (j.participantName) jitsiMap[j.participantName] = j;
+      if (j.userId) jitsiMap[j.userId] = j;
+    });
+
+    let list = participants.map(p => {
+      const totalQ = p.Session?.Quiz?.questions?.length || 20;
+      const responses = p.Responses || [];
+      const correctCount = responses.filter(r => r.points_awarded > 0).length;
+      const scorePct = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : (p.score || 0);
+
+      const jitsi = (p.employeeId && jitsiMap[p.employeeId]) || (p.name && jitsiMap[p.name]) || (p.userId && jitsiMap[p.userId]);
+      const attendancePct = jitsi?.attendancePercentage !== undefined ? jitsi.attendancePercentage : (p.connectionStatus === 'active' ? 100 : 85);
+      const passed = scorePct >= 60;
+      const isEligible = attendancePct >= 80 && scorePct >= 70;
+      const isAtRisk = attendancePct < 75 || scorePct < 60;
+      const readinessStatus = isEligible ? 'Certification Eligible' : isAtRisk ? 'At Risk' : 'In Progress';
+
+      return {
+        id: p.id,
+        participantId: p.id,
+        name: p.name,
+        employeeId: p.employeeId || p.User?.employee_id || '—',
+        email: p.User?.email || '—',
+        projectId: p.Session?.projectId || p.User?.projectId || projectIds[0],
+        projectName: p.Session?.Project?.name || p.User?.Project?.name || 'Assigned Project',
+        zoneStore: p.storeName || p.User?.location || 'General',
+        trainingStatus: jitsi?.status || (p.connectionStatus === 'active' ? 'Attended' : 'Registered'),
+        sessionName: p.Session?.Quiz?.title || p.Session?.Training?.title || 'Launchpad Session',
+        quizScore: `${correctCount}/${totalQ}`,
+        quizScoreNumber: correctCount,
+        quizTotalQuestions: totalQ,
+        quizPercentage: scorePct,
+        quizPassed: passed,
+        attendanceRate: attendancePct,
+        readinessStatus: readinessStatus,
+        createdAt: p.createdAt
+      };
+    });
+
+    // Server-side filtering within authorized project scope
+    if (search && search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(item =>
+        (item.name && item.name.toLowerCase().includes(q)) ||
+        (item.employeeId && item.employeeId.toLowerCase().includes(q)) ||
+        (item.zoneStore && item.zoneStore.toLowerCase().includes(q)) ||
+        (item.projectName && item.projectName.toLowerCase().includes(q))
+      );
+    }
+    if (status && status !== 'ALL') {
+      const s = status.toUpperCase();
+      if (s === 'ATTENDED') list = list.filter(item => item.attendanceRate >= 75);
+      else if (s === 'PASSED') list = list.filter(item => item.quizPassed);
+      else if (s === 'ELIGIBLE') list = list.filter(item => item.readinessStatus === 'Certification Eligible');
+      else if (s === 'AT_RISK') list = list.filter(item => item.readinessStatus === 'At Risk');
+    }
+    if (zone && zone !== 'ALL') {
+      list = list.filter(item => item.zoneStore.toLowerCase() === zone.toLowerCase());
+    }
+
+    res.json(list);
+  } catch (error) {
+    console.error('GET /api/projects/participants error:', error);
+    const statusCode = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
+    res.status(statusCode).json({ error: error.message || 'Failed to fetch project participants', details: error.message });
   }
 });
 

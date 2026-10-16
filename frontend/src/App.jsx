@@ -12,6 +12,7 @@ import LiveQuiz from './pages/LiveQuiz';
 import OfflineQuiz from './pages/OfflineQuiz';
 import Reports from './pages/Reports';
 import UserDirectory from './pages/UserDirectory';
+import ProjectParticipantsPage from './pages/ProjectParticipantsPage';
 import OrgChart from './pages/OrgChart';
 import Projects from './pages/Projects';
 import HostControlRoom from './pages/HostControlRoom';
@@ -94,13 +95,18 @@ function App() {
                 <QuizBuilder />
               </RoleGuard>
             } />
+            <Route path="project-participants" element={
+              <RoleGuard allowedRoles={['Program Manager', 'Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Trainer']}>
+                <ProjectParticipantsPage />
+              </RoleGuard>
+            } />
             <Route path="users"        element={
-              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
                 <UserDirectory />
               </RoleGuard>
             } />
             <Route path="org-chart"    element={
-              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Marketing Manager']}>
                 <OrgChart />
               </RoleGuard>
             } />

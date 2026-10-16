@@ -537,7 +537,7 @@ export default function PMDashboardView({
             value={totalParticipantsCount !== undefined && totalParticipantsCount !== null ? totalParticipantsCount.toLocaleString() : '—'}
             variant="blue"
             subtext="Enrolled Learners"
-            onClick={() => navigate('/users')}
+            onClick={() => navigate('/project-participants')}
           />
 
           {/* 3. Training Sessions */}

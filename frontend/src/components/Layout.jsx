@@ -25,6 +25,7 @@ const getDetectedDashboard = (pathname, role) => {
   if (pathname.includes('/trainings')) return 'Trainings Portal';
   if (pathname.includes('/attendance')) return 'Attendance Portal';
   if (pathname.includes('/settings')) return 'Settings page';
+  if (pathname.includes('/project-participants')) return 'My Project Participants';
   if (pathname.includes('/users')) return 'User Directory';
   if (pathname.includes('/projects')) return 'Projects Admin';
   if (pathname.includes('/org-chart')) return 'Org Chart';
@@ -199,9 +200,9 @@ export default function Layout() {
                 <MapPin size={18} />
                 <span>Attendance & Roster</span>
               </Link>
-              <Link to="/users" className={`nav-link ${isActive('/users') ? 'active' : ''}`}>
+              <Link to="/project-participants" className={`nav-link ${isActive('/project-participants') ? 'active' : ''}`}>
                 <Users size={18} />
-                <span>Participant Directory</span>
+                <span>My Project Participants</span>
               </Link>
 
               <div className="nav-section-label">Performance</div>
