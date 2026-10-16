@@ -166,7 +166,7 @@ export default function PMDashboard() {
   const [syncTrigger, setSyncTrigger] = useState(0);
   const [error, setError] = useState('');
   const [activeSection, setActiveSection] = useState('attendance');
-  const [viewMode, setViewMode] = useState('details');
+  const [viewMode, setViewMode] = useState('dashboard');
   const [manualMetrics, setManualMetrics] = useState({});
 
   const getActiveMetricProjectId = () => {

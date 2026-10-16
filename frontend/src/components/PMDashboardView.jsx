@@ -46,7 +46,9 @@ export default function PMDashboardView({
 }) {
   const navigate = useNavigate();
   const [showAllKPIs, setShowAllKPIs] = useState(false);
-  const [activeTab, setActiveTab] = useState('portfolio'); // 'portfolio' | 'training' | 'assessment' | 'readiness' | 'certification'
+  const [activeTab, setActiveTab] = useState('training'); // 'training' | 'assessment' | 'readiness' | 'certification'
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
+  const [showAdvancedTabs, setShowAdvancedTabs] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState(null);
   const [is360ModalOpen, setIs360ModalOpen] = useState(false);
   const [quizTypeFilter, setQuizTypeFilter] = useState('ALL'); // ALL | ONLINE | OFFLINE
@@ -65,19 +67,43 @@ export default function PMDashboardView({
   const projectComparison = intelligenceData?.projectComparison || [];
   const alerts = intelligenceData?.alerts || [];
 
+  // Deduplicate and disambiguate projects for PM
+  const uniqueAuthorizedProjects = React.useMemo(() => {
+    const map = new Map();
+    const nameCounts = {};
+    projectsList.forEach(p => {
+      nameCounts[p.name] = (nameCounts[p.name] || 0) + 1;
+    });
+
+    const list = [];
+    projectsList.forEach(p => {
+      if (!map.has(p.id)) {
+        map.set(p.id, true);
+        const hasDup = nameCounts[p.name] > 1;
+        let displayName = p.name;
+        if (hasDup) {
+          const detail = p.business_unit || p.project_code || (p.parent?.name ? `Sub of ${p.parent.name}` : (p.parentId ? 'Subproject' : 'Main Project'));
+          displayName = `${p.name} (${detail})`;
+        }
+        list.push({ ...p, displayName });
+      }
+    });
+    return list;
+  }, [projectsList]);
+
   // Filter child subprojects of the currently selected mother project
-  const currentProject = projectsList.find(p => p.id === selectedProjectId);
+  const currentProject = uniqueAuthorizedProjects.find(p => p.id === selectedProjectId) || projectsList.find(p => p.id === selectedProjectId);
   const availableSubProjects = selectedProjectId === 'all'
     ? []
     : projectsList.filter(p => p.parentId === selectedProjectId);
 
   // Authoritative Management KPIs
-  const activeProjectsCount = kpis.activeProjects !== undefined ? kpis.activeProjects : projectsList.filter(p => !p.parentId).length;
+  const activeProjectsCount = kpis.activeProjects !== undefined ? kpis.activeProjects : (uniqueAuthorizedProjects.length || 1);
   const activeSubprojectsCount = kpis.activeSubprojects !== undefined ? kpis.activeSubprojects : projectsList.filter(p => p.parentId).length;
   const activeSessionsCount = kpis.activeTrainingSessions !== undefined ? kpis.activeTrainingSessions : reports.length;
   const totalParticipantsCount = kpis.totalParticipants !== undefined ? kpis.totalParticipants : projectUsers.length;
   const participantsJoinedCount = kpis.participantsJoined !== undefined ? kpis.participantsJoined : reports.reduce((s, r) => s + (r.participants || 0), 0);
-  const attendanceRateVal = kpis.attendanceRate !== undefined ? kpis.attendanceRate : (reports.length > 0 ? 85 : 0);
+  const attendanceRateVal = (kpis.attendanceRate !== undefined && kpis.attendanceRate !== null) ? kpis.attendanceRate : null;
   const avgSessionDurationVal = kpis.averageSessionDuration || '—';
 
   // Quiz Funnel KPIs (Assigned → Started → Attempted → Completed → Passed / Failed)
@@ -222,9 +248,9 @@ export default function PMDashboardView({
       {/* ─── 1. PAGE HEADER (ENTERPRISE OPERATIONAL STANDARD) ─── */}
       <PageHeader
         eyebrow="PROGRAM MANAGEMENT"
-        badge={selectedProjectId === 'all' ? 'All Assigned Projects' : (currentProject?.name || 'Project Scope')}
-        title="Training Operations Command Center"
-        subtitle="Monitor project delivery, training performance, participant readiness and operational actions across your assigned programs."
+        badge={selectedProjectId === 'all' ? (uniqueAuthorizedProjects.length === 1 ? uniqueAuthorizedProjects[0].displayName : 'All Assigned Projects') : (currentProject?.name || 'Project Scope')}
+        title="Training Operations"
+        subtitle="Operational overview of training delivery, participant progress, and program milestones across your assigned projects."
         actions={
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
             {/* View Mode Toggle */}
@@ -288,16 +314,24 @@ export default function PMDashboardView({
                   minWidth: '170px'
                 }}
               >
-                <option value="all">All My Projects</option>
-                {projectsList.filter(p => !p.parentId).map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
+                {uniqueAuthorizedProjects.length === 0 ? (
+                  <option value="">No Assigned Projects</option>
+                ) : uniqueAuthorizedProjects.length === 1 ? (
+                  <option value={uniqueAuthorizedProjects[0].id}>{uniqueAuthorizedProjects[0].displayName}</option>
+                ) : (
+                  <>
+                    <option value="all">All Assigned Projects</option>
+                    {uniqueAuthorizedProjects.map(p => (
+                      <option key={p.id} value={p.id}>{p.displayName}</option>
+                    ))}
+                  </>
+                )}
               </select>
               <ChevronDown size={14} style={{ position: 'absolute', right: '9px', top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none', color: '#64748B' }} />
             </div>
 
-            {/* Subproject Selector (Only enabled if a mother project is selected) */}
-            {selectedProjectId !== 'all' && (
+            {/* Subproject Selector (Only enabled if multiple subprojects exist) */}
+            {selectedProjectId !== 'all' && availableSubProjects.length > 0 && (
               <div style={{ position: 'relative' }}>
                 <select
                   id="pm-subproject-select"
@@ -374,6 +408,29 @@ export default function PMDashboardView({
               <span>{syncing ? 'Syncing...' : 'Sync'}</span>
             </button>
 
+            {/* Primary Action: Schedule Class */}
+            <button
+              id="pm-schedule-btn"
+              onClick={() => navigate('/schedule')}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '7px 14px',
+                borderRadius: '8px',
+                background: '#2563EB',
+                color: '#FFFFFF',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                boxShadow: '0 1px 3px rgba(37, 99, 235, 0.25)'
+              }}
+            >
+              <Plus size={14} />
+              <span>Schedule Class</span>
+            </button>
+
             {/* Quick Export Dropdown */}
             {(onExportPMExcel || onExportExcel) && (
               <button
@@ -426,15 +483,15 @@ export default function PMDashboardView({
         }
       />
 
-      {/* ─── 2. LEVEL 1: OPERATIONAL MANAGEMENT KPIS (9 PRIMARY + EXPANDABLE TELEMETRY) ─── */}
+      {/* ─── 2. LEVEL 1: OPERATIONAL MANAGEMENT KPIS (6 PRIMARY + COLLAPSIBLE OPERATIONAL DETAILS) ─── */}
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
           <div>
             <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Activity size={17} color="#0284C7" /> Program Delivery & Training Metrics
+              <Activity size={17} color="#0284C7" /> Primary Operational Indicators
             </h3>
             <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
-              Real-time operational indicators across assigned project scopes
+              Real-time operational measures across assigned programs and learner cohorts
             </span>
           </div>
           <button
@@ -452,33 +509,35 @@ export default function PMDashboardView({
               gap: '4px'
             }}
           >
-            {showAllKPIs ? 'Hide Secondary Telemetry' : 'Show All 15 Telemetry KPIs'}
+            {showAllKPIs ? 'Hide Operational Details' : 'Operational Details & Telemetry (9)'}
             <ChevronDown size={14} style={{ transform: showAllKPIs ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
           </button>
         </div>
 
-        {/* 9 Primary KPI Cards */}
+        {/* 6 Primary KPI Cards */}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: '14px'
         }}>
-          {/* 1. Active Projects */}
+          {/* 1. Assigned Projects */}
           <KpiCard
             icon={FolderOpen}
-            label="ACTIVE PROJECTS"
+            label="ASSIGNED PROJECTS"
             value={activeProjectsCount !== undefined && activeProjectsCount !== null ? activeProjectsCount : '—'}
             variant="blue"
-            subtext={selectedProjectId === 'all' ? 'Authorized Portfolio' : 'Focused Scope'}
+            subtext={selectedProjectId === 'all' ? (uniqueAuthorizedProjects.length === 1 ? 'Single Assigned Project' : 'Authorized Portfolio') : 'Focused Scope'}
+            onClick={() => navigate('/projects')}
           />
 
-          {/* 2. Active Subprojects */}
+          {/* 2. Active Participants */}
           <KpiCard
-            icon={Layers}
-            label="SUBPROJECTS"
-            value={activeSubprojectsCount !== undefined && activeSubprojectsCount !== null ? activeSubprojectsCount : '—'}
-            variant="cyan"
-            subtext="Child Workstreams"
+            icon={Users}
+            label="ACTIVE PARTICIPANTS"
+            value={totalParticipantsCount !== undefined && totalParticipantsCount !== null ? totalParticipantsCount.toLocaleString() : '—'}
+            variant="blue"
+            subtext="Enrolled Learners"
+            onClick={() => navigate('/users')}
           />
 
           {/* 3. Training Sessions */}
@@ -487,68 +546,43 @@ export default function PMDashboardView({
             label="TRAINING SESSIONS"
             value={activeSessionsCount !== undefined && activeSessionsCount !== null ? activeSessionsCount : '—'}
             variant="purple"
-            subtext="Meetings & Jitsi"
+            subtext="Scheduled & Active Batches"
+            onClick={() => navigate('/schedule')}
           />
 
-          {/* 4. Enrolled Participants */}
-          <KpiCard
-            icon={Users}
-            label="TOTAL PARTICIPANTS"
-            value={totalParticipantsCount !== undefined && totalParticipantsCount !== null ? totalParticipantsCount.toLocaleString() : '—'}
-            variant="blue"
-            subtext="Enrolled Learners"
-          />
-
-          {/* 5. Attendance Rate */}
-          <KpiCard
-            icon={UserCheck}
-            label="ATTENDANCE RATE"
-            value={attendanceRateVal !== undefined && attendanceRateVal !== null ? `${attendanceRateVal}%` : '—'}
-            variant={attendanceRateVal >= 75 ? 'green' : 'amber'}
-            radialProgress={attendanceRateVal}
-            subtext={attendanceRateVal >= 75 ? 'Optimal (≥75%)' : 'Needs Follow-up (<75%)'}
-          />
-
-          {/* 6. Quiz Completion */}
+          {/* 4. Quiz Completion */}
           <KpiCard
             icon={CheckCircle}
             label="QUIZ COMPLETION"
             value={quizCompletionRateVal !== undefined && quizCompletionRateVal !== null ? `${quizCompletionRateVal}%` : '—'}
             variant={quizCompletionRateVal >= 70 ? 'green' : 'amber'}
             radialProgress={quizCompletionRateVal}
-            subtext={`${quizCompletedCount} Completed / ${quizzesAssignedCount} Assigned`}
+            subtext={`${quizCompletedCount} Completed of ${quizzesAssignedCount} Workloads`}
+            onClick={() => navigate('/gamification')}
           />
 
-          {/* 7. Assessment Average */}
+          {/* 5. Assessment Average */}
           <KpiCard
             icon={TrendingUp}
-            label="ASSESSMENT AVERAGE"
+            label="AVG QUIZ SCORE"
             value={avgQuizScoreVal !== undefined && avgQuizScoreVal !== null ? `${avgQuizScoreVal}%` : '—'}
             variant={avgQuizScoreVal >= 70 ? 'green' : avgQuizScoreVal >= 60 ? 'amber' : 'red'}
             radialProgress={avgQuizScoreVal}
             subtext={avgQuizScoreVal >= 70 ? 'Benchmark Met (≥70%)' : 'Below Benchmark'}
+            onClick={() => navigate('/gamification')}
           />
 
-          {/* 8. Certification Pipeline */}
-          <KpiCard
-            icon={Award}
-            label="CERTIFICATES ISSUED"
-            value={certificatesIssuedCount !== undefined && certificatesIssuedCount !== null ? certificatesIssuedCount : '—'}
-            variant="purple"
-            subtext={`${cert.kpis?.eligiblePending || 0} Eligible Pending`}
-          />
-
-          {/* 9. Action Items */}
+          {/* 6. Pending Actions */}
           <KpiCard
             icon={AlertTriangle}
-            label="ACTION ITEMS"
+            label="PENDING ACTIONS"
             value={alerts.length}
             variant={alerts.length > 0 ? 'red' : 'green'}
-            subtext={alerts.length > 0 ? `${alerts.length} Operational Triggers` : 'No Critical Blockers'}
+            subtext={alerts.length > 0 ? `${alerts.length} Items Require Follow-up` : 'All Programs On Track'}
           />
         </div>
 
-        {/* Secondary Telemetry Drawer (Expandable) */}
+        {/* Operational Details Drawer (Expandable secondary metrics) */}
         <AnimatePresence>
           {showAllKPIs && (
             <motion.div
@@ -558,11 +592,33 @@ export default function PMDashboardView({
               transition={{ duration: 0.2 }}
               style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
                 gap: '14px',
                 marginTop: '14px'
               }}
             >
+              <KpiCard
+                icon={UserCheck}
+                label="ATTENDANCE RATE"
+                value={attendanceRateVal !== null && attendanceRateVal !== undefined ? `${attendanceRateVal}%` : 'N/A'}
+                variant={attendanceRateVal != null && attendanceRateVal >= 75 ? 'green' : 'amber'}
+                radialProgress={attendanceRateVal != null ? attendanceRateVal : 0}
+                subtext={attendanceRateVal != null ? (attendanceRateVal >= 75 ? 'Optimal (≥75%)' : 'Needs Follow-up') : 'Telemetry Unavailable'}
+              />
+              <KpiCard
+                icon={Layers}
+                label="SUBPROJECTS"
+                value={activeSubprojectsCount !== undefined && activeSubprojectsCount !== null ? activeSubprojectsCount : '—'}
+                variant="cyan"
+                subtext="Child Workstreams"
+              />
+              <KpiCard
+                icon={Award}
+                label="CERTIFICATES ISSUED"
+                value={certificatesIssuedCount !== undefined && certificatesIssuedCount !== null ? certificatesIssuedCount : '—'}
+                variant="purple"
+                subtext={`${cert.kpis?.eligiblePending || 0} Eligible Pending`}
+              />
               <KpiCard
                 icon={Users}
                 label="PARTICIPANTS JOINED"
@@ -602,9 +658,9 @@ export default function PMDashboardView({
               <KpiCard
                 icon={Clock}
                 label="TRAINING HOURS"
-                value={trainingPerf.trainingHoursDelivered != null ? `${trainingPerf.trainingHoursDelivered}h` : '—'}
+                value={trainingPerf.trainingHoursDelivered != null ? `${trainingPerf.trainingHoursDelivered}h` : 'N/A'}
                 variant="blue"
-                subtext="Total Delivered"
+                subtext={trainingPerf.telemetryStatus === 'UNAVAILABLE' ? 'Telemetry Unavailable' : 'Delivered Classroom Hours'}
               />
             </motion.div>
           )}
@@ -641,16 +697,38 @@ export default function PMDashboardView({
               Targeted operational remediation: What happened → Root cause → Affected learners → Immediate next action.
             </p>
           </div>
-          <span style={{
-            fontSize: '0.78rem',
-            fontWeight: 700,
-            color: alerts.length > 0 ? '#B91C1C' : '#047857',
-            background: alerts.length > 0 ? '#FEE2E2' : '#D1FAE5',
-            padding: '4px 10px',
-            borderRadius: '12px'
-          }}>
-            {alerts.length} Active Operational Trigger{alerts.length === 1 ? '' : 's'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              color: alerts.length > 0 ? '#B91C1C' : '#047857',
+              background: alerts.length > 0 ? '#FEE2E2' : '#D1FAE5',
+              padding: '4px 10px',
+              borderRadius: '12px'
+            }}>
+              {alerts.length} Active Operational Trigger{alerts.length === 1 ? '' : 's'}
+            </span>
+            {alerts.length > 3 && (
+              <button
+                id="pm-toggle-alerts"
+                onClick={() => setShowAllAlerts(prev => !prev)}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: '#0284C7',
+                  fontWeight: 700,
+                  fontSize: '0.8rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px'
+                }}
+              >
+                {showAllAlerts ? 'Show Top 3 Priority Items' : `View All (${alerts.length})`}
+                <ChevronDown size={14} style={{ transform: showAllAlerts ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+              </button>
+            )}
+          </div>
         </div>
 
         {alerts.length === 0 ? (
@@ -661,7 +739,7 @@ export default function PMDashboardView({
           />
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '14px' }}>
-            {alerts.map((al, idx) => {
+            {(showAllAlerts ? alerts : alerts.slice(0, 3)).map((al, idx) => {
               const isCritical = al.severity === 'critical' || al.type?.includes('RISK');
               const isWarning = al.severity === 'warning';
               const borderColor = isCritical ? '#EF4444' : isWarning ? '#F59E0B' : '#0284C7';
@@ -736,272 +814,446 @@ export default function PMDashboardView({
         )}
       </div>
 
-      {/* ─── 4. ENTERPRISE OPERATIONAL WORKSPACE TABS ─── */}
+      {/* ─── 3.5. UPCOMING TRAINING SESSIONS & BATCHES ─── */}
       <div style={{
         background: '#FFFFFF',
         borderRadius: '14px',
+        padding: '20px 24px',
         border: '1px solid #E2E8F0',
-        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
-        overflow: 'hidden'
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)'
       }}>
-        {/* Tab Header Bar */}
-        <div style={{
-          display: 'flex',
-          borderBottom: '1px solid #E2E8F0',
-          background: '#F8FAFC',
-          overflowX: 'auto',
-          padding: '4px 16px 0 16px',
-          gap: '4px'
-        }}>
-          {[
-            { id: 'portfolio', label: 'Project Portfolio & Hierarchy', icon: FolderOpen, count: projectComparison.length || projectsList.length },
-            { id: 'training', label: 'Training Delivery & Telemetry', icon: Video, count: trainingPerf.totalSessions || reports.length },
-            { id: 'assessment', label: 'Assessment Funnel & Quizzes', icon: BarChart2, count: quizAttemptsCount },
-            { id: 'readiness', label: 'Participant Readiness', icon: Users, count: totalParticipantsCount },
-            { id: 'certification', label: 'Certification Pipeline', icon: Award, count: certificatesIssuedCount }
-          ].map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                id={`pm-tab-${tab.id}`}
-                onClick={() => setActiveTab(tab.id)}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '7px',
-                  padding: '12px 16px',
-                  border: 'none',
-                  borderBottom: isActive ? '3px solid #0284C7' : '3px solid transparent',
-                  background: 'transparent',
-                  color: isActive ? '#0284C7' : '#64748B',
-                  fontWeight: isActive ? 800 : 600,
-                  fontSize: '0.84rem',
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap',
-                  transition: 'all 0.15s'
-                }}
-              >
-                <Icon size={16} color={isActive ? '#0284C7' : '#64748B'} />
-                <span>{tab.label}</span>
-                {tab.count !== undefined && (
-                  <span style={{
-                    fontSize: '0.72rem',
-                    padding: '1px 6px',
-                    borderRadius: '10px',
-                    background: isActive ? '#0284C7' : '#E2E8F0',
-                    color: isActive ? '#FFFFFF' : '#475569',
-                    fontWeight: 700
-                  }}>
-                    {tab.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Calendar size={18} color="#0284C7" />
+              Upcoming & Scheduled Training Batches
+            </h3>
+            <p style={{ margin: '3px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+              Real-time training pipeline and upcoming batch deliveries for your assigned scope.
+            </p>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button
+              id="pm-schedule-class-btn"
+              onClick={() => navigate('/schedule')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                background: '#0284C7',
+                color: '#FFFFFF',
+                border: 'none',
+                fontWeight: 700,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
+              <Plus size={14} /> Schedule Class
+            </button>
+            <button
+              onClick={() => navigate('/schedule')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                background: '#F1F5F9',
+                color: '#0F172A',
+                border: '1px solid #CBD5E1',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px'
+              }}
+            >
+              <span>View Full Schedule</span>
+              <ArrowUpRight size={13} />
+            </button>
+          </div>
         </div>
 
-        {/* Tab Content Container */}
-        <div style={{ padding: '24px' }}>
-
-          {/* ══════════════ TAB 1: PROJECT PORTFOLIO & HIERARCHY ══════════════ */}
-          {activeTab === 'portfolio' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-                <div>
-                  <h4 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A' }}>
-                    Project Health & Governance Matrix
-                  </h4>
-                  <p style={{ margin: '2px 0 0 0', fontSize: '0.8rem', color: '#64748B' }}>
-                    Authoritative project-to-subproject hierarchy and delivery status across assigned scopes.
-                  </p>
-                </div>
-                {selectedProjectId !== 'all' && (
-                  <button
-                    onClick={() => {
-                      if (onSelectProject) onSelectProject('all');
-                      if (onSelectSubProject) onSelectSubProject('all');
-                    }}
-                    style={{
-                      padding: '6px 12px',
-                      borderRadius: '6px',
-                      background: '#F1F5F9',
-                      border: '1px solid #CBD5E1',
-                      color: '#0F172A',
-                      fontWeight: 600,
-                      fontSize: '0.78rem',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    ← Back to All Projects
-                  </button>
-                )}
-              </div>
-
-              {/* Hierarchy Visualizer: Mother Project -> Child Subprojects */}
-              <div style={{
-                background: '#F8FAFC',
-                borderRadius: '10px',
-                padding: '16px',
-                border: '1px solid #E2E8F0'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <FolderOpen size={18} color="#0284C7" />
-                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0F172A' }}>
-                      {selectedProjectId === 'all' ? 'All Assigned Mother Projects' : `Mother Project: ${currentProject?.name || 'Selected'}`}
-                    </span>
-                    <span style={{ fontSize: '0.75rem', background: '#E2E8F0', color: '#475569', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
-                      {availableSubProjects.length > 0 ? `${availableSubProjects.length} Child Subprojects` : `${projectsList.filter(p => !p.parentId).length} Projects`}
-                    </span>
-                  </div>
-
-                  {availableSubProjects.length > 0 && (
-                    <div style={{ position: 'relative', width: '220px' }}>
-                      <Search size={14} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
-                      <input
-                        type="text"
-                        placeholder="Search subprojects..."
-                        value={subprojectSearch}
-                        onChange={(e) => setSubprojectSearch(e.target.value)}
-                        style={{
-                          width: '100%',
-                          padding: '5px 10px 5px 28px',
-                          borderRadius: '6px',
-                          border: '1px solid #CBD5E1',
-                          fontSize: '0.78rem'
-                        }}
+        {reports.length === 0 ? (
+          <EmptyState
+            icon={Calendar}
+            title="No Training Sessions Found"
+            description="No training batches or sessions are scheduled for the current project scope."
+          />
+        ) : (
+          <div style={{ overflowX: 'auto', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+              <thead>
+                <tr style={{ background: '#F8FAFC', textAlign: 'left', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Session Title / Topic</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Project Scope</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Date</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Participants</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Avg Score</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700 }}>Status</th>
+                  <th style={{ padding: '10px 14px', fontWeight: 700, textAlign: 'right' }}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.slice(0, 4).map((r, idx) => (
+                  <tr key={r.id || idx} style={{ borderBottom: idx < 3 ? '1px solid #E2E8F0' : 'none' }}>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: '#0F172A' }}>
+                      {r.title || 'Training Session'}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#475569' }}>
+                      {r.projectName || currentProject?.name || 'Assigned Project'}
+                    </td>
+                    <td style={{ padding: '10px 14px', color: '#64748B' }}>
+                      {r.date || '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 600 }}>
+                      {r.participants != null ? r.participants : (r.participantsList?.length || '—')}
+                    </td>
+                    <td style={{ padding: '10px 14px', fontWeight: 700, color: r.avgScore && parseFloat(r.avgScore) >= 70 ? '#10B981' : '#0F172A' }}>
+                      {r.avgScore || '—'}
+                    </td>
+                    <td style={{ padding: '10px 14px' }}>
+                      <StatusBadge
+                        status={r.status === 'Finished' || r.status === 'Completed' ? 'success' : r.status === 'Active' ? 'blue' : 'warning'}
+                        label={r.status || 'Scheduled'}
+                        size="sm"
                       />
-                    </div>
-                  )}
-                </div>
-
-                {/* Subproject folder badges / quick filter buttons */}
-                {availableSubProjects.length > 0 && (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '160px', overflowY: 'auto', padding: '4px 0' }}>
-                    <button
-                      onClick={() => onSelectSubProject && onSelectSubProject('all')}
-                      style={{
-                        padding: '5px 10px',
-                        borderRadius: '6px',
-                        border: '1px solid',
-                        borderColor: selectedSubProjectId === 'all' ? '#0284C7' : '#CBD5E1',
-                        background: selectedSubProjectId === 'all' ? '#0284C7' : '#FFFFFF',
-                        color: selectedSubProjectId === 'all' ? '#FFFFFF' : '#0F172A',
-                        fontWeight: 700,
-                        fontSize: '0.75rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      All Subprojects ({availableSubProjects.length})
-                    </button>
-                    {filteredSubprojectsList.map(sp => (
+                    </td>
+                    <td style={{ padding: '10px 14px', textAlign: 'right' }}>
                       <button
-                        key={sp.id}
-                        onClick={() => onSelectSubProject && onSelectSubProject(sp.id)}
+                        onClick={() => navigate('/schedule')}
                         style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '5px',
-                          padding: '5px 10px',
+                          padding: '4px 10px',
                           borderRadius: '6px',
-                          border: '1px solid',
-                          borderColor: selectedSubProjectId === sp.id ? '#0284C7' : '#E2E8F0',
-                          background: selectedSubProjectId === sp.id ? '#0284C7' : '#FFFFFF',
-                          color: selectedSubProjectId === sp.id ? '#FFFFFF' : '#334155',
-                          fontWeight: selectedSubProjectId === sp.id ? 700 : 500,
+                          background: '#F1F5F9',
+                          border: '1px solid #CBD5E1',
+                          color: '#0284C7',
+                          fontWeight: 700,
                           fontSize: '0.75rem',
                           cursor: 'pointer'
                         }}
                       >
-                        <Layers size={12} color={selectedSubProjectId === sp.id ? '#FFFFFF' : '#64748B'} />
-                        <span>{sp.name}</span>
+                        Manage
                       </button>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
-              {/* Project Comparison Table */}
-              <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
-                  <thead>
-                    <tr style={{ background: '#F8FAFC', textAlign: 'left', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Project Name</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Subprojects</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Participants</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Sessions</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Attendance</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Quiz Completion</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Avg Score</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Pass Rate</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Certificates</th>
-                      <th style={{ padding: '12px 14px', fontWeight: 700 }}>Health Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(projectComparison.length > 0 ? projectComparison : (projectsList.filter(p => !p.parentId).map(p => ({
-                      id: p.id,
-                      name: p.name,
-                      subprojectCount: projectsList.filter(sp => sp.parentId === p.id).length,
-                      participants: totalParticipantsCount,
-                      sessions: activeSessionsCount,
-                      attendance: `${attendanceRateVal}%`,
-                      quizCompletion: `${quizCompletionRateVal}%`,
-                      avgScore: `${avgQuizScoreVal}%`,
-                      passRate: `${quizPassRateVal}%`,
-                      certificates: certificatesIssuedCount,
-                      projectHealth: attendanceRateVal >= 75 && quizCompletionRateVal >= 70 ? 'Healthy' : attendanceRateVal < 70 ? 'Critical' : 'Watch'
-                    })))).map((p, idx) => (
-                      <tr key={p.id || idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
-                        <td style={{ padding: '12px 14px', fontWeight: 700 }}>
-                          <button
-                            onClick={() => {
-                              if (onSelectProject) onSelectProject(p.id);
-                              if (onSelectSubProject) onSelectSubProject('all');
-                            }}
-                            style={{
-                              border: 'none',
-                              background: 'transparent',
-                              color: '#0284C7',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              padding: 0,
-                              textAlign: 'left',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '6px'
-                            }}
-                          >
-                            <FolderOpen size={14} />
-                            <span>{p.name}</span>
-                          </button>
-                        </td>
-                        <td style={{ padding: '12px 14px', color: '#64748B' }}>{p.subprojectCount || 0}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 600 }}>{p.participants || 0}</td>
-                        <td style={{ padding: '12px 14px' }}>{p.sessions || 0}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 700, color: parseFloat(p.attendance) >= 75 ? '#10B981' : '#F59E0B' }}>
-                          {p.attendance || '—'}
-                        </td>
-                        <td style={{ padding: '12px 14px' }}>{p.quizCompletion || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 700 }}>{p.avgScore || '—'}</td>
-                        <td style={{ padding: '12px 14px' }}>{p.passRate || '—'}</td>
-                        <td style={{ padding: '12px 14px', fontWeight: 600 }}>{p.certificates || 0}</td>
-                        <td style={{ padding: '12px 14px' }}>
-                          <StatusBadge
-                            status={p.projectHealth}
-                            label={p.projectHealth}
-                            size="sm"
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+      {/* ─── 4. COMPACT PROJECT HEALTH & GOVERNANCE MATRIX ─── */}
+      <div style={{
+        background: '#FFFFFF',
+        borderRadius: '14px',
+        padding: '20px 24px',
+        border: '1px solid #E2E8F0',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FolderOpen size={18} color="#0284C7" />
+              Project Health & Governance Matrix
+            </h3>
+            <p style={{ margin: '2px 0 0 0', fontSize: '0.78rem', color: '#64748B' }}>
+              Authoritative project-to-subproject hierarchy and delivery status across assigned scopes.
+            </p>
+          </div>
+          {selectedProjectId !== 'all' && (
+            <button
+              onClick={() => {
+                if (onSelectProject) onSelectProject('all');
+                if (onSelectSubProject) onSelectSubProject('all');
+              }}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '6px',
+                background: '#F1F5F9',
+                border: '1px solid #CBD5E1',
+                color: '#0F172A',
+                fontWeight: 600,
+                fontSize: '0.78rem',
+                cursor: 'pointer'
+              }}
+            >
+              ← Back to All Projects
+            </button>
+          )}
+        </div>
+
+        {/* Hierarchy Visualizer: Mother Project -> Child Subprojects */}
+        <div style={{
+          background: '#F8FAFC',
+          borderRadius: '10px',
+          padding: '16px',
+          border: '1px solid #E2E8F0'
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FolderOpen size={16} color="#0284C7" />
+              <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#0F172A' }}>
+                {selectedProjectId === 'all' ? 'All Assigned Mother Projects' : `Mother Project: ${currentProject?.name || 'Selected'}`}
+              </span>
+              <span style={{ fontSize: '0.75rem', background: '#E2E8F0', color: '#475569', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 }}>
+                {availableSubProjects.length > 0
+                  ? `${availableSubProjects.length} Child Subprojects`
+                  : (projectsList.filter(p => !p.parentId).length > 0
+                      ? `${projectsList.filter(p => !p.parentId).length} Mother Projects`
+                      : `${uniqueAuthorizedProjects.length} Assigned Project${uniqueAuthorizedProjects.length === 1 ? '' : 's'}`)}
+              </span>
+            </div>
+
+            {availableSubProjects.length > 0 && (
+              <div style={{ position: 'relative', width: '220px' }}>
+                <Search size={14} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: '#94A3B8' }} />
+                <input
+                  type="text"
+                  placeholder="Search subprojects..."
+                  value={subprojectSearch}
+                  onChange={(e) => setSubprojectSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '5px 10px 5px 28px',
+                    borderRadius: '6px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.78rem'
+                  }}
+                />
               </div>
+            )}
+          </div>
+
+          {/* Subproject folder badges / quick filter buttons */}
+          {availableSubProjects.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', maxHeight: '160px', overflowY: 'auto', padding: '4px 0' }}>
+              <button
+                onClick={() => onSelectSubProject && onSelectSubProject('all')}
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid',
+                  borderColor: selectedSubProjectId === 'all' ? '#0284C7' : '#CBD5E1',
+                  background: selectedSubProjectId === 'all' ? '#0284C7' : '#FFFFFF',
+                  color: selectedSubProjectId === 'all' ? '#FFFFFF' : '#0F172A',
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  cursor: 'pointer'
+                }}
+              >
+                All Subprojects ({availableSubProjects.length})
+              </button>
+              {filteredSubprojectsList.map(sp => (
+                <button
+                  key={sp.id}
+                  onClick={() => onSelectSubProject && onSelectSubProject(sp.id)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '5px',
+                    padding: '5px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid',
+                    borderColor: selectedSubProjectId === sp.id ? '#0284C7' : '#E2E8F0',
+                    background: selectedSubProjectId === sp.id ? '#0284C7' : '#FFFFFF',
+                    color: selectedSubProjectId === sp.id ? '#FFFFFF' : '#334155',
+                    fontWeight: selectedSubProjectId === sp.id ? 700 : 500,
+                    fontSize: '0.75rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <Layers size={12} color={selectedSubProjectId === sp.id ? '#FFFFFF' : '#64748B'} />
+                  <span>{sp.name}</span>
+                </button>
+              ))}
             </div>
           )}
+        </div>
+
+        {/* Project Comparison Table */}
+        <div style={{ overflowX: 'auto', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.84rem' }}>
+            <thead>
+              <tr style={{ background: '#F8FAFC', textAlign: 'left', color: '#64748B', borderBottom: '1px solid #E2E8F0' }}>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Project Name</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Subprojects</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Participants</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Sessions</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Attendance</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Quiz Completion</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Avg Score</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Pass Rate</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Certificates</th>
+                <th style={{ padding: '12px 14px', fontWeight: 700 }}>Health Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(projectComparison.length > 0 ? projectComparison : (uniqueAuthorizedProjects.map(p => ({
+                id: p.id,
+                name: p.displayName || p.name,
+                subprojectCount: projectsList.filter(sp => sp.parentId === p.id).length,
+                participants: totalParticipantsCount,
+                sessions: activeSessionsCount,
+                attendance: attendanceRateVal != null ? `${attendanceRateVal}%` : 'N/A',
+                quizCompletion: `${quizCompletionRateVal}%`,
+                avgScore: `${avgQuizScoreVal}%`,
+                passRate: `${quizPassRateVal}%`,
+                certificates: certificatesIssuedCount,
+                projectHealth: attendanceRateVal >= 75 && quizCompletionRateVal >= 70 ? 'Healthy' : attendanceRateVal < 70 ? 'Critical' : 'Watch'
+              })))).map((p, idx) => (
+                <tr key={p.id || idx} style={{ borderBottom: '1px solid #E2E8F0' }}>
+                  <td style={{ padding: '12px 14px', fontWeight: 700 }}>
+                    <button
+                      onClick={() => {
+                        if (onSelectProject) onSelectProject(p.id);
+                        if (onSelectSubProject) onSelectSubProject('all');
+                      }}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#0284C7',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        padding: 0,
+                        textAlign: 'left',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px'
+                      }}
+                    >
+                      <FolderOpen size={14} />
+                      <span>{p.name}</span>
+                    </button>
+                  </td>
+                  <td style={{ padding: '12px 14px', color: '#64748B' }}>{p.subprojectCount || 0}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600 }}>{p.participants || 0}</td>
+                  <td style={{ padding: '12px 14px' }}>{p.sessions || 0}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 700, color: (p.attendance && p.attendance !== 'N/A' && parseFloat(p.attendance) >= 75) ? '#10B981' : '#F59E0B' }}>
+                    {p.attendance && !String(p.attendance).includes('null') ? p.attendance : 'N/A'}
+                  </td>
+                  <td style={{ padding: '12px 14px' }}>{p.quizCompletion || '—'}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 700 }}>{p.avgScore || '—'}</td>
+                  <td style={{ padding: '12px 14px' }}>{p.passRate || '—'}</td>
+                  <td style={{ padding: '12px 14px', fontWeight: 600 }}>{p.certificates || 0}</td>
+                  <td style={{ padding: '12px 14px' }}>
+                    <StatusBadge
+                      status={p.projectHealth}
+                      label={p.projectHealth}
+                      size="sm"
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* ─── 5. SPECIALIZED OPERATIONAL STREAMS (COLLAPSIBLE DEEP-DIVE STREAMS) ─── */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 800, color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Layers size={17} color="#0284C7" /> Specialized Operational Streams
+            </h3>
+            <span style={{ fontSize: '0.78rem', color: '#64748B' }}>
+              Deep-dive delivery logs, live Jitsi telemetry, quiz funnels, learner roster, and certificates.
+            </span>
+          </div>
+          <button
+            id="pm-toggle-operational-streams"
+            onClick={() => setShowAdvancedTabs(prev => !prev)}
+            style={{
+              padding: '7px 14px',
+              borderRadius: '8px',
+              background: showAdvancedTabs ? '#F1F5F9' : '#FFFFFF',
+              border: '1px solid #CBD5E1',
+              color: '#0284C7',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px'
+            }}
+          >
+            {showAdvancedTabs ? 'Collapse Operational Streams' : 'Explore Detailed Streams (4)'}
+            <ChevronDown size={14} style={{ transform: showAdvancedTabs ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+          </button>
+        </div>
+
+        {showAdvancedTabs && (
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '14px',
+            border: '1px solid #E2E8F0',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+            overflow: 'hidden'
+          }}>
+            {/* Tab Header Bar */}
+            <div style={{
+              display: 'flex',
+              borderBottom: '1px solid #E2E8F0',
+              background: '#F8FAFC',
+              overflowX: 'auto',
+              padding: '4px 16px 0 16px',
+              gap: '4px'
+            }}>
+              {[
+                { id: 'training', label: 'Training Delivery & Telemetry', icon: Video, count: trainingPerf.totalSessions || reports.length },
+                { id: 'assessment', label: 'Assessment Funnel & Quizzes', icon: BarChart2, count: quizAttemptsCount },
+                { id: 'readiness', label: 'Participant Readiness', icon: Users, count: totalParticipantsCount },
+                { id: 'certification', label: 'Certification Pipeline', icon: Award, count: certificatesIssuedCount }
+              ].map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    id={`pm-tab-${tab.id}`}
+                    onClick={() => setActiveTab(tab.id)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '7px',
+                      padding: '12px 16px',
+                      border: 'none',
+                      borderBottom: isActive ? '3px solid #0284C7' : '3px solid transparent',
+                      background: 'transparent',
+                      color: isActive ? '#0284C7' : '#64748B',
+                      fontWeight: isActive ? 800 : 600,
+                      fontSize: '0.84rem',
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s'
+                    }}
+                  >
+                    <Icon size={16} color={isActive ? '#0284C7' : '#64748B'} />
+                    <span>{tab.label}</span>
+                    {tab.count !== undefined && (
+                      <span style={{
+                        fontSize: '0.72rem',
+                        padding: '1px 6px',
+                        borderRadius: '10px',
+                        background: isActive ? '#0284C7' : '#E2E8F0',
+                        color: isActive ? '#FFFFFF' : '#475569',
+                        fontWeight: 700
+                      }}>
+                        {tab.count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Tab Content Container */}
+            <div style={{ padding: '24px' }}>
 
           {/* ══════════════ TAB 2: TRAINING DELIVERY & TELEMETRY ══════════════ */}
           {activeTab === 'training' && (
@@ -1709,7 +1961,9 @@ export default function PMDashboardView({
             </div>
           )}
 
-        </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ─── 5. PERSISTENT ESCALATION MANAGER (SCOPED TO AUTHORIZED PROJECT) ─── */}

@@ -19,8 +19,10 @@ const ProjectAssignment = require('../models/ProjectAssignment');
  * Validates PM ownership and returns authorized project IDs matching the filter.
  */
 async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId) {
-  const userRole = user.role || (user.Role ? user.Role.role_name : 'Program Manager');
-  const userId = user.id;
+  if (!user) return [];
+  const userObj = typeof user === 'string' ? { projectId: user, id: user } : user;
+  const userRole = userObj.role || (userObj.Role ? userObj.Role.role_name : 'Program Manager');
+  const userId = userObj.id;
 
   // 1. Determine all project IDs the user has permission to access
   let authorizedBaseIds = [];
@@ -39,8 +41,8 @@ async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId
       authorizedBaseIds = assignments.map(a => a.projectId);
     }
 
-    // Also include user.projectId for full backward compatibility
-    let userProjId = user.projectId;
+    // Also include userObj.projectId for full backward compatibility
+    let userProjId = userObj.projectId;
     if (userProjId === undefined && isUuid) {
       const dbUser = await User.findByPk(userId, { attributes: ['projectId'] });
       if (dbUser) userProjId = dbUser.projectId;
@@ -728,7 +730,7 @@ async function getProjectComparison(user) {
       subprojectCount: (proj.subProjects || []).length,
       participants: kpis.totalParticipants,
       sessions: kpis.activeTrainingSessions,
-      attendance: `${kpis.attendanceRate}%`,
+      attendance: (kpis.attendanceRate !== null && kpis.attendanceRate !== undefined) ? `${kpis.attendanceRate}%` : 'N/A',
       quizCompletion: `${kpis.quizCompletionRate}%`,
       avgScore: `${kpis.averageQuizScore}%`,
       passRate: `${kpis.quizPassRate}%`,

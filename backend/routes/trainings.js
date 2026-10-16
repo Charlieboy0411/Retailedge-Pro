@@ -213,18 +213,32 @@ router.get('/', requireAuth, async (req, res) => {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       const { projectId } = req.query;
-      if (projectId) {
+      if (projectId && projectId !== 'all') {
         if (!accessibleProjectIds.includes(projectId)) {
           return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
         }
         whereClause.projectId = projectId;
       } else {
-        whereClause.projectId = { [Op.in]: accessibleProjectIds };
+        whereClause.projectId = { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] };
+      }
+    } else if (userRole === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const { projectId } = req.query;
+      if (projectId && projectId !== 'all') {
+        const requestedIds = String(projectId).split(',').map(id => id.trim()).filter(Boolean);
+        const unauthorized = requestedIds.filter(id => !accessibleProjectIds.includes(id));
+        if (unauthorized.length > 0) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
+        }
+        whereClause.projectId = requestedIds.length === 1 ? requestedIds[0] : { [Op.in]: requestedIds };
+      } else {
+        whereClause.projectId = { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] };
       }
     } else {
-      // For Admins/PMs, support filter by project if query is passed
+      // For Admins, support filter by project if query is passed
       const { projectId } = req.query;
-      if (projectId) {
+      if (projectId && projectId !== 'all') {
         if (String(projectId).includes(',')) {
           whereClause.projectId = { [Op.in]: String(projectId).split(',').map(id => id.trim()).filter(Boolean) };
         } else {
@@ -283,8 +297,8 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
           return res.status(403).json({ error: 'Forbidden: You do not have permission to add trainings for this project.' });
         }
       }
-    } else if (!projectId && req.user.role === 'T&D Manager') {
-      return res.status(400).json({ error: 'Project is required for T&D Manager training material creation.' });
+    } else if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      return res.status(400).json({ error: 'Project is required for non-admin training material creation.' });
     }
 
     let formattedUrl = finalUrl.trim();
@@ -565,6 +579,8 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
           return res.status(403).json({ error: 'Forbidden: You do not have permission to schedule meetings for this project.' });
         }
       }
+    } else if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      return res.status(400).json({ error: 'Project is required to schedule a meeting.' });
     }
 
     let formattedUrl = url.trim();

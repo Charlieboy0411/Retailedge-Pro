@@ -165,8 +165,71 @@ export default function Layout() {
 
         {/* Navigation Items */}
         <div className="nav-section">
-          {/* PM / Executive / Client dedicated entry */}
-          {showPMDashboard ? (
+          {/* PM dedicated role-aware navigation */}
+          {isPM ? (
+            <>
+              <div className="nav-section-label">Overview</div>
+              <Link 
+                to="/pm-dashboard?projectId=all" 
+                className={`nav-link ${isActive('/pm-dashboard') ? 'active' : ''}`}
+              >
+                <ClipboardList size={18} />
+                <span>Training Operations</span>
+              </Link>
+              <Link 
+                to="/projects" 
+                className={`nav-link ${isActive('/projects') ? 'active' : ''}`}
+              >
+                <FolderOpen size={18} />
+                <span>Project Portfolio</span>
+              </Link>
+
+              <div className="nav-section-label">Operations</div>
+              <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'active' : ''}`}>
+                <Calendar size={18} />
+                <span>Schedule & Batches</span>
+              </Link>
+              <Link to="/trainings" className={`nav-link ${isActive('/trainings') ? 'active' : ''}`}>
+                <BookOpen size={18} />
+                <span>Training Modules</span>
+              </Link>
+
+              <div className="nav-section-label">People</div>
+              <Link to="/attendance" className={`nav-link ${isActive('/attendance') ? 'active' : ''}`}>
+                <MapPin size={18} />
+                <span>Attendance & Roster</span>
+              </Link>
+              <Link to="/users" className={`nav-link ${isActive('/users') ? 'active' : ''}`}>
+                <Users size={18} />
+                <span>Participant Directory</span>
+              </Link>
+
+              <div className="nav-section-label">Performance</div>
+              <Link 
+                to="/gamification" 
+                className={`nav-link ${isActive('/gamification') ? 'active' : ''}`}
+              >
+                <Trophy size={18} />
+                <span>Participant Results</span>
+              </Link>
+
+              <div className="nav-section-label">Reporting & Compliance</div>
+              <Link to="/reports" className={`nav-link ${isActive('/reports') ? 'active' : ''}`}>
+                <BarChart3 size={18} />
+                <span>Reports & Analytics</span>
+              </Link>
+              <Link to="/certificates" className={`nav-link ${isActive('/certificates') ? 'active' : ''}`}>
+                <Award size={18} />
+                <span>Certification Vault</span>
+              </Link>
+
+              <div className="nav-section-label">System</div>
+              <Link to="/settings" className={`nav-link ${isActive('/settings') ? 'active' : ''}`}>
+                <Settings size={18} />
+                <span>Settings</span>
+              </Link>
+            </>
+          ) : showPMDashboard ? (
             <>
               <div className="nav-section-label">Overview</div>
               <Link 
@@ -174,7 +237,7 @@ export default function Layout() {
                 className={`nav-link ${isActive('/pm-dashboard') && (!searchParams.get('projectId') || searchParams.get('projectId') === 'all') ? 'active' : ''}`}
               >
                 <ClipboardList size={18} />
-                <span>{isClient ? 'Client Command Center' : isPM ? 'Program Manager Dashboard' : `${user?.role || 'Executive'} Dashboard`}</span>
+                <span>{isClient ? 'Client Command Center' : `${user?.role || 'Executive'} Dashboard`}</span>
               </Link>
               
               {/* Project Hierarchy Tree for Executive Roles */}
@@ -487,7 +550,7 @@ export default function Layout() {
                 <span>Notifications Center</span>
               </Link>
             </>
-          ) : (
+          ) : isPM ? null : (
             <>
               <div className="nav-section-label">Operations</div>
               <Link to="/schedule" className={`nav-link ${isActive('/schedule') ? 'active' : ''}`}>

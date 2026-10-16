@@ -18,7 +18,7 @@ export default function SchedulePage() {
   const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
-  const [selectedProjectId, setSelectedProjectId] = useState('all');
+  const [selectedProjectId, setSelectedProjectId] = useState(user?.role === 'Program Manager' && user?.projectId ? user.projectId : 'all');
   const [activeTab, setActiveTab] = useState('meetings');
 
   // Calendar States
@@ -32,7 +32,7 @@ export default function SchedulePage() {
   const [meetingForm, setMeetingForm] = useState({
     title: '',
     description: '',
-    projectId: '',
+    projectId: user?.role === 'Program Manager' && user?.projectId ? user.projectId : '',
     scheduledAt: '',
     url: '',
     inviteeIds: [],
@@ -41,6 +41,30 @@ export default function SchedulePage() {
 
   const canManage = ['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(user?.role);
   const isTrainee = !canManage;
+
+  // Deduplicate projects by ID and append clarifying details if distinct IDs share same name
+  const uniqueProjects = React.useMemo(() => {
+    const map = new Map();
+    const nameCounts = {};
+    projects.forEach(p => {
+      nameCounts[p.name] = (nameCounts[p.name] || 0) + 1;
+    });
+
+    const list = [];
+    projects.forEach(p => {
+      if (!map.has(p.id)) {
+        map.set(p.id, true);
+        const hasDuplicateName = nameCounts[p.name] > 1;
+        let displayName = p.name;
+        if (hasDuplicateName) {
+          const detail = p.business_unit || p.project_code || (p.parent?.name ? `Sub of ${p.parent.name}` : (p.parentId ? 'Subproject' : 'Main Project'));
+          displayName = `${p.name} (${detail})`;
+        }
+        list.push({ ...p, displayName });
+      }
+    });
+    return list;
+  }, [projects]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -69,11 +93,12 @@ export default function SchedulePage() {
   };
 
   // Fetch all training modules and meetings
-  const fetchData = async (isSilent = false) => {
+  const fetchData = async (isSilent = false, targetProjId = selectedProjectId) => {
     try {
       if (!isSilent) setLoading(true);
       
-      const trainingsRes = await axios.get('/api/trainings', {
+      const queryParam = targetProjId && targetProjId !== 'all' ? `?projectId=${targetProjId}` : '';
+      const trainingsRes = await axios.get(`/api/trainings${queryParam}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setItems(trainingsRes.data || []);
@@ -83,8 +108,18 @@ export default function SchedulePage() {
           axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } }),
           axios.get('/api/users', { headers: { Authorization: `Bearer ${token}` } })
         ]);
-        setProjects(projRes.data || []);
+        const fetchedProjs = projRes.data || [];
+        setProjects(fetchedProjs);
         setUsersList(usersRes.data || []);
+
+        // Explicit single project auto-selection for PM
+        if (user?.role === 'Program Manager') {
+          if (fetchedProjs.length === 1) {
+            setSelectedProjectId(fetchedProjs[0].id);
+          } else if (fetchedProjs.length === 0) {
+            setSelectedProjectId('');
+          }
+        }
       }
     } catch (err) {
       console.error('Failed to fetch schedule data', err);
@@ -153,6 +188,11 @@ export default function SchedulePage() {
     e.preventDefault();
     if (!meetingForm.title.trim() || !meetingForm.scheduledAt || !meetingForm.url.trim()) {
       alert("Please fill in all required fields.");
+      return;
+    }
+
+    if (user?.role === 'Program Manager' && !meetingForm.projectId) {
+      alert("Please select an authorized project.");
       return;
     }
 
@@ -229,7 +269,11 @@ export default function SchedulePage() {
           {canManage && (
             <select
               value={selectedProjectId}
-              onChange={e => setSelectedProjectId(e.target.value)}
+              onChange={e => {
+                const nextVal = e.target.value;
+                setSelectedProjectId(nextVal);
+                fetchData(true, nextVal);
+              }}
               style={{
                 padding: '8px 16px',
                 borderRadius: '10px',
@@ -239,13 +283,24 @@ export default function SchedulePage() {
                 fontSize: '0.85rem',
                 fontWeight: 600,
                 outline: 'none',
-                height: '38px'
+                height: '38px',
+                maxWidth: '260px'
               }}
             >
-              <option value="all">🌐 All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>📁 {p.name}</option>
-              ))}
+              {user?.role === 'Program Manager' && uniqueProjects.length === 0 ? (
+                <option value="">No Assigned Projects</option>
+              ) : user?.role === 'Program Manager' && uniqueProjects.length === 1 ? (
+                <option value={uniqueProjects[0].id}>📁 {uniqueProjects[0].displayName}</option>
+              ) : (
+                <>
+                  <option value="all">
+                    {user?.role === 'Program Manager' ? '🌐 All Assigned Projects' : '🌐 All Projects'}
+                  </option>
+                  {uniqueProjects.map(p => (
+                    <option key={p.id} value={p.id}>📁 {p.displayName}</option>
+                  ))}
+                </>
+              )}
             </select>
           )}
 
@@ -258,7 +313,7 @@ export default function SchedulePage() {
                 setMeetingForm({
                   title: '',
                   description: '',
-                  projectId: '',
+                  projectId: user?.role === 'Program Manager' && uniqueProjects.length === 1 ? uniqueProjects[0].id : (selectedProjectId !== 'all' ? selectedProjectId : ''),
                   scheduledAt: '',
                   url: '',
                   inviteeIds: [],
@@ -283,7 +338,7 @@ export default function SchedulePage() {
       ) : (
         <>
           {/* Calendar & Selected Day Detail (Grid Layout) */}
-          <div style={{ display: 'grid', gridTemplateColumns: '7fr 4fr', gap: '24px', alignItems: 'stretch' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '24px', alignItems: 'stretch' }}>
             
             {/* Broad Month Calendar */}
             <div className="glass-card" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -738,12 +793,24 @@ export default function SchedulePage() {
                       <select 
                         value={meetingForm.projectId} 
                         onChange={e => handleProjectChange(e.target.value)} 
+                        required={user?.role === 'Program Manager'}
                         style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
                       >
-                        <option value="">-- General / Global --</option>
-                        {projects.map(p => (
-                          <option key={p.id} value={p.id}>{p.name}</option>
-                        ))}
+                        {user?.role === 'Program Manager' ? (
+                          <>
+                            {uniqueProjects.length !== 1 && <option value="">-- Select Assigned Project --</option>}
+                            {uniqueProjects.map(p => (
+                              <option key={p.id} value={p.id}>{p.displayName}</option>
+                            ))}
+                          </>
+                        ) : (
+                          <>
+                            <option value="">-- General / Global --</option>
+                            {uniqueProjects.map(p => (
+                              <option key={p.id} value={p.id}>{p.displayName}</option>
+                            ))}
+                          </>
+                        )}
                       </select>
                     </div>
 

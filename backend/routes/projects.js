@@ -51,6 +51,10 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       const tdService = require('../utils/tdService');
       const accessibleIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       whereClause.id = { [require('sequelize').Op.in]: accessibleIds };
+    } else if (req.user.role === 'Program Manager') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      whereClause.id = { [require('sequelize').Op.in]: accessibleIds.length > 0 ? accessibleIds : ['00000000-0000-0000-0000-000000000000'] };
     }
 
     const projects = await Project.findAll({
