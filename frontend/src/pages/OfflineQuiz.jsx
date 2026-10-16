@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useContext, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
-import { Clock, Check, Award, Play, ShieldAlert, User, Fingerprint, MapPin } from 'lucide-react';
+import { Clock, Check, Award, Play, ShieldAlert, User, Fingerprint, MapPin, Calendar, AlertTriangle, WifiOff } from 'lucide-react';
 import { AuthContext } from '../context/AuthContext';
 
 const ZONES = ['North', 'East', 'West', 'South'];
@@ -46,6 +46,8 @@ export default function OfflineQuiz() {
   // Quiz states: 'entrance' | 'taking' | 'submitting' | 'result' | 'error'
   const [quizState, setQuizState] = useState('entrance');
   const [errorMsg, setErrorMsg]   = useState('');
+  const [offlineState, setOfflineState] = useState(null); // 'SCHEDULED' | 'EXPIRED' | 'UNCONFIGURED' | 'DISABLED'
+  const [availabilityDetails, setAvailabilityDetails] = useState(null);
 
   const [regForm, setRegForm] = useState({
     name: '', employeeId: '', zone: ''
@@ -87,8 +89,21 @@ export default function OfflineQuiz() {
         const res = await axios.get(`/api/quizzes/${quizId}/offline-details`);
         setQuizInfo(res.data);
         setQuestions(res.data.questions || []);
+        setOfflineState(res.data.offlineState || 'ACTIVE');
+        setAvailabilityDetails({
+          startTimeIST: res.data.startTimeIST,
+          endTimeIST: res.data.endTimeIST
+        });
       } catch (err) {
         setQuizState('error');
+        const state = err.response?.data?.offlineState || 'ERROR';
+        setOfflineState(state);
+        setAvailabilityDetails({
+          startTimeIST: err.response?.data?.startTimeIST,
+          endTimeIST: err.response?.data?.endTimeIST,
+          scheduledStartTime: err.response?.data?.scheduledStartTime,
+          expiredAt: err.response?.data?.expiredAt
+        });
         setErrorMsg(err.response?.data?.error || 'This quiz is not available offline or has expired.');
       }
     };
@@ -314,6 +329,18 @@ export default function OfflineQuiz() {
               Project: <strong style={{ color: C.textSub }}>{quizInfo.projectName}</strong>
               &nbsp;•&nbsp;
               Questions: <strong style={{ color: C.accent }}>{questions.length}</strong>
+            </div>
+          )}
+
+          {quizInfo?.endTimeIST && (
+            <div style={{
+              marginTop: '14px', padding: '8px 12px',
+              background: '#FEF2F2', border: '1px solid #FECACA',
+              borderRadius: '8px', fontSize: '0.78rem', color: '#991B1B',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px'
+            }}>
+              <Clock size={14} style={{ color: '#DC2626', flexShrink: 0 }} />
+              <span>Link expires on <strong>{quizInfo.endTimeIST}</strong></span>
             </div>
           )}
         </div>
@@ -627,21 +654,116 @@ const optBtn = (active) => ({
     );
   };
 
-  // ─── ERROR SCREEN ──────────────────────────────────────────────────────────
-  const renderError = () => (
-    <div style={{ width: '100%', maxWidth: '440px', margin: 'auto', padding: '44px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid rgba(239,68,68,0.25)`, boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
-      <div style={{
-        width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 20px auto',
-        background: C.redBg, border: `2px solid ${C.red}`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <ShieldAlert size={32} color={C.red} />
+  // ─── ERROR & AVAILABILITY SCREENS ──────────────────────────────────────────
+  const renderError = () => {
+    // 1. Scheduled Start View
+    if (offlineState === 'SCHEDULED') {
+      return (
+        <div style={{ width: '100%', maxWidth: '460px', margin: 'auto', padding: '40px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid #BFDBFE`, boxShadow: '0 12px 40px rgba(15,23,42,0.12)' }}>
+          <div style={{ width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 18px auto', background: '#EFF6FF', border: `2px solid #2563EB`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Calendar size={32} color="#2563EB" />
+          </div>
+          <span style={{ display: 'inline-block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#1D4ED8', background: '#DBEAFE', padding: '4px 12px', borderRadius: '20px', marginBottom: '12px' }}>
+            Scheduled Opening
+          </span>
+          <h3 style={{ fontSize: '1.45rem', color: C.textPrimary, fontWeight: 800, margin: '0 0 10px 0' }}>Quiz Not Yet Available</h3>
+          <p style={{ color: C.textSub, fontSize: '0.9rem', lineHeight: 1.6, margin: '0 0 16px 0' }}>
+            This offline quiz has been scheduled and will open for participants on:
+          </p>
+          <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '14px', marginBottom: '16px' }}>
+            <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600, textTransform: 'uppercase' }}>Opening Time (IST)</div>
+            <div style={{ fontSize: '1.15rem', color: '#1D4ED8', fontWeight: 800, marginTop: '4px' }}>
+              {availabilityDetails?.startTimeIST || 'At the scheduled opening time'}
+            </div>
+          </div>
+          <p style={{ color: C.textMuted, fontSize: '0.82rem', margin: 0 }}>
+            Please bookmark or keep this link and return once the quiz becomes active.
+          </p>
+        </div>
+      );
+    }
+
+    // 2. Expired View
+    if (offlineState === 'EXPIRED') {
+      return (
+        <div style={{ width: '100%', maxWidth: '460px', margin: 'auto', padding: '40px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid #FECACA`, boxShadow: '0 12px 40px rgba(15,23,42,0.12)' }}>
+          <div style={{ width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 18px auto', background: '#FEF2F2', border: `2px solid #DC2626`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Clock size={32} color="#DC2626" />
+          </div>
+          <span style={{ display: 'inline-block', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase', color: '#B91C1C', background: '#FEE2E2', padding: '4px 12px', borderRadius: '20px', marginBottom: '12px' }}>
+            Link Expired
+          </span>
+          <h3 style={{ fontSize: '1.45rem', color: C.textPrimary, fontWeight: 800, margin: '0 0 10px 0' }}>This Quiz Link Has Expired</h3>
+          <p style={{ color: C.textSub, fontSize: '0.9rem', lineHeight: 1.6, margin: '0 0 16px 0' }}>
+            The availability window for this offline quiz has ended. Participants can no longer start or submit after the configured deadline.
+          </p>
+          {availabilityDetails?.endTimeIST && (
+            <div style={{ background: '#F8FAFC', border: '1px solid #E2E8F0', borderRadius: '12px', padding: '12px', marginBottom: '16px' }}>
+              <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 600 }}>Expired At:</div>
+              <div style={{ fontSize: '0.95rem', color: '#DC2626', fontWeight: 700, marginTop: '2px' }}>
+                {availabilityDetails.endTimeIST}
+              </div>
+            </div>
+          )}
+          <p style={{ color: C.textMuted, fontSize: '0.82rem', margin: 0 }}>
+            Please contact your trainer if you need an extension or rescheduled session.
+          </p>
+        </div>
+      );
+    }
+
+    // 3. Unconfigured View (Legacy Link)
+    if (offlineState === 'UNCONFIGURED') {
+      return (
+        <div style={{ width: '100%', maxWidth: '460px', margin: 'auto', padding: '40px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid #FDE68A`, boxShadow: '0 12px 40px rgba(15,23,42,0.12)' }}>
+          <div style={{ width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 18px auto', background: '#FFFBEB', border: `2px solid #D97706`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <AlertTriangle size={32} color="#D97706" />
+          </div>
+          <h3 style={{ fontSize: '1.45rem', color: C.textPrimary, fontWeight: 800, margin: '0 0 10px 0' }}>Expiry Not Configured</h3>
+          <p style={{ color: C.textSub, fontSize: '0.9rem', lineHeight: 1.6, margin: '0 0 16px 0' }}>
+            This quiz link does not currently have an active availability schedule configured. For assessment integrity, attempts cannot be started until an authorized trainer sets a schedule.
+          </p>
+          <p style={{ color: C.textMuted, fontSize: '0.82rem', margin: 0 }}>
+            Please notify your trainer to configure this quiz's availability window.
+          </p>
+        </div>
+      );
+    }
+
+    // 4. Disabled View
+    if (offlineState === 'DISABLED') {
+      return (
+        <div style={{ width: '100%', maxWidth: '460px', margin: 'auto', padding: '40px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid #E2E8F0`, boxShadow: '0 12px 40px rgba(15,23,42,0.12)' }}>
+          <div style={{ width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 18px auto', background: '#F8FAFC', border: `2px solid #94A3B8`, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <WifiOff size={32} color="#64748B" />
+          </div>
+          <h3 style={{ fontSize: '1.45rem', color: C.textPrimary, fontWeight: 800, margin: '0 0 10px 0' }}>Quiz No Longer Available</h3>
+          <p style={{ color: C.textSub, fontSize: '0.9rem', lineHeight: 1.6, margin: '0 0 16px 0' }}>
+            Offline participation for this quiz has been closed by the trainer.
+          </p>
+          <p style={{ color: C.textMuted, fontSize: '0.82rem', margin: 0 }}>
+            Please contact your trainer if you believe this is in error.
+          </p>
+        </div>
+      );
+    }
+
+    // 5. Default General Error View
+    return (
+      <div style={{ width: '100%', maxWidth: '440px', margin: 'auto', padding: '44px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid rgba(239,68,68,0.25)`, boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+        <div style={{
+          width: '68px', height: '68px', borderRadius: '50%', margin: '0 auto 20px auto',
+          background: C.redBg, border: `2px solid ${C.red}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <ShieldAlert size={32} color={C.red} />
+        </div>
+        <h3 style={{ fontSize: '1.4rem', color: C.textPrimary, fontWeight: 700 }}>Unable to Attend Quiz</h3>
+        <p style={{ color: C.textSub, marginTop: '12px', fontSize: '0.9rem', lineHeight: 1.6 }}>{errorMsg}</p>
+        <p style={{ color: C.textMuted, fontSize: '0.8rem', marginTop: '20px' }}>Please close this tab or contact your trainer.</p>
       </div>
-      <h3 style={{ fontSize: '1.4rem', color: C.textPrimary, fontWeight: 700 }}>Unable to Attend Quiz</h3>
-      <p style={{ color: C.textSub, marginTop: '12px', fontSize: '0.9rem', lineHeight: 1.6 }}>{errorMsg}</p>
-      <p style={{ color: C.textMuted, fontSize: '0.8rem', marginTop: '20px' }}>Please close this tab or contact your trainer.</p>
-    </div>
-  );
+    );
+  };
 
   // ─── PAGE SHELL ────────────────────────────────────────────────────────────
   return (

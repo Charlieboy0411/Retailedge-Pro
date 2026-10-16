@@ -80,15 +80,85 @@ export default function TrainerDashboard({
     platform: 'google_meet'
   });
 
-  // Offline form
+  // Offline form state with strict scheduling & expiry in Asia/Kolkata (IST)
   const [offlineForm, setOfflineForm] = useState({
     isOffline: false,
     startNow: true,
+    startDate: '',
     startTime: '',
-    endTime: ''
+    endDate: '',
+    endTime: '',
+    isLegacyUnconfigured: false
   });
+  const [offlineSaving, setOfflineSaving] = useState(false);
+  const [offlineValidationError, setOfflineValidationError] = useState('');
+  const [offlineConfigSummary, setOfflineConfigSummary] = useState(null);
   const [offlineQuizLink, setOfflineQuizLink] = useState('');
   const [offlineBaseUrl, setOfflineBaseUrl] = useState(window.location.origin);
+
+  // Timezone & DateTime helpers for Asia/Kolkata (IST)
+  const toISTParts = (isoStr) => {
+    if (!isoStr) return { date: '', time: '' };
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return { date: '', time: '' };
+    const f = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+    const p = f.formatToParts(d);
+    const gp = (t) => p.find(x => x.type === t)?.value || '';
+    return {
+      date: `${gp('year')}-${gp('month')}-${gp('day')}`,
+      time: `${gp('hour')}:${gp('minute')}`
+    };
+  };
+
+  const istToISO = (dateStr, timeStr) => {
+    if (!dateStr || !timeStr) return null;
+    const isoWithOffset = `${dateStr}T${timeStr}:00+05:30`;
+    const d = new Date(isoWithOffset);
+    return isNaN(d.getTime()) ? null : d.toISOString();
+  };
+
+  const formatISTDisplay = (dateOrStr) => {
+    if (!dateOrStr) return '';
+    const d = new Date(dateOrStr);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    }) + ' IST';
+  };
+
+  const getFutureIST = (hoursFromNow = 2, baseISO = null) => {
+    const base = baseISO ? new Date(baseISO) : new Date();
+    const future = new Date(base.getTime() + hoursFromNow * 3600 * 1000);
+    return toISTParts(future.toISOString());
+  };
+
+  const handleApplyPreset = (hours) => {
+    let baseISO = null;
+    if (!offlineForm.startNow && offlineForm.startDate && offlineForm.startTime) {
+      baseISO = istToISO(offlineForm.startDate, offlineForm.startTime);
+    }
+    const future = getFutureIST(hours, baseISO);
+    setOfflineForm(prev => ({
+      ...prev,
+      endDate: future.date,
+      endTime: future.time
+    }));
+    setOfflineValidationError('');
+  };
 
   // Helper: format local timezone abbreviation for display
   const localTzLabel = () => {
@@ -408,35 +478,119 @@ export default function TrainerDashboard({
     }
   };
 
-  // Handle offline mode toggle submit
+  // Handle offline mode toggle submit with validation and IST persistence
   const handleOfflineSubmit = async (e) => {
     e.preventDefault();
-    try {
-      const startTimeToSend = (offlineForm.isOffline && !offlineForm.startNow && offlineForm.startTime)
-        ? new Date(offlineForm.startTime).toISOString()
-        : null;
-      const endTimeToSend = (offlineForm.isOffline && offlineForm.endTime)
-        ? new Date(offlineForm.endTime).toISOString()
-        : null;
+    setOfflineValidationError('');
 
+    if (offlineForm.isOffline) {
+      // 1. Mandatory Expiry Validation
+      if (!offlineForm.endDate || !offlineForm.endTime) {
+        setOfflineValidationError('Expiry Date and Time are mandatory for offline quizzes.');
+        return;
+      }
+      const endISO = istToISO(offlineForm.endDate, offlineForm.endTime);
+      if (!endISO) {
+        setOfflineValidationError('Please enter a valid Expiry Date and Time.');
+        return;
+      }
+      const endMs = new Date(endISO).getTime();
+      const nowMs = Date.now();
+
+      let startISO = null;
+      if (!offlineForm.startNow) {
+        // Scheduled Start Validation
+        if (!offlineForm.startDate || !offlineForm.startTime) {
+          setOfflineValidationError('Start Date and Time are required when not starting immediately.');
+          return;
+        }
+        startISO = istToISO(offlineForm.startDate, offlineForm.startTime);
+        if (!startISO) {
+          setOfflineValidationError('Please enter a valid Start Date and Time.');
+          return;
+        }
+        const startMs = new Date(startISO).getTime();
+        if (startMs < nowMs - 5 * 60 * 1000) {
+          setOfflineValidationError('Scheduled start time cannot be in the past.');
+          return;
+        }
+        if (endMs <= startMs) {
+          setOfflineValidationError('Expiry time must be strictly later than the start time.');
+          return;
+        }
+      } else {
+        // Immediate start: Expiry must be in the future
+        if (endMs <= nowMs) {
+          setOfflineValidationError('Expiry time must be strictly later than current time.');
+          return;
+        }
+      }
+
+      try {
+        setOfflineSaving(true);
+        const res = await axios.post(`/api/quizzes/${selectedOfflineQuiz.id}/offline`, {
+          isOffline: true,
+          startNow: offlineForm.startNow,
+          startTime: offlineForm.startNow ? null : startISO,
+          endTime: endISO
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        setOfflineConfigSummary({
+          startIST: res.data.startTimeIST || formatISTDisplay(res.data.config.offlineStartTime),
+          endIST: res.data.endTimeIST || formatISTDisplay(res.data.config.offlineEndTime),
+          isImmediate: offlineForm.startNow
+        });
+        setIsOfflineSuccessView(true);
+        if (fetchAllData) fetchAllData(true);
+      } catch (err) {
+        console.error(err);
+        setOfflineValidationError(err.response?.data?.error || 'Failed to save offline quiz settings.');
+      } finally {
+        setOfflineSaving(false);
+      }
+    } else {
+      // Disabling offline taking or closing link early
+      try {
+        setOfflineSaving(true);
+        await axios.post(`/api/quizzes/${selectedOfflineQuiz.id}/offline`, {
+          isOffline: false
+        }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+
+        alert('Offline taking disabled successfully.');
+        setIsOfflineModalOpen(false);
+        if (fetchAllData) fetchAllData(true);
+      } catch (err) {
+        console.error(err);
+        setOfflineValidationError(err.response?.data?.error || 'Failed to disable offline taking.');
+      } finally {
+        setOfflineSaving(false);
+      }
+    }
+  };
+
+  const handleCloseLinkEarly = async () => {
+    if (!window.confirm("Are you sure you want to close this offline quiz link early? Participants will no longer be able to open or submit.")) {
+      return;
+    }
+    try {
+      setOfflineSaving(true);
       await axios.post(`/api/quizzes/${selectedOfflineQuiz.id}/offline`, {
-        isOffline: offlineForm.isOffline,
-        startTime: startTimeToSend,
-        endTime: endTimeToSend
+        isOffline: false
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-
-      if (offlineForm.isOffline) {
-        setIsOfflineSuccessView(true);
-      } else {
-        alert('Offline settings saved successfully!');
-        setIsOfflineModalOpen(false);
-      }
+      alert('Quiz link has been closed early.');
+      setIsOfflineModalOpen(false);
       if (fetchAllData) fetchAllData(true);
     } catch (err) {
       console.error(err);
-      alert('Failed to save offline quiz settings.');
+      setOfflineValidationError(err.response?.data?.error || 'Failed to close link.');
+    } finally {
+      setOfflineSaving(false);
     }
   };
 
@@ -451,22 +605,47 @@ export default function TrainerDashboard({
   const handleOpenOfflineModal = (quiz) => {
     setSelectedOfflineQuiz(quiz);
     const conf = quiz.config || {};
+    const isLegacyUnconfigured = !!(conf.isOffline && !conf.offlineEndTime);
 
-    const formatDatetimeLocal = (isoStr) => {
-      if (!isoStr) return '';
-      const date = new Date(isoStr);
-      if (isNaN(date.getTime())) return '';
-      const localMs = date.getTime() - (date.getTimezoneOffset() * 60000);
-      return new Date(localMs).toISOString().slice(0, 16);
-    };
+    const nowIST = toISTParts(new Date().toISOString());
+    const defaultEndIST = getFutureIST(2);
 
-    const storedStart = formatDatetimeLocal(conf.offlineStartTime);
+    let startNowVal = true;
+    let startDateVal = nowIST.date;
+    let startTimeVal = nowIST.time;
+    let endDateVal = defaultEndIST.date;
+    let endTimeVal = defaultEndIST.time;
+
+    if (conf.isOffline && conf.offlineEndTime) {
+      const endParts = toISTParts(conf.offlineEndTime);
+      endDateVal = endParts.date;
+      endTimeVal = endParts.time;
+
+      if (conf.offlineStartTime) {
+        const startParts = toISTParts(conf.offlineStartTime);
+        startDateVal = startParts.date;
+        startTimeVal = startParts.time;
+        startNowVal = conf.offlineStartMode === 'immediate';
+      }
+    } else if (isLegacyUnconfigured) {
+      startNowVal = true;
+      startDateVal = nowIST.date;
+      startTimeVal = nowIST.time;
+      endDateVal = defaultEndIST.date;
+      endTimeVal = defaultEndIST.time;
+    }
+
     setOfflineForm({
       isOffline: !!conf.isOffline,
-      startNow: !conf.offlineStartTime,
-      startTime: storedStart,
-      endTime: formatDatetimeLocal(conf.offlineEndTime)
+      startNow: startNowVal,
+      startDate: startDateVal,
+      startTime: startTimeVal,
+      endDate: endDateVal,
+      endTime: endTimeVal,
+      isLegacyUnconfigured: isLegacyUnconfigured
     });
+    setOfflineValidationError('');
+    setOfflineConfigSummary(null);
     setOfflineQuizLink(`${offlineBaseUrl}/offline-quiz/${quiz.id}`);
     setIsOfflineSuccessView(false);
     setIsOfflineModalOpen(true);
@@ -1651,55 +1830,197 @@ export default function TrainerDashboard({
       {isOfflineModalOpen && selectedOfflineQuiz && (
         <div style={{
           position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-          background: 'rgba(15, 23, 42, 0.45)', backdropFilter: 'blur(6px)',
+          background: 'rgba(15, 23, 42, 0.5)', backdropFilter: 'blur(6px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000,
           padding: '20px'
         }}>
           <div style={{
-            width: '100%', maxWidth: '480px', background: '#FFFFFF',
+            width: '100%', maxWidth: '520px', background: '#FFFFFF',
             padding: '28px', borderRadius: '16px', border: '1px solid var(--re-border, #E2E8F0)',
-            boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.15)'
+            boxShadow: '0 20px 45px -10px rgba(15, 23, 42, 0.18)',
+            maxHeight: '90vh', overflowY: 'auto'
           }}>
             {!isOfflineSuccessView ? (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
-                  <h3 style={{ margin: 0, fontSize: '1.18rem', fontWeight: 800, color: 'var(--re-navy, #0F172A)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <WifiOff size={18} style={{ color: '#2563EB' }} /> Configure Offline Quiz
-                  </h3>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid #E2E8F0', paddingBottom: '12px' }}>
+                  <div>
+                    <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: 'var(--re-navy, #0F172A)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <WifiOff size={20} style={{ color: '#2563EB' }} /> Configure Offline Quiz
+                    </h3>
+                    <div style={{ fontSize: '0.78rem', color: '#64748B', marginTop: '2px' }}>
+                      {selectedOfflineQuiz.title}
+                    </div>
+                  </div>
                   <button onClick={() => setIsOfflineModalOpen(false)} style={{ background: '#F1F5F9', border: 'none', color: '#64748B', borderRadius: '50%', width: '30px', height: '30px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
                     <X size={16} />
                   </button>
                 </div>
 
-                <form onSubmit={handleOfflineSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', padding: '12px 14px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                {offlineForm.isLegacyUnconfigured && (
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', color: '#991B1B', fontSize: '0.78rem' }}>
+                    <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#DC2626' }} />
                     <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.84rem', color: '#0F172A' }}>Enable Offline Taking</div>
-                      <div style={{ fontSize: '0.72rem', color: '#64748B' }}>Learners can join asynchronously via a link</div>
+                      <strong>Expiry Not Configured:</strong> This legacy link is currently paused because no expiry time was set. To make it available to learners, configure a valid start and expiry schedule below.
+                    </div>
+                  </div>
+                )}
+
+                {offlineValidationError && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', background: '#FEF2F2', border: '1px solid #FECACA', borderRadius: '8px', padding: '10px 12px', marginBottom: '14px', color: '#DC2626', fontSize: '0.8rem', fontWeight: 600 }}>
+                    <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                    {offlineValidationError}
+                  </div>
+                )}
+
+                <form onSubmit={handleOfflineSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {/* 1. Toggle: Enable Offline Taking */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#F8FAFC', padding: '12px 14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '0.86rem', color: '#0F172A' }}>Enable Offline Taking</div>
+                      <div style={{ fontSize: '0.74rem', color: '#64748B' }}>Learners can join asynchronously via shareable link</div>
                     </div>
                     <input
                       type="checkbox"
                       checked={offlineForm.isOffline}
-                      onChange={e => setOfflineForm({ ...offlineForm, isOffline: e.target.checked })}
-                      style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                      onChange={e => {
+                        setOfflineForm({ ...offlineForm, isOffline: e.target.checked });
+                        setOfflineValidationError('');
+                      }}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer', accentColor: '#2563EB' }}
                     />
                   </div>
 
                   {offlineForm.isOffline && (
                     <>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#ECFDF5', padding: '10px 14px', borderRadius: '8px', border: '1px solid #A7F3D0' }}>
-                        <div>
-                          <div style={{ fontWeight: 700, fontSize: '0.82rem', color: '#065F46' }}>⚡ Start Immediately</div>
-                          <div style={{ fontSize: '0.72rem', color: '#047857' }}>Quiz is live the moment you save</div>
+                      {/* 2. Start Availability: Immediate vs Scheduled */}
+                      <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: offlineForm.startNow ? '#ECFDF5' : '#FFFFFF', padding: '10px 12px', borderRadius: '8px', border: `1px solid ${offlineForm.startNow ? '#A7F3D0' : '#E2E8F0'}` }}>
+                          <div>
+                            <div style={{ fontWeight: 700, fontSize: '0.84rem', color: offlineForm.startNow ? '#065F46' : '#0F172A', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              ⚡ Start Immediately
+                            </div>
+                            <div style={{ fontSize: '0.72rem', color: offlineForm.startNow ? '#047857' : '#64748B' }}>
+                              Quiz opens the moment settings are saved
+                            </div>
+                          </div>
+                          <input
+                            type="checkbox"
+                            checked={offlineForm.startNow}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              const nowIST = toISTParts(new Date().toISOString());
+                              setOfflineForm(prev => ({
+                                ...prev,
+                                startNow: checked,
+                                startDate: checked ? nowIST.date : prev.startDate || nowIST.date,
+                                startTime: checked ? nowIST.time : prev.startTime || nowIST.time
+                              }));
+                              setOfflineValidationError('');
+                            }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer', accentColor: '#059669' }}
+                          />
                         </div>
-                        <input
-                          type="checkbox"
-                          checked={offlineForm.startNow}
-                          onChange={e => setOfflineForm({ ...offlineForm, startNow: e.target.checked, startTime: e.target.checked ? '' : offlineForm.startTime })}
-                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                        />
+
+                        {/* Scheduled Start Inputs (when Start Immediately is unchecked) */}
+                        {!offlineForm.startNow && (
+                          <div style={{ background: '#FFFFFF', padding: '12px', borderRadius: '8px', border: '1px solid #E2E8F0' }}>
+                            <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: '#334155', marginBottom: '6px' }}>
+                              Scheduled Start Date & Time <span style={{ color: '#2563EB', fontWeight: 600 }}>(Asia/Kolkata - IST)</span> *
+                            </label>
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                              <div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginBottom: '2px' }}>Start Date</span>
+                                <input
+                                  type="date"
+                                  required
+                                  value={offlineForm.startDate}
+                                  onChange={e => setOfflineForm({ ...offlineForm, startDate: e.target.value })}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.82rem', color: '#0F172A', boxSizing: 'border-box' }}
+                                />
+                              </div>
+                              <div>
+                                <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginBottom: '2px' }}>Start Time (IST)</span>
+                                <input
+                                  type="time"
+                                  required
+                                  value={offlineForm.startTime}
+                                  onChange={e => setOfflineForm({ ...offlineForm, startTime: e.target.value })}
+                                  style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.82rem', color: '#0F172A', boxSizing: 'border-box' }}
+                                />
+                              </div>
+                            </div>
+                            <span style={{ fontSize: '0.72rem', color: '#64748B', display: 'block', marginTop: '6px' }}>
+                              Before this time, learners opening the link will see “Quiz not yet available” with the scheduled opening time.
+                            </span>
+                          </div>
+                        )}
                       </div>
 
+                      {/* 3. Link Expiry (Mandatory for ALL offline quizzes) */}
+                      <div style={{ background: '#F8FAFC', padding: '14px', borderRadius: '10px', border: '1px solid #E2E8F0' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <label style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0F172A' }}>
+                            Link Expiry Date & Time <span style={{ color: '#DC2626' }}>*</span>
+                          </label>
+                          <span style={{ fontSize: '0.7rem', background: '#EFF6FF', color: '#1D4ED8', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                            Asia/Kolkata (IST)
+                          </span>
+                        </div>
+                        <div style={{ fontSize: '0.72rem', color: '#DC2626', fontWeight: 600, marginBottom: '8px' }}>
+                          Participants can no longer start or submit after this time.
+                        </div>
+
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '10px' }}>
+                          <div>
+                            <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginBottom: '2px' }}>Expiry Date</span>
+                            <input
+                              type="date"
+                              required
+                              value={offlineForm.endDate}
+                              onChange={e => setOfflineForm({ ...offlineForm, endDate: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.82rem', color: '#0F172A', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                          <div>
+                            <span style={{ fontSize: '0.7rem', color: '#64748B', display: 'block', marginBottom: '2px' }}>Expiry Time (IST)</span>
+                            <input
+                              type="time"
+                              required
+                              value={offlineForm.endTime}
+                              onChange={e => setOfflineForm({ ...offlineForm, endTime: e.target.value })}
+                              style={{ width: '100%', padding: '8px 10px', borderRadius: '6px', border: '1px solid #CBD5E1', fontSize: '0.82rem', color: '#0F172A', boxSizing: 'border-box' }}
+                            />
+                          </div>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.7rem', color: '#64748B', fontWeight: 600 }}>Quick Presets:</span>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset(2)}
+                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#334155', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            +2 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset(24)}
+                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#334155', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            +24 Hours
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleApplyPreset(72)}
+                            style={{ padding: '3px 8px', borderRadius: '4px', border: '1px solid #CBD5E1', background: '#FFFFFF', color: '#334155', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer' }}
+                          >
+                            +3 Days
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* 4. Shareable Quiz Link */}
                       <div>
                         <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.78rem', color: '#475569', fontWeight: 600 }}>Shareable Quiz Link</label>
                         <div style={{ display: 'flex', gap: '8px' }}>
@@ -1718,13 +2039,55 @@ export default function TrainerDashboard({
                             {linkCopied ? "Copied" : "Copy"}
                           </button>
                         </div>
+                        {!offlineForm.startNow && (
+                          <span style={{ fontSize: '0.7rem', color: '#D97706', display: 'block', marginTop: '4px', fontWeight: 600 }}>
+                            ⚠️ Note: Link will show “Quiz not yet available” until the scheduled start time.
+                          </span>
+                        )}
                       </div>
+
+                      {/* Close Link Early Button (if previously active) */}
+                      {selectedOfflineQuiz.config?.isOffline && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-start', paddingTop: '4px' }}>
+                          <button
+                            type="button"
+                            onClick={handleCloseLinkEarly}
+                            disabled={offlineSaving}
+                            style={{
+                              padding: '6px 12px', borderRadius: '6px',
+                              background: '#FEF2F2', border: '1px solid #FECACA',
+                              color: '#DC2626', fontSize: '0.74rem', fontWeight: 700,
+                              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px'
+                            }}
+                          >
+                            <WifiOff size={13} /> Close Link Early
+                          </button>
+                        </div>
+                      )}
                     </>
                   )}
 
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
-                    <button type="button" onClick={() => setIsOfflineModalOpen(false)} style={{ padding: '8px 14px', borderRadius: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>Cancel</button>
-                    <button type="submit" style={{ padding: '8px 18px', borderRadius: '8px', background: 'var(--re-primary, #1E40AF)', border: 'none', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}>Save Settings</button>
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px', paddingTop: '12px', borderTop: '1px solid #E2E8F0' }}>
+                    <button
+                      type="button"
+                      onClick={() => setIsOfflineModalOpen(false)}
+                      disabled={offlineSaving}
+                      style={{ padding: '8px 14px', borderRadius: '8px', background: '#F8FAFC', border: '1px solid #E2E8F0', color: '#475569', fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={offlineSaving}
+                      style={{
+                        padding: '8px 18px', borderRadius: '8px',
+                        background: offlineSaving ? '#94A3B8' : 'var(--re-primary, #1E40AF)',
+                        border: 'none', color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700,
+                        cursor: offlineSaving ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {offlineSaving ? 'Saving...' : 'Save Settings'}
+                    </button>
                   </div>
                 </form>
               </>
@@ -1733,17 +2096,60 @@ export default function TrainerDashboard({
                 <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#ECFDF5', border: '2px solid #10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px auto' }}>
                   <Check size={24} style={{ color: '#059669' }} />
                 </div>
-                <h3 style={{ fontSize: '1.25rem', color: 'var(--re-navy, #0F172A)', marginBottom: '6px', fontWeight: 800 }}>Offline Mode Configured!</h3>
-                <p style={{ color: '#64748B', marginBottom: '20px', fontSize: '0.84rem' }}>
-                  Quiz <strong>{selectedOfflineQuiz.title}</strong> is ready for offline completion.
+                <h3 style={{ fontSize: '1.25rem', color: 'var(--re-navy, #0F172A)', marginBottom: '6px', fontWeight: 800 }}>
+                  Offline Availability Configured!
+                </h3>
+                <p style={{ color: '#64748B', marginBottom: '16px', fontSize: '0.84rem' }}>
+                  Quiz <strong>{selectedOfflineQuiz.title}</strong> availability window has been saved on the server.
                 </p>
+
+                {offlineConfigSummary && (
+                  <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '14px', textAlign: 'left', marginBottom: '18px', border: '1px solid #E2E8F0', fontSize: '0.82rem' }}>
+                    <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Start Window:</span>
+                      <strong style={{ color: '#0F172A' }}>
+                        {offlineConfigSummary.isImmediate ? `⚡ Immediate (${offlineConfigSummary.startIST})` : `⏰ Scheduled (${offlineConfigSummary.startIST})`}
+                      </strong>
+                    </div>
+                    <div style={{ marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Expiry Deadline:</span>
+                      <strong style={{ color: '#DC2626' }}>
+                        {offlineConfigSummary.endIST}
+                      </strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span style={{ color: '#64748B', fontWeight: 600 }}>Timezone:</span>
+                      <strong style={{ color: '#2563EB' }}>Asia/Kolkata (IST)</strong>
+                    </div>
+                  </div>
+                )}
+
+                <div style={{ marginBottom: '18px' }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <input
+                      type="text"
+                      value={offlineQuizLink}
+                      readOnly
+                      style={{ flex: 1, padding: '8px 10px', borderRadius: '6px', border: '1px solid #E2E8F0', background: '#F8FAFC', color: '#475569', fontSize: '0.8rem' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(offlineQuizLink)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '4px', padding: '8px 12px', borderRadius: '6px', background: '#FFFFFF', border: '1px solid #E2E8F0', fontSize: '0.76rem', fontWeight: 600, cursor: 'pointer' }}
+                    >
+                      {linkCopied ? <Check size={12} color="#059669" /> : <Copy size={12} />}
+                      {linkCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => {
                     setIsOfflineModalOpen(false);
                     setIsOfflineSuccessView(false);
                   }}
-                  style={{ width: '100%', padding: '10px', background: 'var(--re-primary, #1E40AF)', border: 'none', color: '#FFFFFF', fontWeight: 600, borderRadius: '8px', cursor: 'pointer', fontSize: '0.84rem' }}
+                  style={{ width: '100%', padding: '10px', background: 'var(--re-primary, #1E40AF)', border: 'none', color: '#FFFFFF', fontWeight: 700, borderRadius: '8px', cursor: 'pointer', fontSize: '0.84rem' }}
                 >
                   Close & Back to Dashboard
                 </button>

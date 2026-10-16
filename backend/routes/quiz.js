@@ -254,21 +254,161 @@ const isCorrectAnswer = (question, submittedAnswer) => {
   return scoringEngine.isCorrectAnswer(question, submittedAnswer);
 };
 
+// Explicit IST Timezone formatter
+const formatIST = (dateOrStr) => {
+  if (!dateOrStr) return '';
+  const d = new Date(dateOrStr);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true
+  }) + ' IST';
+};
+
+// Derived server availability state calculator
+const getQuizAvailability = (quiz, now = new Date()) => {
+  const conf = quiz.config || {};
+  if (!conf.isOffline) {
+    return {
+      allowed: false,
+      state: 'DISABLED',
+      error: 'This quiz is not available offline or has been disabled.',
+      startTime: conf.offlineStartTime || null,
+      endTime: conf.offlineEndTime || null
+    };
+  }
+  // Check for legacy link with no expiry
+  if (!conf.offlineEndTime) {
+    return {
+      allowed: false,
+      state: 'UNCONFIGURED',
+      error: 'This quiz link does not have an expiry configured. Please contact your trainer.',
+      startTime: conf.offlineStartTime || null,
+      endTime: null
+    };
+  }
+  const end = new Date(conf.offlineEndTime);
+  if (isNaN(end.getTime())) {
+    return {
+      allowed: false,
+      state: 'UNCONFIGURED',
+      error: 'This quiz link has an invalid expiry configuration.',
+      startTime: conf.offlineStartTime || null,
+      endTime: null
+    };
+  }
+  const start = conf.offlineStartTime ? new Date(conf.offlineStartTime) : null;
+  if (start && !isNaN(start.getTime()) && now < start) {
+    return {
+      allowed: false,
+      state: 'SCHEDULED',
+      error: `Quiz not yet available. Opens on ${formatIST(start)}.`,
+      startTime: conf.offlineStartTime,
+      endTime: conf.offlineEndTime,
+      scheduledStartTime: conf.offlineStartTime
+    };
+  }
+  if (now >= end) {
+    return {
+      allowed: false,
+      state: 'EXPIRED',
+      error: 'This quiz link has expired. Please contact your trainer.',
+      startTime: conf.offlineStartTime,
+      endTime: conf.offlineEndTime,
+      expiredAt: conf.offlineEndTime
+    };
+  }
+  return {
+    allowed: true,
+    state: 'ACTIVE',
+    startTime: conf.offlineStartTime,
+    endTime: conf.offlineEndTime
+  };
+};
+
 // POST /api/quizzes/:id/offline - Enable & configure offline mode
 router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin']), async (req, res) => {
-  const { isOffline, startTime, endTime } = req.body;
+  const { isOffline, startTime, endTime, startNow } = req.body;
   try {
     const quiz = await Quiz.findByPk(req.params.id);
     if (!quiz) {
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
+    // Role-based project authorization check for Trainer
+    if (req.user.role === 'Trainer') {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const isCreator = quiz.creatorId === req.user.id;
+      const hasProjectAccess = quiz.projectId && projectIds.includes(quiz.projectId);
+      if (!isCreator && !hasProjectAccess) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to configure offline mode for this quiz.' });
+      }
+    }
+
     const currentConfig = quiz.config || {};
+    let finalStartTime = null;
+    let finalEndTime = null;
+    let finalStartMode = null;
+
+    if (isOffline) {
+      // 1. Mandatory Expiry Validation
+      if (!endTime) {
+        return res.status(400).json({ error: 'Expiry date and time is required.' });
+      }
+      const end = new Date(endTime);
+      if (isNaN(end.getTime())) {
+        return res.status(400).json({ error: 'Invalid expiry date and time.' });
+      }
+
+      // 2. Start Time Validation
+      const now = new Date();
+      if (startNow || !startTime) {
+        // Immediate start: availability starts immediately after saving
+        finalStartMode = 'immediate';
+        finalStartTime = now.toISOString();
+        if (end <= now) {
+          return res.status(400).json({ error: 'Expiry time must be strictly later than current time.' });
+        }
+      } else {
+        // Scheduled start
+        finalStartMode = 'scheduled';
+        const start = new Date(startTime);
+        if (isNaN(start.getTime())) {
+          return res.status(400).json({ error: 'Invalid start date and time.' });
+        }
+        // Require end time strictly later than start time
+        if (end <= start) {
+          return res.status(400).json({ error: 'Expiry time must be strictly later than start time.' });
+        }
+        // Allow a 5-minute clock tolerance for form submission, but reject past start times
+        if (start.getTime() < now.getTime() - 5 * 60 * 1000) {
+          return res.status(400).json({ error: 'Scheduled start time cannot be in the past.' });
+        }
+        finalStartTime = start.toISOString();
+      }
+
+      finalEndTime = end.toISOString();
+    } else {
+      // Disabling offline taking or closing link early
+      finalStartTime = currentConfig.offlineStartTime || null;
+      finalEndTime = currentConfig.offlineEndTime || null;
+      finalStartMode = currentConfig.offlineStartMode || null;
+    }
+
     quiz.config = {
       ...currentConfig,
       isOffline: !!isOffline,
-      offlineStartTime: startTime || null,
-      offlineEndTime: endTime || null
+      offlineStartTime: finalStartTime,
+      offlineEndTime: finalEndTime,
+      offlineStartMode: finalStartMode,
+      offlineConfiguredAt: new Date().toISOString(),
+      offlineConfiguredBy: req.user.id
     };
 
     const roomCode = `off-${quiz.id.substring(0, 8)}`;
@@ -310,7 +450,12 @@ router.post('/:id/offline', requireAuth, requireRole(['Trainer', 'Admin', 'Super
     // Save changes
     quiz.changed('config', true);
     await quiz.save();
-    res.json({ success: true, config: quiz.config });
+    res.json({
+      success: true,
+      config: quiz.config,
+      startTimeIST: formatIST(quiz.config.offlineStartTime),
+      endTimeIST: formatIST(quiz.config.offlineEndTime)
+    });
   } catch (err) {
     console.error('Offline config error:', err);
     res.status(500).json({ error: 'Failed to configure offline quiz', details: err.message });
@@ -334,25 +479,19 @@ router.get('/:id/offline-details', async (req, res) => {
       return res.status(404).json({ error: 'Quiz not found' });
     }
 
-    const conf = quiz.config || {};
-    if (!conf.isOffline) {
-      return res.status(400).json({ error: 'This quiz is not configured for offline taking.' });
-    }
-
     const now = new Date();
-    if (conf.offlineStartTime && new Date(conf.offlineStartTime) > now) {
-      return res.status(400).json({ 
-        error: 'This offline quiz has not started yet.',
-        startTime: conf.offlineStartTime,
-        endTime: conf.offlineEndTime
-      });
-    }
+    const availability = getQuizAvailability(quiz, now);
 
-    if (conf.offlineEndTime && new Date(conf.offlineEndTime) < now) {
-      return res.status(400).json({ 
-        error: 'This offline quiz has ended.',
-        startTime: conf.offlineStartTime,
-        endTime: conf.offlineEndTime
+    if (!availability.allowed) {
+      return res.status(400).json({
+        error: availability.error,
+        offlineState: availability.state,
+        startTime: availability.startTime,
+        endTime: availability.endTime,
+        scheduledStartTime: availability.scheduledStartTime || null,
+        expiredAt: availability.expiredAt || null,
+        startTimeIST: formatIST(availability.startTime),
+        endTimeIST: formatIST(availability.endTime)
       });
     }
 
@@ -369,8 +508,11 @@ router.get('/:id/offline-details', async (req, res) => {
       description: quiz.description,
       projectName: quiz.Project ? quiz.Project.name : 'No Project',
       questions: safeQuestions,
-      offlineStartTime: conf.offlineStartTime,
-      offlineEndTime: conf.offlineEndTime
+      offlineState: availability.state,
+      offlineStartTime: availability.startTime,
+      offlineEndTime: availability.endTime,
+      startTimeIST: formatIST(availability.startTime),
+      endTimeIST: formatIST(availability.endTime)
     });
   } catch (err) {
     console.error('Offline details error:', err);
@@ -378,13 +520,26 @@ router.get('/:id/offline-details', async (req, res) => {
   }
 });
 
-// POST /api/quizzes/:id/offline-check-eligibility - Verify duplicate submissions
+// POST /api/quizzes/:id/offline-check-eligibility - Verify duplicate submissions & server availability
 router.post('/:id/offline-check-eligibility', async (req, res) => {
   const { employeeId, mobileNumber, userId } = req.body;
   try {
     const quiz = await Quiz.findByPk(req.params.id);
     if (!quiz) {
       return res.status(404).json({ error: 'Quiz not found' });
+    }
+
+    // Server-enforced offline availability window check
+    const availability = getQuizAvailability(quiz, new Date());
+    if (!availability.allowed) {
+      return res.status(400).json({
+        eligible: false,
+        error: availability.error,
+        message: availability.error,
+        offlineState: availability.state,
+        startTime: availability.startTime,
+        endTime: availability.endTime
+      });
     }
 
     if (userId) {
@@ -456,17 +611,15 @@ router.post('/:id/offline-submit', async (req, res) => {
       }
     }
 
-    const conf = quiz.config || {};
-    if (!conf.isOffline) {
-      return res.status(400).json({ error: 'This quiz is not configured for offline taking.' });
-    }
-
-    const now = new Date();
-    if (conf.offlineStartTime && new Date(conf.offlineStartTime) > now) {
-      return res.status(400).json({ error: 'This offline quiz has not started yet.' });
-    }
-    if (conf.offlineEndTime && new Date(conf.offlineEndTime) < now) {
-      return res.status(400).json({ error: 'This offline quiz has ended.' });
+    // Server-enforced offline availability window check
+    const availability = getQuizAvailability(quiz, new Date());
+    if (!availability.allowed) {
+      return res.status(400).json({
+        error: availability.error,
+        offlineState: availability.state,
+        startTime: availability.startTime,
+        endTime: availability.endTime
+      });
     }
 
     const roomCode = `off-${quiz.id.substring(0, 8)}`;

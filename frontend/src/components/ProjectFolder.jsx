@@ -171,24 +171,44 @@ export default function ProjectFolder({
                   const end = quiz.config?.offlineEndTime ? new Date(quiz.config.offlineEndTime) : null;
                   const linkUrl = `${offlineBaseUrl || window.location.origin}/offline-quiz/${quiz.id}`;
 
+                  const formatISTShort = (dateOrStr) => {
+                    if (!dateOrStr) return '';
+                    const d = new Date(dateOrStr);
+                    if (isNaN(d.getTime())) return '';
+                    return d.toLocaleString('en-IN', {
+                      timeZone: 'Asia/Kolkata',
+                      day: '2-digit',
+                      month: 'short',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: true
+                    }) + ' IST';
+                  };
+
                   let offlineBadge = null;
                   if (quiz.config?.isOffline) {
-                    if (start && now < start) {
+                    if (!quiz.config?.offlineEndTime) {
                       offlineBadge = (
-                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(245,158,11,0.1)', color: '#F59E0B', border: '1px solid rgba(245,158,11,0.25)', borderRadius: '4px', fontWeight: 700 }}>
-                          ⏰ Scheduled Offline
+                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: '#FEF2F2', color: '#DC2626', border: '1px solid #FECACA', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          ⚠️ Expiry Not Configured
                         </span>
                       );
-                    } else if (end && now > end) {
+                    } else if (start && now < start) {
                       offlineBadge = (
-                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(239,68,68,0.1)', color: '#EF4444', border: '1px solid rgba(239,68,68,0.25)', borderRadius: '4px', fontWeight: 700 }}>
-                          🚫 Expired
+                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(245,158,11,0.1)', color: '#D97706', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          ⏰ Scheduled (Opens {formatISTShort(start)})
+                        </span>
+                      );
+                    } else if (end && now >= end) {
+                      offlineBadge = (
+                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: '#F1F5F9', color: '#64748B', border: '1px solid #CBD5E1', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          🚫 Expired ({formatISTShort(end)})
                         </span>
                       );
                     } else {
                       offlineBadge = (
-                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '4px', fontWeight: 700 }}>
-                          🟢 Offline Active
+                        <span style={{ fontSize: '0.68rem', padding: '2px 8px', background: 'rgba(16,185,129,0.12)', color: '#059669', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '4px', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
+                          🟢 Offline Active (Until {formatISTShort(end)})
                         </span>
                       );
                     }

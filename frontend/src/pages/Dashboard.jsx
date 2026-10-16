@@ -281,6 +281,16 @@ export default function Dashboard() {
 
   const handleOfflineSubmit = async (e) => {
     e.preventDefault();
+    if (offlineForm.isOffline) {
+      if (!offlineForm.endTime) {
+        alert("Expiry Date & Time is mandatory.");
+        return;
+      }
+      if (offlineForm.startTime && new Date(offlineForm.endTime) <= new Date(offlineForm.startTime)) {
+        alert("Expiry time must be strictly later than start time.");
+        return;
+      }
+    }
     try {
       const res = await axios.post(`/api/quizzes/${selectedOfflineQuiz.id}/offline`, {
         isOffline: offlineForm.isOffline,
@@ -300,7 +310,7 @@ export default function Dashboard() {
       }
     } catch (err) {
       console.error(err);
-      alert('Failed to save offline quiz settings.');
+      alert(err.response?.data?.error || 'Failed to save offline quiz settings.');
     }
   };
 
