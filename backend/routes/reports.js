@@ -627,16 +627,25 @@ router.get('/gamification', requireAuth, async (req, res) => {
     }
 
     // 2. Resolve accessible project IDs based on effective targetProjectId
+    // In Gamification, a specific project selection in the dropdown must scope strictly
+    // to that authorized project without implicitly expanding into its child projects.
+    // If an explicit subProjectId is provided, respect it; otherwise, when a single project
+    // is selected, pass targetProjectId as the subproject filter so that resolution utilities
+    // scope strictly to that project without child expansion.
+    const effectiveSubProjectId = (subProjectId && subProjectId !== 'all')
+      ? subProjectId
+      : (targetProjectId && targetProjectId !== 'all' ? targetProjectId : 'all');
+
     let accessibleProjectIds = [];
     if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
-      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, targetProjectId, subProjectId);
+      accessibleProjectIds = await clientService.getAccessibleClientProjectIds(req.user, targetProjectId, effectiveSubProjectId);
     } else if (userRole === 'T&D Manager') {
       const tdService = require('../utils/tdService');
-      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, targetProjectId, subProjectId);
+      accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, targetProjectId, effectiveSubProjectId);
     } else {
       const intelligenceService = require('../utils/projectIntelligenceService');
-      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, targetProjectId, subProjectId);
+      accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, targetProjectId, effectiveSubProjectId);
     }
 
     // If user has no accessible projects, return legitimate empty state
