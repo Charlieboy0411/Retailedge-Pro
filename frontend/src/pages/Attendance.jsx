@@ -3,6 +3,7 @@ import { Download, Calendar, Award, Clock, Users, ShieldAlert, BarChart2, CheckC
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import { getSocket } from '../utils/socketService';
+import { KpiCard } from '../components/ui';
 
 export default function Attendance() {
   const { token, user } = useContext(AuthContext);
@@ -13,7 +14,9 @@ export default function Attendance() {
   const [activeTab, setActiveTab] = useState('quizzes'); // quizzes or trainings
   const [selectedProject, setSelectedProject] = useState('All');
   const [selectedZone, setSelectedZone] = useState('All');
-  
+
+  const [authorizedProjects, setAuthorizedProjects] = useState([]);
+
   // Project detail modal states
   const [selectedDetailProject, setSelectedDetailProject] = useState(null);
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
@@ -29,6 +32,23 @@ export default function Attendance() {
   useEffect(() => {
     if (token) {
       fetchAttendance(false);
+
+      // Fetch complete authorized projects list for the user
+      const endpoint = ['Trainer', 'Employee', 'Supervisor'].includes(user?.role)
+        ? '/api/projects/my-projects'
+        : '/api/projects';
+      axios.get(endpoint, { headers: { Authorization: `Bearer ${token}` } })
+        .then(res => {
+          if (Array.isArray(res.data) && res.data.length > 0) {
+            setAuthorizedProjects(prev => {
+              const map = new Map();
+              res.data.forEach(p => map.set(p.name, p));
+              (prev || []).forEach(p => map.set(p.name, p));
+              return Array.from(map.values());
+            });
+          }
+        })
+        .catch(err => console.error('Failed to load authorized projects:', err));
 
       const socket = getSocket();
       const handleSync = () => fetchAttendance(true);
@@ -50,7 +70,7 @@ export default function Attendance() {
         clearInterval(pollInterval);
       };
     }
-  }, [token]);
+  }, [token, user?.role]);
 
   const fetchAttendance = async (isSilent = false) => {
     try {
@@ -60,6 +80,14 @@ export default function Attendance() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setAttendanceData(response.data);
+      if (response.data?.projects && Array.isArray(response.data.projects) && response.data.projects.length > 0) {
+        setAuthorizedProjects(prev => {
+          const map = new Map();
+          (prev || []).forEach(p => map.set(p.name, p));
+          response.data.projects.forEach(p => map.set(p.name, p));
+          return Array.from(map.values());
+        });
+      }
     } catch (err) {
       console.error('Failed to fetch attendance', err);
       setError(err.response?.data?.error || 'Failed to fetch attendance data');
@@ -68,25 +96,33 @@ export default function Attendance() {
     }
   };
 
-  const projectsList = attendanceData 
-    ? [...new Set([
-        ...(attendanceData.quizAttendance || []).map(x => x.projectName),
-        ...(attendanceData.trainingAttendance || []).map(x => x.projectName)
-      ])].filter(Boolean).sort()
-    : [];
+  const projectsList = (attendanceData?.projects && attendanceData.projects.length > 0)
+    ? [...new Set(attendanceData.projects.map(p => p.name))].filter(Boolean).sort()
+    : (authorizedProjects.length > 0
+        ? [...new Set(authorizedProjects.map(p => p.name))].filter(Boolean).sort()
+        : (attendanceData
+            ? [...new Set([
+                ...(attendanceData.quizAttendance || []).map(x => x.projectName),
+                ...(attendanceData.trainingAttendance || []).map(x => x.projectName)
+              ])].filter(Boolean).sort()
+            : []));
 
   const zonesList = ['North', 'West', 'East', 'South'];
 
   const filteredQuizAttendance = (attendanceData?.quizAttendance || [])
     .filter(log => {
-      const matchProj = selectedProject === 'All' || log.projectName === selectedProject;
+      const matchProj = selectedProject === 'All' ||
+        log.projectName === selectedProject ||
+        (log.projectName && log.projectName.trim() === selectedProject.trim());
       const matchZone = selectedZone === 'All' || log.zone === selectedZone;
       return matchProj && matchZone;
     });
 
   const filteredTrainingAttendance = (attendanceData?.trainingAttendance || [])
     .filter(log => {
-      const matchProj = selectedProject === 'All' || log.projectName === selectedProject;
+      const matchProj = selectedProject === 'All' ||
+        log.projectName === selectedProject ||
+        (log.projectName && log.projectName.trim() === selectedProject.trim());
       const matchZone = selectedZone === 'All' || log.zone === selectedZone;
       return matchProj && matchZone;
     });
@@ -105,7 +141,7 @@ export default function Attendance() {
       }
       const headers = "Project,Employee ID,Employee Name,Zone,Date,Quiz Attempted,Avg Score";
       const rows = quizAttendance.map(e => `"${e.projectName}","${e.employeeId}","${e.name}","${e.zone || 'N/A'}","${e.dates}",${e.quizCount},"${e.avgScore}"`);
-      
+
       const csvContent = headers + "\n" + rows.join("\n");
       const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -126,7 +162,7 @@ export default function Attendance() {
       }
       const headers = "Project,Employee ID,Employee Name,Zone,Date,Training Topic,Time Spent,Status";
       const rows = trainingAttendance.map(e => `"${e.projectName}","${e.employeeId}","${e.name}","${e.zone || 'N/A'}","${e.date}","${e.topic}","${e.timeSpent}","${e.status}"`);
-      
+
       const csvContent = headers + "\n" + rows.join("\n");
       const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
@@ -169,14 +205,14 @@ export default function Attendance() {
   const isEmployeeView = attendanceData && attendanceData.isEmployee;
 
   return (
-    <div className="view-section active" style={{ display: 'flex', flexDirection: 'column', gap: '24px', overflowY: 'auto' }}>
-      
+    <div className="view-section active" style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+
       <div className="section-header">
         <div>
           <h2 className="section-title">Attendance Tracking</h2>
           <p className="section-desc">
-            {isEmployeeView 
-              ? "Track your presence, quiz completion, and training meeting history." 
+            {isEmployeeView
+              ? "Track your presence, quiz completion, and training meeting history."
               : "Monitor your team's quiz participation history, training meeting attendance, and completion rates."}
           </p>
         </div>
@@ -220,8 +256,8 @@ export default function Attendance() {
 
       {/* Tab Switcher */}
       <div style={{ display: 'flex', gap: '12px', borderBottom: '1px solid var(--border-glass)', paddingBottom: '12px' }}>
-        <button 
-          onClick={() => setActiveTab('quizzes')} 
+        <button
+          onClick={() => setActiveTab('quizzes')}
           style={{
             padding: '8px 16px',
             borderRadius: '8px',
@@ -235,8 +271,8 @@ export default function Attendance() {
         >
           Quiz Attendance
         </button>
-        <button 
-          onClick={() => setActiveTab('trainings')} 
+        <button
+          onClick={() => setActiveTab('trainings')}
           style={{
             padding: '8px 16px',
             borderRadius: '8px',
@@ -257,9 +293,9 @@ export default function Attendance() {
         <div style={{ display: 'flex', gap: '16px', padding: '16px', background: 'var(--bg-tertiary)', borderRadius: '12px', border: '1px solid var(--border-glass)', alignItems: 'center' }}>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>Filter by Project</label>
-            <select 
-              value={selectedProject} 
-              onChange={e => setSelectedProject(e.target.value)} 
+            <select
+              value={selectedProject}
+              onChange={e => setSelectedProject(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-primary)', color: 'var(--text-primary)', minWidth: '180px', outline: 'none', cursor: 'pointer' }}
             >
               <option value="All">All Projects</option>
@@ -268,9 +304,9 @@ export default function Attendance() {
           </div>
           <div>
             <label style={{ display: 'block', fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '6px', fontWeight: 600 }}>Filter by Zone</label>
-            <select 
-              value={selectedZone} 
-              onChange={e => setSelectedZone(e.target.value)} 
+            <select
+              value={selectedZone}
+              onChange={e => setSelectedZone(e.target.value)}
               style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-primary)', color: 'var(--text-primary)', minWidth: '150px', outline: 'none', cursor: 'pointer' }}
             >
               <option value="All">All Zones</option>
@@ -283,104 +319,124 @@ export default function Attendance() {
       {/* Summary Cards */}
       {isEmployeeView ? (
         <div className="dashboard-grid">
-          <div className="glass-card stat-card">
-            <div className="stat-info">
-              <span className="stat-label">Total Days Present</span>
-              <span className="stat-value">{attendanceData.summary.datesCount}</span>
-            </div>
-            <div className="stat-icon-wrapper primary" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
-              <Calendar size={24} />
-            </div>
-          </div>
-          <div className="glass-card stat-card">
-            <div className="stat-info">
-              <span className="stat-label">Quizzes Attempted</span>
-              <span className="stat-value">{attendanceData.summary.quizCount}</span>
-            </div>
-            <div className="stat-icon-wrapper secondary" style={{ background: 'var(--accent-glow)', color: 'var(--accent)' }}>
-              <Award size={24} />
-            </div>
-          </div>
-          <div className="glass-card stat-card">
-            <div className="stat-info">
-              <span className="stat-label">Meetings Attended</span>
-              <span className="stat-value">{attendanceData.trainingLogs ? attendanceData.trainingLogs.length : 0}</span>
-            </div>
-            <div className="stat-icon-wrapper success" style={{ background: 'var(--success-glow)', color: 'var(--success)' }}>
-              <Clock size={24} />
-            </div>
-          </div>
+          <KpiCard
+            icon={Calendar}
+            label="Total Days Present"
+            value={attendanceData.summary.datesCount}
+            variant="blue"
+          />
+          <KpiCard
+            icon={Award}
+            label="Quizzes Attempted"
+            value={attendanceData.summary.quizCount}
+            variant="purple"
+          />
+          <KpiCard
+            icon={Clock}
+            label="Meetings Attended"
+            value={attendanceData.trainingLogs ? attendanceData.trainingLogs.length : 0}
+            variant="green"
+          />
         </div>
       ) : (
         attendanceData && (
-          activeTab === 'quizzes' ? (
+          activeTab === 'quizzes' ? (() => {
+            const getLearnerKey = (u) => (u.employeeId && u.employeeId !== 'N/A' && u.employeeId.trim())
+              ? u.employeeId.trim().toLowerCase()
+              : (u.name ? u.name.trim().toLowerCase() : u.id);
+
+            const isAllProjects = selectedProject === 'All';
+            const totalRows = filteredQuizAttendance.length;
+            const totalAttempts = filteredQuizAttendance.reduce((sum, u) => sum + (u.quizCount || 0), 0);
+
+            const uniqueLearnerKeys = [...new Set(filteredQuizAttendance.map(getLearnerKey))];
+            const totalUniqueLearners = uniqueLearnerKeys.length;
+
+            const attemptedLearnerKeys = [...new Set(
+              filteredQuizAttendance.filter(u => (u.quizCount || 0) > 0).map(getLearnerKey)
+            )];
+            const attemptedCount = attemptedLearnerKeys.length;
+
+            const participantsWithAttempts = filteredQuizAttendance.filter(u => (u.quizCount || 0) > 0);
+
+            const quizAttemptsValue = totalUniqueLearners > 0
+              ? `${attemptedCount} / ${totalUniqueLearners}`
+              : '—';
+
+            const quizAttemptsSubtext = totalUniqueLearners > 0
+              ? (isAllProjects && totalRows !== totalUniqueLearners
+                  ? `${totalUniqueLearners} unique learners across portfolio (${totalRows} project records)`
+                  : (attemptedCount > 0 ? 'Participants with at least one recorded quiz attempt' : 'No quiz attempts recorded'))
+              : 'No participant records';
+
+            const avgQuizzesValue = totalUniqueLearners > 0
+              ? (totalAttempts / totalUniqueLearners).toFixed(1)
+              : '—';
+
+            const avgQuizzesSubtext = totalUniqueLearners > 0
+              ? (isAllProjects
+                  ? `${totalAttempts} total attempts across ${totalUniqueLearners} unique learners`
+                  : 'Average attempt volume')
+              : 'No quiz data available';
+
+            const overallAvgScoreValue = attemptedCount > 0
+              ? `${Math.round(participantsWithAttempts.reduce((sum, u) => sum + parseInt(u.avgScore || 0), 0) / participantsWithAttempts.length)}%`
+              : '—';
+
+            const overallAvgScoreSubtext = totalUniqueLearners === 0
+              ? 'No score data available'
+              : (isAllProjects
+                  ? 'Portfolio aggregate test performance'
+                  : (attemptedCount > 0 ? 'Aggregate test performance' : 'No quiz attempts recorded'));
+
+            return (
+              <div className="dashboard-grid">
+                <KpiCard
+                  icon={Users}
+                  label="Participants with Quiz Attempts"
+                  value={quizAttemptsValue}
+                  variant="blue"
+                  subtext={quizAttemptsSubtext}
+                />
+                <KpiCard
+                  icon={Award}
+                  label="Average Quizzes per Employee"
+                  value={avgQuizzesValue}
+                  variant="purple"
+                  subtext={avgQuizzesSubtext}
+                />
+                <KpiCard
+                  icon={BarChart2}
+                  label="Overall Average Score"
+                  value={overallAvgScoreValue}
+                  variant="green"
+                  subtext={overallAvgScoreSubtext}
+                />
+              </div>
+            );
+          })() : (
             <div className="dashboard-grid">
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Employees Active</span>
-                  <span className="stat-value">{filteredQuizAttendance.filter(u => u.quizCount > 0).length} / {Math.max(filteredQuizAttendance.length, 1)}</span>
-                </div>
-                <div className="stat-icon-wrapper primary" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
-                  <Users size={24} />
-                </div>
-              </div>
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Avg Quizzes per Employee</span>
-                  <span className="stat-value">
-                    {filteredQuizAttendance.length > 0 ? (filteredQuizAttendance.reduce((sum, u) => sum + u.quizCount, 0) / filteredQuizAttendance.length).toFixed(1) : 0}
-                  </span>
-                </div>
-                <div className="stat-icon-wrapper secondary" style={{ background: 'var(--accent-glow)', color: 'var(--accent)' }}>
-                  <Award size={24} />
-                </div>
-              </div>
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Overall Average Score</span>
-                  <span className="stat-value">
-                    {filteredQuizAttendance.length > 0 && filteredQuizAttendance.filter(u => u.quizCount > 0).length > 0
-                      ? `${Math.round(
-                          filteredQuizAttendance.filter(u => u.quizCount > 0).reduce((sum, u) => sum + parseInt(u.avgScore), 0) / 
-                          filteredQuizAttendance.filter(u => u.quizCount > 0).length
-                        )}%`
-                      : '0%'}
-                  </span>
-                </div>
-                <div className="stat-icon-wrapper success" style={{ background: 'var(--success-glow)', color: 'var(--success)' }}>
-                  <BarChart2 size={24} />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <div className="dashboard-grid">
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Trainees Engaged</span>
-                  <span className="stat-value">{[...new Set(filteredTrainingAttendance.map(t => t.userId))].length}</span>
-                </div>
-                <div className="stat-icon-wrapper primary" style={{ background: 'var(--primary-glow)', color: 'var(--primary)' }}>
-                  <Users size={24} />
-                </div>
-              </div>
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Total Session Attendances</span>
-                  <span className="stat-value">{filteredTrainingAttendance.length}</span>
-                </div>
-                <div className="stat-icon-wrapper secondary" style={{ background: 'var(--accent-glow)', color: 'var(--accent)' }}>
-                  <Award size={24} />
-                </div>
-              </div>
-              <div className="glass-card stat-card">
-                <div className="stat-info">
-                  <span className="stat-label">Google Meet Topic Counts</span>
-                  <span className="stat-value">{[...new Set(filteredTrainingAttendance.map(t => t.topic))].length}</span>
-                </div>
-                <div className="stat-icon-wrapper success" style={{ background: 'var(--success-glow)', color: 'var(--success)' }}>
-                  <BarChart2 size={24} />
-                </div>
-              </div>
+              <KpiCard
+                icon={Users}
+                label="Trainees Engaged"
+                value={[...new Set(filteredTrainingAttendance.map(t => t.userId))].length}
+                variant="blue"
+                subtext="Unique participating learners"
+              />
+              <KpiCard
+                icon={Award}
+                label="Total Session Attendances"
+                value={filteredTrainingAttendance.length}
+                variant="purple"
+                subtext="Total attendance logs recorded"
+              />
+              <KpiCard
+                icon={BarChart2}
+                label="Google Meet Topic Counts"
+                value={[...new Set(filteredTrainingAttendance.map(t => t.topic))].length}
+                variant="green"
+                subtext="Distinct modules covered"
+              />
             </div>
           )
         )
@@ -389,11 +445,11 @@ export default function Attendance() {
       {/* Details Table */}
       <div className="glass-card">
         <h3 style={{ marginBottom: '16px' }}>
-          {isEmployeeView 
+          {isEmployeeView
             ? (activeTab === 'quizzes' ? "Your Quiz Participation Log" : "Your Training Meeting Attendance Log")
             : (activeTab === 'quizzes' ? "Employee Quiz Attendance Log" : "Employee Training Meeting Attendance Log")}
         </h3>
-        
+
         {isEmployeeView ? (
           activeTab === 'quizzes' ? (
             (attendanceData.logs || []).length > 0 ? (
@@ -484,17 +540,17 @@ export default function Attendance() {
                   </thead>
                   <tbody>
                     {filteredQuizAttendance.map((log) => (
-                      <tr key={log.userId} style={{ borderBottom: '1px solid var(--border-glass)' }}>
-                        <td 
+                      <tr key={log.id || log.userId} style={{ borderBottom: '1px solid var(--border-glass)' }}>
+                        <td
                           style={{ padding: '16px 12px', color: 'var(--primary)', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}
                           onClick={() => handleProjectClick(log.projectName)}
                         >
                           {log.projectName}
                         </td>
                         <td style={{ padding: '16px 12px', color: 'var(--text-secondary)' }}>{log.employeeId}</td>
-                        <td style={{ padding: '16px 12px', color: 'var(--text-primary)', fontWeight: 500 }}>{log.name}</td>
+                        <td style={{ padding: '16px 12px', color: 'var(--text-primary)', fontWeight: 500, whiteSpace: 'nowrap' }}>{log.name}</td>
                         <td style={{ padding: '16px 12px' }}>
-                          <span style={{ 
+                          <span style={{
                             ...getZoneBadgeStyle(log.zone),
                             padding: '4px 10px',
                             borderRadius: '20px',
@@ -547,7 +603,7 @@ export default function Attendance() {
                         <td style={{ padding: '16px 12px', color: 'var(--text-secondary)' }}>{log.employeeId}</td>
                         <td style={{ padding: '16px 12px', color: 'var(--text-primary)', fontWeight: 500 }}>{log.name}</td>
                         <td style={{ padding: '16px 12px' }}>
-                          <span style={{ 
+                          <span style={{
                             ...getZoneBadgeStyle(log.zone),
                             padding: '4px 10px',
                             borderRadius: '20px',
@@ -631,7 +687,7 @@ export default function Attendance() {
                       </thead>
                       <tbody>
                         {projQuizRows.map(emp => (
-                          <tr key={emp.userId} style={{ borderBottom: '1px solid var(--border-glass)', fontSize: '0.88rem' }}>
+                          <tr key={emp.id || emp.userId} style={{ borderBottom: '1px solid var(--border-glass)', fontSize: '0.88rem' }}>
                             <td style={{ padding: '12px', color: 'var(--text-muted)' }}>{emp.employeeId}</td>
                             <td style={{ padding: '12px', fontWeight: 600 }}>{emp.name}</td>
                             <td style={{ padding: '12px' }}>

@@ -143,7 +143,7 @@ export default function MDDashboard({
       </div>
 
       {/* INSIGHTS BANNER */}
-      <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+      <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '32px', fontSize: '0.875rem', fontWeight: 500 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><AlertTriangle size={16} color={theme.danger} /> 2 clients require immediate attention</div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><TrendingUp size={16} color={theme.success} /> Workforce readiness improved by 4%</div>
@@ -158,7 +158,7 @@ export default function MDDashboard({
       {/* KPI CARDS */}
       <div style={{ display: 'flex', gap: '20px', marginBottom: '24px' }}>
         {/* Card 1 */}
-        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(99, 102, 241, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: theme.primary, fontWeight: 'bold' }}>₹</div>
@@ -181,7 +181,7 @@ export default function MDDashboard({
         </div>
 
         {/* Card 2 */}
-        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Users size={18} color={theme.success} /></div>
@@ -204,7 +204,7 @@ export default function MDDashboard({
         </div>
 
         {/* Card 3 */}
-        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(139, 92, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Target size={18} color={theme.purple} /></div>
@@ -223,7 +223,7 @@ export default function MDDashboard({
         </div>
 
         {/* Card 4 */}
-        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={18} color="#3B82F6" /></div>
@@ -242,7 +242,7 @@ export default function MDDashboard({
         </div>
 
         {/* Card 5 */}
-        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ flex: 1, background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
               <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Star size={18} color={theme.warning} /></div>
@@ -269,7 +269,7 @@ export default function MDDashboard({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr 1fr', gap: '24px', marginBottom: '24px' }}>
         
         {/* Strategic Alerts */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Strategic Alerts</h3>
             <span onClick={() => handleViewDetails('Strategic Alerts', { title: 'Strategic Alerts', data: 'All strategic alerts are currently being monitored by the AI.' })} style={{ fontSize: '0.75rem', color: theme.primary, fontWeight: 600, cursor: 'pointer' }}>View All</span>
@@ -279,7 +279,7 @@ export default function MDDashboard({
               { type: 'Critical', text: 'Galderma compliance dropped below 90%', sub: 'Compliance score is 87%', color: theme.danger, bg: 'rgba(239, 68, 68, 0.1)', border: 'rgba(239, 68, 68, 0.3)' },
               { type: 'Warning', text: 'Royal Canin certifications due for renewal', sub: '256 certificates expiring in 15 days', color: theme.warning, bg: 'rgba(245, 158, 11, 0.1)', border: 'rgba(245, 158, 11, 0.3)' },
               { type: 'Success', text: 'Unilever exceeded training targets', sub: 'Targets achieved 120% this month', color: theme.success, bg: 'rgba(16, 185, 129, 0.1)', border: 'rgba(16, 185, 129, 0.3)' },
-              { type: 'Info', text: 'West region achieved highest productivity', sub: 'Productivity improved by 18%', color: theme.primary, bg: 'rgba(0, 240, 255, 0.1)', border: 'rgba(0, 240, 255, 0.3)' }
+              { type: 'Info', text: 'West region achieved highest productivity', sub: 'Productivity improved by 18%', color: theme.primary, bg: 'rgba(37, 99, 235, 0.08)', border: 'rgba(37, 99, 235, 0.25)' }
             ].map((al, i) => (
               <div key={i} style={{ padding: '12px', background: al.bg, border: `1px solid ${al.border}`, borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
@@ -296,7 +296,7 @@ export default function MDDashboard({
         </div>
 
         {/* Client Health Matrix */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Client Health Matrix</h3>
             <span onClick={() => handleViewDetails('Client Health Matrix', { title: 'Client Health Matrix', data: 'Loading full matrix...' })} style={{ fontSize: '0.75rem', color: theme.primary, fontWeight: 600, cursor: 'pointer' }}>View All Clients</span>
@@ -344,7 +344,7 @@ export default function MDDashboard({
         </div>
 
         {/* Training ROI Overview */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Training ROI Overview</h3>
             <span style={{ fontSize: '0.75rem', color: theme.textSecondary, border: `1px solid ${theme.border}`, padding: '4px 8px', borderRadius: '6px' }}>This Month ▼</span>
@@ -424,7 +424,7 @@ export default function MDDashboard({
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '24px', marginBottom: '24px' }}>
         
         {/* Business Impact Correlation */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Business Impact Correlation</h3>
             <span style={{ fontSize: '0.7rem', color: theme.textSecondary }}>Training vs Sales Growth (Cr)</span>
@@ -445,7 +445,7 @@ export default function MDDashboard({
         </div>
 
         {/* Budget Utilization */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Budget Utilization</h3>
             <MoreVertical size={16} color={theme.textSecondary} />
@@ -477,7 +477,7 @@ export default function MDDashboard({
         </div>
 
         {/* Compliance Risk Deficit */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Compliance Risk Deficit</h3>
             <span style={{ fontSize: '0.7rem', background: 'rgba(239, 68, 68, 0.1)', color: theme.danger, padding: '4px 10px', borderRadius: '12px', fontWeight: 600 }}>High Priority</span>
@@ -520,7 +520,7 @@ export default function MDDashboard({
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1.5fr', gap: '24px', marginBottom: '24px' }}>
         
         {/* Heat Map */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Region Performance Heat Map</h3>
             <span style={{ fontSize: '0.75rem', color: theme.textSecondary, border: `1px solid ${theme.border}`, padding: '4px 8px', borderRadius: '6px' }}>This Month ▼</span>
@@ -581,7 +581,7 @@ export default function MDDashboard({
         </div>
 
         {/* Escalation Radar */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Escalation Radar</h3>
             <span onClick={() => handleViewDetails('Escalations', { title: 'Escalation Radar', data: 'Loading all escalations...' })} style={{ fontSize: '0.75rem', color: theme.primary, fontWeight: 600, cursor: 'pointer' }}>View All Escalations</span>
@@ -620,7 +620,7 @@ export default function MDDashboard({
         </div>
 
         {/* Strategic Projects Requiring Attention */}
-        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', display: 'flex', flexDirection: 'column' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
             <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 700 }}>Strategic Projects Requiring Attention</h3>
             <span onClick={() => handleViewDetails('Strategic Projects', { title: 'Strategic Projects', data: 'Loading projects...' })} style={{ fontSize: '0.75rem', color: theme.primary, fontWeight: 600, cursor: 'pointer' }}>View All Projects</span>
@@ -657,7 +657,7 @@ export default function MDDashboard({
       </div>
 
       {/* BOTTOM AI BANNER */}
-      <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+      <div style={{ background: theme.card, backdropFilter: 'blur(12px)', borderRadius: '12px', border: `1px solid ${theme.border}`, padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
           <div style={{ width: '48px', height: '48px', background: '#6D28D9', borderRadius: '12px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: '1.2rem' }}>AI</div>
           <div>

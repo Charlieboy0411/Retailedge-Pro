@@ -137,9 +137,9 @@ export default function MarketingManagerDashboard({
   const card = (children, style = {}) => (
     <div style={{
       background: CARD,
-      borderRadius: '16px',
+      borderRadius: '12px',
       padding: '24px',
-      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
+      boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)',
       border: `1px solid ${BORDER}`,
       position: 'relative',
       ...style
@@ -195,9 +195,9 @@ export default function MarketingManagerDashboard({
         borderBottom: `2.5px solid ${BORDER}`,
         marginBottom: '28px',
         background: CARD,
-        borderRadius: '16px 16px 0 0',
+        borderRadius: '12px 12px 0 0',
         padding: '0 24px',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
+        boxShadow: '0 1px 2px 0 rgba(15, 23, 42, 0.04)',
         overflowX: 'auto',
         gap: '8px'
       }}>
@@ -214,12 +214,12 @@ export default function MarketingManagerDashboard({
       <div style={{
         background: CARD,
         border: `1px solid ${BORDER}`,
-        borderRadius: '16px',
+        borderRadius: '12px',
         padding: '16px 20px',
         marginBottom: '28px',
         display: 'flex', flexWrap: 'wrap', gap: '12px',
         alignItems: 'center',
-        boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
+        boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)'
       }}>
         <div style={{ fontSize: '0.78rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.5px', color: MUTED }}>Filters:</div>
         
@@ -852,7 +852,7 @@ export default function MarketingManagerDashboard({
                       borderRadius: '8px',
                       fontSize: '0.78rem',
                       fontWeight: 700,
-                      boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
+                      boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
                       display: 'flex',
                       justifyContent: 'space-between',
                       alignItems: 'center'

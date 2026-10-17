@@ -30,8 +30,8 @@ function Toggle({ value, onChange, id }) {
       }}>
         <span style={{
           position: 'absolute', left: value ? '22px' : '2px', top: '2px',
-          width: '16px', height: '16px', borderRadius: '50%', background: 'var(--bg-tertiary)',
-          transition: 'left 0.2s', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
+          width: '16px', height: '16px', borderRadius: '50%', background: '#FFFFFF',
+          transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0, 0, 0, 0.2)',
         }} />
       </span>
     </label>

@@ -80,15 +80,16 @@ export default function KpiCard({
 
         {/* Optional Radial Progress Graphic */}
         {pctValue !== null && !isNaN(pctValue) && (
-          <div className="re-kpi-radial">
+          <div className="re-kpi-radial" title={`${Math.round(pctValue)}%`}>
             <svg viewBox="0 0 36 36" className="re-radial-svg">
               <path
                 className="re-radial-bg"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
               <path
-                className={`re-radial-meter re-radial-meter-${variant}`}
+                className={`re-radial-meter re-radial-meter-${displayVariant}`}
                 strokeDasharray={`${Math.min(Math.max(pctValue, 0), 100)}, 100`}
+                style={pctValue === 0 ? { opacity: 0 } : undefined}
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
             </svg>

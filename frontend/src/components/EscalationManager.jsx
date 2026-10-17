@@ -77,7 +77,7 @@ export default function EscalationManager({ userRole, projects = [], syncTrigger
   const isPM = ['Program Manager', 'Admin', 'Super Admin'].includes(userRole);
 
   return (
-    <div style={{ background: 'var(--bg-glass)', borderRadius: '16px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+    <div style={{ background: '#FFFFFF', borderRadius: '12px', padding: '24px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h3 style={{ margin: 0, fontWeight: 800, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -93,9 +93,9 @@ export default function EscalationManager({ userRole, projects = [], syncTrigger
           <button 
             onClick={() => setShowRaiseModal(true)}
             style={{
-              padding: '10px 16px', background: '#EF4444', color: 'white', border: 'none',
+              padding: '9px 16px', background: '#EF4444', color: 'white', border: 'none',
               borderRadius: '8px', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
+              display: 'flex', alignItems: 'center', gap: '6px', boxShadow: '0 1px 2px rgba(0, 0, 0, 0.05)'
             }}
           >
             <PlusCircle size={16} /> Raise Escalation

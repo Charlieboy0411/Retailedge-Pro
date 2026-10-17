@@ -308,34 +308,67 @@ router.get('/attendance', requireAuth, async (req, res) => {
 
     // Admin/Manager View - Fetch all users
     const whereUser = {};
+    let allAuthorizedProjectIds = [];
+
     if (['MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(userRole)) {
       if (!userProjectId) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
-      const projectIds = await getAccessibleProjectIds(userProjectId);
-      whereUser.projectId = { [Op.in]: projectIds };
+      allAuthorizedProjectIds = await getAccessibleProjectIds(userProjectId);
     } else if (userRole === 'Client') {
       const clientService = require('../utils/clientService');
-      const projectIds = await clientService.getAccessibleClientProjectIds(req.user);
-      whereUser.projectId = { [Op.in]: projectIds };
+      allAuthorizedProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
+    } else if (userRole === 'T&D Manager') {
+      const tdService = require('../utils/tdService');
+      allAuthorizedProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
     } else if (['Program Manager', 'Manager'].includes(userRole) && userProjectId) {
-      const projectIds = await getAccessibleProjectIds(userProjectId);
-      whereUser.projectId = { [Op.in]: projectIds };
+      allAuthorizedProjectIds = await getAccessibleProjectIds(userProjectId);
     } else if (userRole === 'Trainer') {
       const intelligenceService = require('../utils/projectIntelligenceService');
-      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      if (projectIds.length === 0) {
+      allAuthorizedProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (allAuthorizedProjectIds.length === 0) {
         return res.json({
           summary: { quizCount: 0, avgScore: '0%', datesCount: 0 },
           logs: [],
-          trainingLogs: []
+          trainingLogs: [],
+          quizAttendance: [],
+          trainingAttendance: [],
+          projects: []
         });
       }
-      whereUser.projectId = { [Op.in]: projectIds };
     } else if (userRole === 'Supervisor') {
       const supervisorService = require('../utils/supervisorService');
       const subordinateIds = await supervisorService.getTeamSubordinateIds(req.user.id);
       whereUser.id = { [Op.in]: subordinateIds };
+      const subUsers = await User.findAll({ where: { id: { [Op.in]: subordinateIds } }, attributes: ['projectId'] });
+      allAuthorizedProjectIds = [...new Set(subUsers.map(u => u.projectId).filter(Boolean))];
+    } else if (['Admin', 'Super Admin'].includes(userRole)) {
+      const allProjects = await Project.findAll({ attributes: ['id'] });
+      allAuthorizedProjectIds = allProjects.map(p => p.id);
+    }
+
+    // Server-side project scoping and authorization check if query parameter provided
+    let targetProject = null;
+    const targetProjectParam = req.query.projectId;
+    if (targetProjectParam && targetProjectParam !== 'All' && targetProjectParam !== 'all') {
+      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetProjectParam);
+      targetProject = await Project.findOne({
+        where: isUUID ? { id: targetProjectParam } : { name: targetProjectParam }
+      });
+
+      if (!targetProject) {
+        return res.status(404).json({ error: 'Project not found.' });
+      }
+
+      if (!['Admin', 'Super Admin'].includes(userRole) && allAuthorizedProjectIds.length > 0) {
+        if (!allAuthorizedProjectIds.includes(targetProject.id)) {
+          return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
+        }
+      }
+    }
+
+    if (allAuthorizedProjectIds.length > 0) {
+      whereUser.projectId = { [Op.in]: allAuthorizedProjectIds };
     }
 
     const users = await User.findAll({
@@ -343,21 +376,6 @@ router.get('/attendance', requireAuth, async (req, res) => {
       include: [
         Role,
         Project,
-        {
-          model: Participant,
-          include: [
-            Response,
-            {
-              model: Session,
-              include: [
-                {
-                  model: Quiz,
-                  include: [{ model: Question, as: 'questions' }]
-                }
-              ]
-            }
-          ]
-        },
         {
           model: TrainingProgress,
           include: [
@@ -370,41 +388,133 @@ router.get('/attendance', requireAuth, async (req, res) => {
       ]
     });
 
-    const quizAttendanceLogs = users
-      .filter(u => u.Participants && u.Participants.length > 0)
-      .map(u => {
-        const participations = u.Participants || [];
-        const dates = [...new Set(participations.map(p => {
-          const date = p.Session?.startedAt || p.createdAt;
-          return new Date(date).toISOString().split('T')[0];
-        }))].sort((a,b) => new Date(b) - new Date(a));
+    // Query canonical quiz attendance records from Participant joined with Session, Quiz, Question, Response
+    const allParticipants = await Participant.findAll({
+      include: [
+        Response,
+        {
+          model: Session,
+          required: true,
+          include: [
+            {
+              model: Quiz,
+              required: true,
+              include: [
+                { model: Question, as: 'questions' },
+                { model: Project, attributes: ['id', 'name'] }
+              ]
+            },
+            { model: Project, attributes: ['id', 'name'] }
+          ]
+        },
+        User
+      ],
+      order: [['createdAt', 'DESC']]
+    });
 
-        const quizCount = participations.length;
-        
-        let totalPercentage = 0;
-        participations.forEach(p => {
-          const totalQuestions = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
-          const responses = p.Responses || [];
-          const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
-          const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
-          totalPercentage += percentage;
-        });
+    // Strictly scope participants to authorized projects
+    const scopedParticipants = allParticipants.filter(p => {
+      const projId = p.Session?.projectId || p.Session?.Quiz?.projectId;
+      return projId && allAuthorizedProjectIds.includes(projId);
+    });
 
-        const avgScore = quizCount > 0 ? Math.round(totalPercentage / quizCount) : 0;
+    const groupedByProjectAndLearner = {};
 
-        return {
-          userId: u.id,
-          name: u.name,
-          email: u.email,
-          employeeId: u.employee_id || 'N/A',
-          projectName: u.Project ? u.Project.name : 'Unassigned',
-          roleName: u.Role ? u.Role.role_name : 'Employee',
-          dates: dates.join(', ') || 'No attendance',
-          quizCount,
-          avgScore: `${avgScore}%`,
-          zone: u.location ? getZoneFromCoords(null, null, u.location) : 'N/A'
+    scopedParticipants.forEach(p => {
+      const proj = p.Session?.Project || p.Session?.Quiz?.Project;
+      const projId = proj?.id;
+      const projName = proj?.name || 'Unassigned';
+
+      const empId = p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : null;
+      const learnerKey = empId ? empId.toLowerCase() : p.name.trim().toLowerCase();
+      const groupKey = `${projId}_${learnerKey}`;
+
+      if (!groupedByProjectAndLearner[groupKey]) {
+        let zone = 'N/A';
+        if (p.storeName && p.storeName.trim()) {
+          const match = p.storeName.match(/(North|West|East|South)/i);
+          if (match) {
+            zone = match[0].charAt(0).toUpperCase() + match[0].slice(1).toLowerCase();
+          }
+        }
+        if (zone === 'N/A' && p.User?.location) {
+          zone = getZoneFromCoords(null, null, p.User.location);
+        }
+
+        groupedByProjectAndLearner[groupKey] = {
+          id: p.id,
+          userId: p.userId || p.id,
+          name: p.name || p.User?.name || 'Participant',
+          employeeId: empId || p.User?.employee_id || 'N/A',
+          projectName: projName,
+          projectId: projId,
+          roleName: p.User?.Role ? p.User.Role.role_name : 'Employee',
+          zone,
+          participations: []
         };
+      }
+
+      groupedByProjectAndLearner[groupKey].participations.push(p);
+    });
+
+    const quizAttendanceLogs = Object.values(groupedByProjectAndLearner).map(entry => {
+      const dates = [...new Set(entry.participations.map(p => {
+        const date = p.Session?.startedAt || p.createdAt;
+        return date ? new Date(date).toISOString().split('T')[0] : 'N/A';
+      }))].sort((a,b) => new Date(b) - new Date(a));
+
+      const quizCount = entry.participations.length;
+      let totalPercentage = 0;
+
+      entry.participations.forEach(p => {
+        const totalQuestions = p.Session?.Quiz?.questions ? p.Session.Quiz.questions.length : 0;
+        const responses = p.Responses || [];
+        const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
+        const percentage = totalQuestions > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQuestions) * 100))) : 0;
+        totalPercentage += percentage;
       });
+
+      const avgScore = quizCount > 0 ? Math.round(totalPercentage / quizCount) : 0;
+
+      return {
+        id: entry.id,
+        userId: entry.userId,
+        name: entry.name,
+        email: entry.email || '',
+        employeeId: entry.employeeId,
+        projectName: entry.projectName,
+        projectId: entry.projectId,
+        roleName: entry.roleName,
+        dates: dates.join(', ') || 'No attendance',
+        quizCount,
+        avgScore: `${avgScore}%`,
+        zone: entry.zone
+      };
+    });
+
+    // Also include registered employees in authorized projects who have 0 quiz attempts
+    users.forEach(u => {
+      if (u.Role && u.Role.role_name === 'Employee') {
+        const empId = u.employee_id && u.employee_id.trim() ? u.employee_id.trim().toLowerCase() : null;
+        const key = `${u.projectId}_${empId || u.name.trim().toLowerCase()}`;
+        if (!groupedByProjectAndLearner[key]) {
+          quizAttendanceLogs.push({
+            id: u.id,
+            userId: u.id,
+            name: u.name,
+            email: u.email,
+            employeeId: u.employee_id || 'N/A',
+            projectName: u.Project ? u.Project.name : 'Unassigned',
+            projectId: u.projectId,
+            roleName: u.Role ? u.Role.role_name : 'Employee',
+            dates: 'No attendance',
+            quizCount: 0,
+            avgScore: '0%',
+            zone: u.location ? getZoneFromCoords(null, null, u.location) : 'N/A'
+          });
+        }
+      }
+    });
 
     const trainingAttendanceLogs = [];
     users.forEach(u => {
@@ -441,9 +551,27 @@ router.get('/attendance', requireAuth, async (req, res) => {
       });
     });
 
+    let authorizedProjects = [];
+    if (allAuthorizedProjectIds.length > 0) {
+      authorizedProjects = await Project.findAll({
+        where: { id: { [Op.in]: allAuthorizedProjectIds } },
+        attributes: ['id', 'name'],
+        order: [['name', 'ASC']]
+      });
+    }
+
+    const filteredQuizLogs = targetProject
+      ? quizAttendanceLogs.filter(q => q.projectId === targetProject.id || q.projectName === targetProject.name || (q.projectName && q.projectName.trim() === targetProject.name.trim()))
+      : quizAttendanceLogs;
+
+    const filteredTrainLogs = targetProject
+      ? trainingAttendanceLogs.filter(t => t.projectName === targetProject.name || (t.projectName && t.projectName.trim() === targetProject.name.trim()))
+      : trainingAttendanceLogs;
+
     res.json({
-      quizAttendance: quizAttendanceLogs,
-      trainingAttendance: trainingAttendanceLogs
+      quizAttendance: filteredQuizLogs,
+      trainingAttendance: filteredTrainLogs,
+      projects: authorizedProjects.map(p => ({ id: p.id, name: p.name }))
     });
   } catch (error) {
     console.error('Error fetching attendance reports:', error);

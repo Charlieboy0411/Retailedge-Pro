@@ -1,10 +1,10 @@
 import React, { useEffect, useState, useContext, useMemo } from 'react';
-import { 
-  Trophy, Award, Target, Zap, Clock, TrendingUp, Search, 
-  Users, CheckCircle2, ChevronRight, Filter, AlertCircle, 
+import {
+  Trophy, Award, Target, Zap, Clock, TrendingUp, Search,
+  Users, CheckCircle2, ChevronRight, Filter, AlertCircle,
   MapPin, RefreshCw, BarChart2, ShieldCheck, Flame, Layers,
   Download, ChevronUp, ChevronDown, ArrowUpDown, X, ExternalLink,
-  Calendar, FileText, Check, Eye, Info
+  Calendar, FileText, Check, Eye, Info, Globe, Building2
 } from 'lucide-react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
@@ -160,11 +160,11 @@ export default function Gamification() {
     setRefreshError(null);
     try {
       const res = await axios.get('/api/reports/gamification', {
-        params: { 
+        params: {
           projectId: projId || 'all',
           _t: Date.now()
         },
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache'
         }
@@ -190,11 +190,11 @@ export default function Gamification() {
     setRefreshError(null);
     try {
       const res = await axios.get('/api/reports/gamification', {
-        params: { 
+        params: {
           projectId: selectedProjectId || 'all',
           _t: Date.now() // Cache-busting
         },
-        headers: { 
+        headers: {
           Authorization: `Bearer ${token}`,
           'Cache-Control': 'no-cache'
         }
@@ -246,8 +246,8 @@ export default function Gamification() {
 
   // Drill-down from View A into View C
   const handleDrilldownToHistory = (participant) => {
-    const filterKey = participant.employeeId && participant.employeeId !== 'N/A' 
-      ? participant.employeeId 
+    const filterKey = participant.employeeId && participant.employeeId !== 'N/A'
+      ? participant.employeeId
       : participant.name;
     setHistoryParticipantFilter(filterKey);
     setHistorySearch('');
@@ -257,10 +257,10 @@ export default function Gamification() {
   };
 
   // Helper sort header renderer
-  const renderSortHeader = (label, colKey, currentSort, setSortHandler, align = 'left', customWidth = null) => {
+  const renderSortHeader = (label, colKey, currentSort, setSortHandler, align = 'left', customWidth = null, minWidth = null) => {
     const isActive = currentSort.key === colKey;
     return (
-      <th 
+      <th
         onClick={() => {
           if (isActive) {
             setSortHandler({ key: colKey, direction: currentSort.direction === 'asc' ? 'desc' : 'asc' });
@@ -270,7 +270,7 @@ export default function Gamification() {
           }
         }}
         style={{
-          padding: '10px 12px',
+          padding: '11px 8px',
           textAlign: align,
           cursor: 'pointer',
           userSelect: 'none',
@@ -279,11 +279,12 @@ export default function Gamification() {
           fontWeight: 700,
           background: isActive ? '#EFF6FF50' : 'transparent',
           transition: 'all 0.15s ease',
-          width: customWidth || 'auto'
+          width: customWidth || 'auto',
+          minWidth: minWidth || (customWidth || 'auto')
         }}
         title={`Sort by ${label}`}
       >
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: align === 'right' ? 'flex-end' : (align === 'center' ? 'center' : 'flex-start') }}>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', justifyContent: align === 'right' ? 'flex-end' : (align === 'center' ? 'center' : 'flex-start') }}>
           <span>{label}</span>
           {isActive ? (
             currentSort.direction === 'asc' ? <ChevronUp size={14} color="#2563EB" /> : <ChevronDown size={14} color="#2563EB" />
@@ -394,7 +395,7 @@ export default function Gamification() {
     let list = rawSummaries;
     if (summarySearch.trim()) {
       const q = summarySearch.toLowerCase().trim();
-      list = list.filter(p => 
+      list = list.filter(p =>
         (p.name && p.name.toLowerCase().includes(q)) ||
         (p.employeeId && p.employeeId.toLowerCase().includes(q)) ||
         (p.zone && p.zone.toLowerCase().includes(q))
@@ -480,7 +481,7 @@ export default function Gamification() {
     let list = allAttempts;
     if (historyParticipantFilter) {
       const pf = historyParticipantFilter.toLowerCase().trim();
-      list = list.filter(p => 
+      list = list.filter(p =>
         (p.name && p.name.toLowerCase().includes(pf)) ||
         (p.employeeId && p.employeeId.toLowerCase().includes(pf))
       );
@@ -588,8 +589,8 @@ export default function Gamification() {
   const nextLevelObj = LEVELS[LEVELS.indexOf(currentLevelObj) + 1] || null;
 
   return (
-    <div className="view-section active" style={{ padding: '24px', maxWidth: '1440px', margin: '0 auto', boxSizing: 'border-box', overflowX: 'hidden' }}>
-      
+    <div className="view-section active" style={{ padding: '0 0 24px 0', maxWidth: '1440px', margin: '0 auto', boxSizing: 'border-box' }}>
+
       {/* ── Top Header & Context Bar ── */}
       <div style={{
         background: '#FFFFFF',
@@ -653,7 +654,7 @@ export default function Gamification() {
             {isEmployee ? 'My Performance & Gamification' : 'Participant Results & Performance Arena'}
           </h1>
           <p style={{ margin: 0, fontSize: '0.88rem', color: '#64748B' }}>
-            {isEmployee 
+            {isEmployee
               ? 'Your validated Live Arena points, mathematical level progression, and verified badge collection.'
               : 'Project-scoped analytics, cumulative participant standings, topic-wise assessments, and scalable quiz history.'}
           </p>
@@ -1032,18 +1033,18 @@ export default function Gamification() {
               {summarySearch ? 'No participants match your search filter.' : 'No participant records exist for this project yet.'}
             </div>
           ) : (
-            <div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '900px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {renderSortHeader('Rank', 'displayRank', summarySort, setSummarySort, 'center', '70px')}
-                    {renderSortHeader('Participant', 'name', summarySort, setSummarySort)}
-                    {renderSortHeader('Zone / Store', 'zone', summarySort, setSummarySort, 'left', '140px')}
-                    {renderSortHeader('Quizzes Completed', 'quizzesCompleted', summarySort, setSummarySort, 'center', '150px')}
-                    {renderSortHeader('Cumulative Points', 'cumulativeArenaPoints', summarySort, setSummarySort, 'right', '150px')}
-                    {renderSortHeader('Overall Accuracy', 'rawPercentage', summarySort, setSummarySort, 'center', '140px')}
-                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '120px' }}>Badges</th>
-                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '130px' }}>Actions</th>
+                    {renderSortHeader('Rank', 'displayRank', summarySort, setSummarySort, 'center', '52px', '52px')}
+                    {renderSortHeader('Participant', 'name', summarySort, setSummarySort, 'left', '200px', '180px')}
+                    {renderSortHeader('Zone / Store', 'zone', summarySort, setSummarySort, 'left', '100px', '90px')}
+                    {renderSortHeader('Quizzes Completed', 'quizzesCompleted', summarySort, setSummarySort, 'center', '120px', '110px')}
+                    {renderSortHeader('Cumulative Points', 'cumulativeArenaPoints', summarySort, setSummarySort, 'right', '120px', '110px')}
+                    {renderSortHeader('Overall Accuracy', 'rawPercentage', summarySort, setSummarySort, 'center', '110px', '100px')}
+                    <th style={{ padding: '11px 8px', textAlign: 'center', width: '80px', minWidth: '70px', whiteSpace: 'nowrap' }}>Badges</th>
+                    <th style={{ padding: '11px 8px', textAlign: 'center', width: '85px', minWidth: '80px', whiteSpace: 'nowrap' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1059,13 +1060,13 @@ export default function Gamification() {
                           transition: 'background 0.15s ease'
                         }}>
                           {/* Rank */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span style={{
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              width: '26px',
-                              height: '26px',
+                              width: '28px',
+                              height: '28px',
                               borderRadius: '6px',
                               fontWeight: 800,
                               fontSize: '0.8rem',
@@ -1078,8 +1079,8 @@ export default function Gamification() {
                           </td>
 
                           {/* Participant Name & Inline Subtitle */}
-                          <td style={{ padding: '10px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <td style={{ padding: '12px 10px', minWidth: '180px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                               <button
                                 onClick={() => toggleSummaryRow(rowKey)}
                                 style={{
@@ -1096,12 +1097,20 @@ export default function Gamification() {
                               >
                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                               </button>
-                              <div>
+                              <div
+                                style={{
+                                  minWidth: 0,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={`${p.name}${p.employeeId && p.employeeId !== 'N/A' ? ` (${p.employeeId})` : ''}`}
+                              >
                                 <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
                                   {p.name}
                                 </span>
                                 {p.employeeId && p.employeeId !== 'N/A' && (
-                                  <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                  <span style={{ fontSize: '0.74rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace', fontWeight: 500 }}>
                                     ({p.employeeId})
                                   </span>
                                 )}
@@ -1110,7 +1119,7 @@ export default function Gamification() {
                           </td>
 
                           {/* Zone / Store */}
-                          <td style={{ padding: '10px 12px', color: '#475569' }}>
+                          <td style={{ padding: '12px 10px', color: '#475569', whiteSpace: 'nowrap' }}>
                             <span style={{
                               display: 'inline-block',
                               padding: '2px 8px',
@@ -1124,7 +1133,7 @@ export default function Gamification() {
                           </td>
 
                           {/* Quizzes Completed */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span style={{
                               padding: '3px 8px',
                               borderRadius: '6px',
@@ -1138,12 +1147,12 @@ export default function Gamification() {
                           </td>
 
                           {/* Cumulative Arena Points */}
-                          <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'right', fontWeight: 800, color: '#FF6B35', fontSize: '0.92rem', whiteSpace: 'nowrap' }}>
                             {p.cumulativeArenaPoints.toLocaleString()} pts
                           </td>
 
                           {/* Overall Accuracy */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span style={{
                               padding: '3px 8px', borderRadius: '6px',
                               background: p.rawPercentage >= 70 ? '#ECFDF5' : (p.rawPercentage >= 0 ? '#FEF2F2' : '#F1F5F9'),
@@ -1155,7 +1164,7 @@ export default function Gamification() {
                           </td>
 
                           {/* Badges Earned */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             {p.earnedBadges && p.earnedBadges.length > 0 ? (
                               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '3px' }}>
                                 {p.earnedBadges.map(bId => {
@@ -1171,7 +1180,7 @@ export default function Gamification() {
                           </td>
 
                           {/* Actions: History & Expand */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 10px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
                               <button
                                 onClick={() => handleDrilldownToHistory(p)}
@@ -1180,13 +1189,14 @@ export default function Gamification() {
                                   color: '#2563EB',
                                   border: '1px solid #BFDBFE',
                                   borderRadius: '6px',
-                                  padding: '4px 8px',
+                                  padding: '5px 10px',
                                   fontSize: '0.75rem',
                                   fontWeight: 700,
                                   cursor: 'pointer',
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px'
+                                  gap: '4px',
+                                  transition: 'all 0.15s ease'
                                 }}
                                 title="View chronological quiz history for this participant"
                               >
@@ -1308,8 +1318,8 @@ export default function Gamification() {
                 fontSize: '0.8rem',
                 fontWeight: 600
               }}>
-                {topicQuizId === 'all' 
-                  ? '🌐 All Topics & Sessions View — Displaying individual quiz session attempts' 
+                {topicQuizId === 'all'
+                  ? '🌐 All Topics & Sessions View — Displaying individual quiz session attempts'
                   : `🎯 Topic Scoped: ${availableQuizzes.find(q => q.id === topicQuizId)?.title || 'Selected Quiz'}`}
               </div>
             </div>
@@ -1460,18 +1470,18 @@ export default function Gamification() {
               No quiz attempt records match the selected topic and session criteria.
             </div>
           ) : (
-            <div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+            <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                    {renderSortHeader('Rank', 'displayRank', topicSort, setTopicSort, 'center', '70px')}
-                    {renderSortHeader('Participant', 'name', topicSort, setTopicSort)}
-                    {renderSortHeader('Zone / Store', 'zone', topicSort, setTopicSort, 'left', '140px')}
-                    {renderSortHeader('Correct Answers', 'correctCount', topicSort, setTopicSort, 'center', '140px')}
-                    {renderSortHeader('Quiz Score', 'rawPercentage', topicSort, setTopicSort, 'center', '130px')}
-                    {renderSortHeader('Points Earned', 'arenaPoints', topicSort, setTopicSort, 'right', '140px')}
-                    {renderSortHeader('Status', 'status', topicSort, setTopicSort, 'center', '130px')}
-                    <th style={{ padding: '10px 12px', textAlign: 'center', width: '100px' }}>Details</th>
+                    {renderSortHeader('Rank', 'displayRank', topicSort, setTopicSort, 'center', '64px', '64px')}
+                    {renderSortHeader('Participant', 'name', topicSort, setTopicSort, 'left', '240px', '220px')}
+                    {renderSortHeader('Zone / Store', 'zone', topicSort, setTopicSort, 'left', '140px', '130px')}
+                    {renderSortHeader('Correct Answers', 'correctCount', topicSort, setTopicSort, 'center', '140px', '130px')}
+                    {renderSortHeader('Quiz Score', 'rawPercentage', topicSort, setTopicSort, 'center', '130px', '120px')}
+                    {renderSortHeader('Points Earned', 'arenaPoints', topicSort, setTopicSort, 'right', '140px', '130px')}
+                    {renderSortHeader('Status', 'status', topicSort, setTopicSort, 'center', '130px', '120px')}
+                    <th style={{ padding: '12px 14px', textAlign: 'center', width: '100px', minWidth: '90px', whiteSpace: 'nowrap' }}>Details</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1487,13 +1497,13 @@ export default function Gamification() {
                           transition: 'background 0.15s ease'
                         }}>
                           {/* Rank */}
-                          <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                          <td style={{ padding: '12px 14px', textAlign: 'center', whiteSpace: 'nowrap' }}>
                             <span style={{
                               display: 'inline-flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              width: '26px',
-                              height: '26px',
+                              width: '28px',
+                              height: '28px',
                               borderRadius: '6px',
                               fontWeight: 800,
                               fontSize: '0.8rem',
@@ -1506,8 +1516,8 @@ export default function Gamification() {
                           </td>
 
                           {/* Participant Name & Inline Subtitle */}
-                          <td style={{ padding: '10px 12px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <td style={{ padding: '12px 14px', minWidth: '220px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
                               <button
                                 onClick={() => toggleTopicRow(rowKey)}
                                 style={{
@@ -1524,12 +1534,20 @@ export default function Gamification() {
                               >
                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                               </button>
-                              <div>
+                              <div
+                                style={{
+                                  minWidth: 0,
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap'
+                                }}
+                                title={`${row.name}${row.employeeId && row.employeeId !== 'N/A' ? ` (${row.employeeId})` : ''}`}
+                              >
                                 <span style={{ fontWeight: 700, color: '#0F172A', fontSize: '0.88rem' }}>
                                   {row.name}
                                 </span>
                                 {row.employeeId && row.employeeId !== 'N/A' && (
-                                  <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                  <span style={{ fontSize: '0.74rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace', fontWeight: 500 }}>
                                     ({row.employeeId})
                                   </span>
                                 )}
@@ -1896,19 +1914,19 @@ export default function Gamification() {
                   No historical quiz attempt records match the filter criteria.
                 </div>
               ) : (
-                <div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                <div style={{ overflowX: 'auto', width: '100%', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ width: '100%', minWidth: '1020px', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
                     <thead>
                       <tr style={{ borderBottom: '2px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                         {renderSortHeader('Date', 'createdAt', historySort, setHistorySort, 'left', '110px')}
-                        {renderSortHeader('Participant', 'name', historySort, setHistorySort)}
+                        {renderSortHeader('Participant', 'name', historySort, setHistorySort, 'left', '220px', '200px')}
                         {renderSortHeader('Zone / Store', 'zone', historySort, setHistorySort, 'left', '130px')}
                         {renderSortHeader('Quiz / Topic', 'quizTitle', historySort, setHistorySort)}
                         {renderSortHeader('Questions', 'questionsCount', historySort, setHistorySort, 'center', '110px')}
                         {renderSortHeader('Score', 'rawPercentage', historySort, setHistorySort, 'center', '110px')}
                         {renderSortHeader('Points', 'arenaPoints', historySort, setHistorySort, 'right', '110px')}
                         {renderSortHeader('Status', 'status', historySort, setHistorySort, 'center', '110px')}
-                        <th style={{ padding: '10px 12px', textAlign: 'center', width: '90px' }}>Details</th>
+                        <th style={{ padding: '12px 14px', textAlign: 'center', width: '90px', minWidth: '80px', whiteSpace: 'nowrap' }}>Details</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1924,16 +1942,24 @@ export default function Gamification() {
                               transition: 'background 0.15s ease'
                             }}>
                               {/* Date */}
-                              <td style={{ padding: '10px 12px', color: '#64748B', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+                              <td style={{ padding: '12px 14px', color: '#64748B', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
                                 {row.date || (row.createdAt ? new Date(row.createdAt).toISOString().split('T')[0] : 'N/A')}
                               </td>
 
                               {/* Participant */}
-                              <td style={{ padding: '10px 12px' }}>
-                                <div>
+                              <td style={{ padding: '12px 14px', minWidth: '200px' }}>
+                                <div
+                                  style={{
+                                    minWidth: 0,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                  title={`${row.name}${row.employeeId && row.employeeId !== 'N/A' ? ` (${row.employeeId})` : ''}`}
+                                >
                                   <span style={{ fontWeight: 700, color: '#0F172A' }}>{row.name}</span>
                                   {row.employeeId && row.employeeId !== 'N/A' && (
-                                    <span style={{ fontSize: '0.72rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace' }}>
+                                    <span style={{ fontSize: '0.74rem', color: '#64748B', marginLeft: '6px', fontFamily: 'monospace', fontWeight: 500 }}>
                                       ({row.employeeId})
                                     </span>
                                   )}
@@ -2259,74 +2285,198 @@ export default function Gamification() {
       )}
 
       {/* ── Team Performance by Zone / Store (Shown on Summary Tab) ── */}
-      {!isEmployee && activeTab === 'summary' && zoneBreakdown.length > 0 && (
-        <div style={{
-          background: '#FFFFFF',
-          borderRadius: '16px',
-          border: '1px solid #E2E8F0',
-          padding: '24px 28px',
-          marginTop: '24px',
-          boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)'
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <div>
-              <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.15rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <MapPin size={20} color="#2563EB" />
-                Team Performance by Zone / Store
-              </h3>
-              <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
-                Performance aggregated by registered participant store or territory.
-              </p>
-            </div>
-          </div>
+      {!isEmployee && activeTab === 'summary' && zoneBreakdown.length > 0 && (() => {
+        // Distinguish regional territory aggregates (e.g. West, East, North, South, Central or multi-learner groups >= 4) from specific retail stores/outlets
+        const isRegionalZone = (zoneName) => {
+          const norm = (zoneName || '').trim().toLowerCase();
+          return ['west', 'east', 'north', 'south', 'central', 'northeast', 'northwest', 'southeast', 'southwest'].includes(norm);
+        };
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-            gap: '14px'
-          }}>
-            {zoneBreakdown.map((z, idx) => (
-              <div key={idx} style={{
-                padding: '16px 18px',
-                borderRadius: '12px',
-                background: '#F8FAFC',
-                border: '1px solid #E2E8F0',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontWeight: 800, fontSize: '0.95rem', color: '#0F172A' }}>
+        const regionalZones = zoneBreakdown.filter(z => isRegionalZone(z.zone) || z.participantCount >= 4);
+        const storeOutlets = zoneBreakdown.filter(z => !regionalZones.includes(z));
+
+        const renderZoneCard = (z, idx, isRegional = false) => (
+          <div
+            key={`${z.zone}_${idx}`}
+            style={{
+              padding: isRegional ? '20px 22px' : '16px 18px',
+              borderRadius: '12px',
+              background: isRegional ? '#FFFFFF' : '#F8FAFC',
+              border: isRegional ? '1.5px solid #CBD5E1' : '1px solid #E2E8F0',
+              boxShadow: isRegional ? '0 2px 5px rgba(15, 23, 42, 0.05)' : 'none',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'space-between',
+              gap: '12px',
+              transition: 'all 0.15s ease',
+              position: 'relative'
+            }}
+          >
+            {/* Header: Name + Badge */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                <div style={{
+                  width: isRegional ? '32px' : '28px',
+                  height: isRegional ? '32px' : '28px',
+                  borderRadius: '8px',
+                  background: isRegional ? '#EFF6FF' : '#F1F5F9',
+                  color: isRegional ? '#2563EB' : '#64748B',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {isRegional ? <Globe size={isRegional ? 18 : 15} /> : <MapPin size={15} />}
+                </div>
+                <div style={{ minWidth: 0 }}>
+                  <div
+                    style={{
+                      fontWeight: 800,
+                      fontSize: isRegional ? '1.02rem' : '0.92rem',
+                      color: '#0F172A',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                    title={z.zone}
+                  >
                     {z.zone}
-                  </span>
-                  <span style={{
-                    padding: '3px 8px', borderRadius: '6px',
-                    background: '#EFF6FF', color: '#2563EB',
-                    fontSize: '0.72rem', fontWeight: 700
-                  }}>
-                    {z.participantCount} {z.participantCount === 1 ? 'Learner' : 'Learners'}
-                  </span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#64748B' }}>
-                  <span>Completed Quizzes:</span>
-                  <span style={{ fontWeight: 700, color: '#0F172A' }}>{z.quizzesCompleted}</span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#64748B' }}>
-                  <span>Average Score:</span>
-                  <span style={{ fontWeight: 700, color: z.avgScore !== 'N/A' ? '#10B981' : '#94A3B8' }}>{z.avgScore}</span>
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', color: '#64748B', borderTop: '1px dashed #E2E8F0', paddingTop: '6px' }}>
-                  <span>Arena Points:</span>
-                  <span style={{ fontWeight: 800, color: '#FF6B35' }}>{z.totalArenaPoints.toLocaleString()} pts</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#64748B', fontWeight: 500 }}>
+                    {isRegional ? 'Regional Territory' : 'Store / Location Outlet'}
+                  </div>
                 </div>
               </div>
-            ))}
+              <span style={{
+                padding: '3px 8px',
+                borderRadius: '6px',
+                background: isRegional ? '#EFF6FF' : '#E2E8F0',
+                color: isRegional ? '#2563EB' : '#475569',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                flexShrink: 0
+              }}>
+                {z.participantCount} {z.participantCount === 1 ? 'Learner' : 'Learners'}
+              </span>
+            </div>
+
+            {/* Metrics Breakdown */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #F1F5F9', paddingTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                <span style={{ color: '#64748B' }}>Completed Quizzes:</span>
+                <span style={{ fontWeight: 700, color: '#0F172A' }}>{z.quizzesCompleted}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.82rem' }}>
+                <span style={{ color: '#64748B' }}>Average Score:</span>
+                <span style={{
+                  fontWeight: 700,
+                  color: z.avgScore !== 'N/A' ? '#059669' : '#94A3B8',
+                  background: z.avgScore !== 'N/A' ? '#ECFDF5' : 'transparent',
+                  padding: z.avgScore !== 'N/A' ? '2px 6px' : '0',
+                  borderRadius: '4px'
+                }}>
+                  {z.avgScore}
+                </span>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                fontSize: '0.82rem',
+                borderTop: '1px dashed #E2E8F0',
+                paddingTop: '8px',
+                marginTop: '2px'
+              }}>
+                <span style={{ color: '#64748B', fontWeight: 600 }}>Arena Points:</span>
+                <span style={{ fontWeight: 800, color: '#FF6B35', fontSize: '0.95rem' }}>
+                  {z.totalArenaPoints.toLocaleString()} pts
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+
+        return (
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            border: '1px solid #E2E8F0',
+            padding: '24px 28px',
+            marginTop: '24px',
+            boxShadow: '0 1px 3px rgba(15, 23, 42, 0.05)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, margin: '0 0 4px 0', fontSize: '1.18rem', color: '#0F172A', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MapPin size={20} color="#2563EB" />
+                  Team Performance by Zone / Store
+                </h3>
+                <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748B' }}>
+                  Performance aggregated by registered participant store or territory.
+                </p>
+              </div>
+            </div>
+
+            {/* Tier 1: Regional Territories */}
+            {regionalZones.length > 0 && (
+              <div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '14px',
+                  paddingBottom: '8px',
+                  borderBottom: '1px solid #F1F5F9'
+                }}>
+                  <Globe size={16} color="#2563EB" />
+                  <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#1E293B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Regional Territories ({regionalZones.length})
+                  </span>
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {regionalZones.map((z, idx) => renderZoneCard(z, idx, true))}
+                </div>
+              </div>
+            )}
+
+            {/* Tier 2: Specific Stores & Outlets */}
+            {storeOutlets.length > 0 && (
+              <div>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  marginBottom: '14px',
+                  paddingBottom: '8px',
+                  borderBottom: '1px solid #F1F5F9'
+                }}>
+                  <Building2 size={16} color="#64748B" />
+                  <span style={{ fontSize: '0.86rem', fontWeight: 700, color: '#64748B', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    Individual Stores & Outlets ({storeOutlets.length})
+                  </span>
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+                  gap: '16px'
+                }}>
+                  {storeOutlets.map((z, idx) => renderZoneCard(z, idx, false))}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
     </div>
   );

@@ -129,31 +129,31 @@ export default function Layout() {
 
   return (
     <div className="app-container">
-      {/* ─── LEFT SIDEBAR (White Enterprise System) ─── */}
+      {/* ─── LEFT SIDEBAR (Deep Navy Enterprise System) ─── */}
       <nav className="sidebar">
         {/* Brand Area */}
-        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '18px 20px', borderBottom: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+        <div className="brand-section" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '18px 20px', borderBottom: '1px solid #1E293B', background: '#0F172A' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', width: '100%' }}>
             <div style={{
               width: '36px', height: '36px', borderRadius: '8px',
-              background: '#EFF6FF',
-              border: '1px solid rgba(37, 99, 235, 0.2)',
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.12)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               flexShrink: 0
             }}>
               {/* RetailEdge PRO 3-bar corporate icon */}
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
                 <rect x="3" y="12" width="4" height="9" rx="1.5" fill="#2563EB" />
-                <rect x="10" y="7" width="4" height="14" rx="1.5" fill="#3B82F6" />
-                <rect x="17" y="3" width="4" height="18" rx="1.5" fill="#06B6D4" />
+                <rect x="10" y="7" width="4" height="14" rx="1.5" fill="#38BDF8" />
+                <rect x="17" y="3" width="4" height="18" rx="1.5" fill="#22C55E" />
               </svg>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 800, fontSize: '1.05rem', color: '#0F172A', letterSpacing: '-0.02em' }}>
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 800, fontSize: '1.05rem', color: '#FFFFFF', letterSpacing: '-0.02em' }}>
                   RETAILEDGE
                 </span>
-                <span style={{ fontFamily: 'Manrope, sans-serif', fontWeight: 900, fontSize: '1.05rem', color: '#2563EB', letterSpacing: '0.02em' }}>
+                <span style={{ fontFamily: 'var(--font-heading)', fontWeight: 900, fontSize: '1.05rem', color: '#38BDF8', letterSpacing: '0.02em' }}>
                   PRO
                 </span>
               </div>
@@ -251,10 +251,10 @@ export default function Layout() {
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '6px 12px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === myProjectId ? '#2563EB' : '#475569',
-                        background: searchParams.get('projectId') === myProjectId ? '#EFF6FF' : 'transparent',
+                        color: searchParams.get('projectId') === myProjectId ? '#38BDF8' : '#94A3B8',
+                        background: searchParams.get('projectId') === myProjectId ? '#1E293B' : 'transparent',
                         fontWeight: searchParams.get('projectId') === myProjectId ? 700 : 500,
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? '#2563EB' : 'transparent'}`
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === myProjectId ? '#38BDF8' : 'transparent'}`
                       }}
                     >
                       <FolderOpen size={14} style={{ flexShrink: 0 }} />
@@ -270,10 +270,10 @@ export default function Layout() {
                         display: 'flex', alignItems: 'center', gap: '8px',
                         padding: '6px 12px', marginLeft: '10px', fontSize: '0.8rem', borderRadius: '6px',
                         textDecoration: 'none',
-                        color: searchParams.get('projectId') === cp.id ? '#2563EB' : '#475569',
-                        background: searchParams.get('projectId') === cp.id ? '#EFF6FF' : 'transparent',
+                        color: searchParams.get('projectId') === cp.id ? '#38BDF8' : '#94A3B8',
+                        background: searchParams.get('projectId') === cp.id ? '#1E293B' : 'transparent',
                         fontWeight: searchParams.get('projectId') === cp.id ? 700 : 500,
-                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? '#2563EB' : 'transparent'}`
+                        borderLeft: `2.5px solid ${searchParams.get('projectId') === cp.id ? '#38BDF8' : 'transparent'}`
                       }}
                     >
                       <Network size={14} style={{ flexShrink: 0 }} />
@@ -631,7 +631,7 @@ export default function Layout() {
             <div 
               style={{
                 position: 'absolute', bottom: -1, right: -1, width: '10px', height: '10px',
-                backgroundColor: '#10B981', border: '2px solid #FFFFFF',
+                backgroundColor: '#22C55E', border: '2px solid #0B1220',
                 borderRadius: '50%'
               }} 
               title="Active Session"
@@ -649,7 +649,7 @@ export default function Layout() {
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'all 0.15s ease'
             }}
-            onMouseOver={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = '#F8FAFC'; }}
+            onMouseOver={e => { e.currentTarget.style.color = '#EF4444'; e.currentTarget.style.background = '#1E293B'; }}
             onMouseOut={e => { e.currentTarget.style.color = '#94A3B8'; e.currentTarget.style.background = 'none'; }}
             title="Log Out"
           >
@@ -670,6 +670,7 @@ export default function Layout() {
           <div className="header-actions">
             {/* Raise Query Action */}
             <button 
+              className="header-query-btn"
               onClick={() => {
                 setQuerySubject('');
                 setQueryDesc('');
@@ -679,57 +680,39 @@ export default function Layout() {
                 setQueryError('');
                 setIsQueryModalOpen(true);
               }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '6px 14px', borderRadius: '8px', fontSize: '0.8rem',
-                fontWeight: 600, color: '#EF4444', background: '#FEF2F2',
-                border: '1px solid rgba(239, 68, 68, 0.25)', cursor: 'pointer',
-                transition: 'all 0.15s ease'
-              }}
-              onMouseOver={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.12)'; }}
-              onMouseOut={e => { e.currentTarget.style.background = '#FEF2F2'; }}
+              title="Raise Support Query"
+              aria-label="Raise Support Query"
             >
-              <AlertTriangle size={14} />
-              <span>Raise Query</span>
+              <AlertTriangle size={14} className="header-query-icon" />
+              <span className="header-query-text">Raise Query</span>
+              <span className="header-query-text-compact">Query</span>
             </button>
 
             {/* Notification Bell */}
-            <button className="icon-badge-btn" title="Notifications">
+            <button className="icon-badge-btn header-notification-btn" title="Notifications" aria-label="Notifications">
               <Bell size={18} />
               <span className="badge-dot" />
             </button>
 
             {/* Enterprise Brand Pill */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '8px',
-              background: '#EFF6FF', border: '1px solid rgba(37, 99, 235, 0.2)',
-              borderRadius: '20px', padding: '5px 12px', fontSize: '0.8rem',
-              fontWeight: 700, color: '#2563EB'
-            }}>
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2563EB', display: 'inline-block' }} />
-              <span>RetailEdge Pro Enterprise</span>
-              <ChevronDown size={14} style={{ opacity: 0.7 }} />
+            <div className="header-enterprise-pill" title="RetailEdge Pro Enterprise">
+              <span className="header-enterprise-dot" />
+              <span className="header-enterprise-name-full">RetailEdge Pro Enterprise</span>
+              <span className="header-enterprise-name-compact">Enterprise</span>
+              <span className="header-enterprise-name-tiny">PRO</span>
+              <ChevronDown size={14} className="header-enterprise-chevron" />
             </div>
 
             {/* User Profile Context in Top Header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '10px',
-              paddingLeft: '6px', borderLeft: '1px solid #E2E8F0'
-            }}>
-              <div style={{
-                width: '36px', height: '36px', borderRadius: '50%',
-                background: '#EFF6FF', border: '1.5px solid rgba(37, 99, 235, 0.25)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontFamily: 'var(--font-heading)', fontWeight: 700, fontSize: '0.86rem',
-                color: '#2563EB', flexShrink: 0
-              }}>
+            <div className="header-user-wrapper" title={user?.name ? `${user.name} (${user?.role || 'Enterprise User'})` : 'User Profile'}>
+              <div className="header-user-avatar" aria-label="User Avatar">
                 {user?.name ? user.name.substring(0, 2).toUpperCase() : 'U'}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#0F172A', whiteSpace: 'nowrap' }}>
+              <div className="header-user-meta">
+                <span className="header-user-name">
                   {user?.name || 'Authorized User'}
                 </span>
-                <span style={{ fontSize: '0.74rem', color: '#64748B', fontWeight: 500 }}>
+                <span className="header-user-role">
                   {user?.role || 'Enterprise User'}
                 </span>
               </div>

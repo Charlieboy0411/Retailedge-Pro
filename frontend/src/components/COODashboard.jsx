@@ -166,15 +166,16 @@ export default function COODashboard({
           { label: 'Deployment Efficiency', value: `${deploymentEfficiency.toFixed(1)}%`, icon: <TrendingUp size={20} color="#3B8C68" />, border: '#3B8C68' }
         ].map((card, i) => (
           <div key={i} style={{
-            background: 'var(--bg-glass)',
+            background: '#FFFFFF',
             padding: '20px',
-            borderRadius: '16px',
-            boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)',
-            borderTop: `4px solid ${card.border}`,
+            borderRadius: '12px',
+            border: '1px solid #E2E8F0',
+            boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)',
+            borderTop: `3.5px solid ${card.border}`,
             display: 'flex',
             justifyContent: 'space-between',
             alignItems: 'center',
-            transition: 'transform 0.2s',
+            transition: 'transform 0.15s ease, box-shadow 0.15s ease',
             cursor: 'default'
           }}
           onMouseOver={e => e.currentTarget.style.transform = 'translateY(-2px)'}
@@ -192,7 +193,7 @@ export default function COODashboard({
       </div>
 
       {/* ─── 2. OPERATIONS TAB PORTAL ─── */}
-      <div style={{ background: 'var(--bg-glass)', borderRadius: '20px', padding: '24px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)', marginBottom: '24px' }}>
+      <div style={{ background: '#FFFFFF', borderRadius: '12px', border: '1px solid #E2E8F0', padding: '24px', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)', marginBottom: '24px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', overflowX: 'auto', borderBottom: '2px solid #B7BEC7', paddingBottom: '0', gap: '8px', marginBottom: '24px' }}>
           {[
             { id: 'distribution', label: 'Workforce Distribution' },
@@ -381,7 +382,7 @@ export default function COODashboard({
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: '24px' }}>
         
         {/* Operations Alerts */}
-        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
             <ShieldAlert size={20} color="#F59E0B" /> Operations Action Items
           </h3>
@@ -400,7 +401,7 @@ export default function COODashboard({
         </div>
 
         {/* Workforce statistics */}
-        <div style={{ background: 'var(--bg-glass)', padding: '24px', borderRadius: '20px', boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)' }}>
+        <div style={{ background: '#FFFFFF', padding: '24px', borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)' }}>
           <h3 style={{ margin: '0 0 16px 0', fontSize: '1.1rem', fontWeight: 800 }}>Workforce Analytics</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             {[

@@ -34,20 +34,20 @@ export default function OrgChart() {
     return (
       <div key={node.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', margin: '0 16px' }}>
         <div style={{
-          padding: '16px',
-          background: 'var(--bg-tertiary)',
-          border: '1px solid var(--primary)',
+          padding: '18px',
+          background: '#FFFFFF',
+          border: '1px solid #E2E8F0',
           borderRadius: '12px',
-          minWidth: '200px',
+          minWidth: '210px',
           textAlign: 'center',
           position: 'relative',
-          boxShadow: '0 8px 32px 0 rgba(0, 0, 0, 0.4), 0 0 20px rgba(0, 240, 255, 0.15), inset 0 0 30px rgba(0, 240, 255, 0.08)'
+          boxShadow: '0 1px 3px 0 rgba(15, 23, 42, 0.05)'
         }}>
-          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'var(--primary-glow)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold', margin: '0 auto 12px auto' }}>
+          <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#EFF6FF', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 'bold', margin: '0 auto 12px auto', border: '1px solid rgba(37, 99, 235, 0.2)' }}>
             {node.name.charAt(0)}
           </div>
-          <h4 style={{ margin: '0 0 4px 0', color: 'white' }}>{node.name}</h4>
-          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{node.Role?.role_name || 'Employee'}</div>
+          <h4 style={{ margin: '0 0 4px 0', color: '#0F172A', fontWeight: 700 }}>{node.name}</h4>
+          <div style={{ fontSize: '0.8rem', color: '#64748B', fontWeight: 500 }}>{node.Role?.role_name || 'Employee'}</div>
         </div>
         
         {node.subordinates && node.subordinates.length > 0 && (
