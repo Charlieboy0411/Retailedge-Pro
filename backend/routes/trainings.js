@@ -213,13 +213,18 @@ router.get('/', requireAuth, async (req, res) => {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       const { projectId } = req.query;
-      if (projectId && projectId !== 'all') {
+      if (projectId === '') {
+        whereClause.projectId = null;
+      } else if (projectId && projectId !== 'all') {
         if (!accessibleProjectIds.includes(projectId)) {
           return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
         }
         whereClause.projectId = projectId;
       } else {
-        whereClause.projectId = { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] };
+        whereClause[Op.or] = [
+          { projectId: { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] } },
+          { projectId: null }
+        ];
       }
     } else if (userRole === 'Program Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
@@ -298,7 +303,11 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
         }
       }
     } else if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
-      return res.status(400).json({ error: 'Project is required for non-admin training material creation.' });
+      if (type === 'Meeting' && ['Trainer', 'T&D Manager'].includes(req.user.role)) {
+        // Allowed: General / Global meeting scheduling for Trainer and T&D Manager
+      } else {
+        return res.status(400).json({ error: 'Project is required for non-admin training material creation.' });
+      }
     }
 
     let formattedUrl = finalUrl.trim();
@@ -579,7 +588,7 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
           return res.status(403).json({ error: 'Forbidden: You do not have permission to schedule meetings for this project.' });
         }
       }
-    } else if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+    } else if (!projectId && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager'].includes(req.user.role)) {
       return res.status(400).json({ error: 'Project is required to schedule a meeting.' });
     }
 

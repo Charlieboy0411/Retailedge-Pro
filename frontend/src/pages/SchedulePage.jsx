@@ -15,6 +15,8 @@ export default function SchedulePage() {
 
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsError, setProjectsError] = useState(null);
   const [usersList, setUsersList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -104,21 +106,46 @@ export default function SchedulePage() {
       setItems(trainingsRes.data || []);
 
       if (canManage) {
-        const [projRes, usersRes] = await Promise.all([
-          axios.get('/api/projects', { headers: { Authorization: `Bearer ${token}` } }),
-          axios.get('/api/users', { headers: { Authorization: `Bearer ${token}` } })
-        ]);
-        const fetchedProjs = projRes.data || [];
-        setProjects(fetchedProjs);
-        setUsersList(usersRes.data || []);
+        setProjectsLoading(true);
+        setProjectsError(null);
+        let fetchedProjs = [];
+        try {
+          const projRes = await axios.get('/api/projects', {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          fetchedProjs = projRes.data || [];
+          setProjects(fetchedProjs);
 
-        // Explicit single project auto-selection for PM
-        if (user?.role === 'Program Manager') {
-          if (fetchedProjs.length === 1) {
-            setSelectedProjectId(fetchedProjs[0].id);
-          } else if (fetchedProjs.length === 0) {
-            setSelectedProjectId('');
+          // Explicit single project auto-selection for PM
+          if (user?.role === 'Program Manager') {
+            if (fetchedProjs.length === 1) {
+              setSelectedProjectId(fetchedProjs[0].id);
+            } else if (fetchedProjs.length === 0) {
+              setSelectedProjectId('');
+            }
           }
+        } catch (projErr) {
+          console.error('Failed to fetch projects', projErr);
+          setProjectsError(projErr.response?.data?.error || 'Failed to load projects');
+          setProjects([]);
+        } finally {
+          setProjectsLoading(false);
+        }
+
+        // Only administrative roles can access /api/users for team invites
+        const canFetchUsers = ['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager'].includes(user?.role);
+        if (canFetchUsers) {
+          try {
+            const usersRes = await axios.get('/api/users', {
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            setUsersList(usersRes.data || []);
+          } catch (userErr) {
+            console.error('Failed to fetch users list', userErr);
+            setUsersList([]);
+          }
+        } else {
+          setUsersList([]);
         }
       }
     } catch (err) {
@@ -291,10 +318,12 @@ export default function SchedulePage() {
                 <option value="">No Assigned Projects</option>
               ) : user?.role === 'Program Manager' && uniqueProjects.length === 1 ? (
                 <option value={uniqueProjects[0].id}>📁 {uniqueProjects[0].displayName}</option>
+              ) : user?.role === 'Trainer' && uniqueProjects.length === 0 ? (
+                <option value="all">🌐 All Classes (No mapped projects)</option>
               ) : (
                 <>
                   <option value="all">
-                    {user?.role === 'Program Manager' ? '🌐 All Assigned Projects' : '🌐 All Projects'}
+                    {user?.role === 'Program Manager' || user?.role === 'Trainer' ? '🌐 All Assigned Projects' : '🌐 All Projects'}
                   </option>
                   {uniqueProjects.map(p => (
                     <option key={p.id} value={p.id}>📁 {p.displayName}</option>
@@ -794,9 +823,24 @@ export default function SchedulePage() {
                         value={meetingForm.projectId} 
                         onChange={e => handleProjectChange(e.target.value)} 
                         required={user?.role === 'Program Manager'}
-                        style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }}
+                        disabled={projectsLoading}
+                        style={{
+                          width: '100%',
+                          padding: '12px',
+                          borderRadius: '8px',
+                          border: projectsError ? '1px solid #ef4444' : '1px solid var(--border-glass)',
+                          background: 'var(--bg-tertiary)',
+                          color: 'var(--text-primary)'
+                        }}
                       >
-                        {user?.role === 'Program Manager' ? (
+                        {projectsLoading ? (
+                          <option disabled value="">Loading assigned projects...</option>
+                        ) : projectsError ? (
+                          <>
+                            <option value="">-- General / Global --</option>
+                            <option disabled value="">⚠️ Failed to load assigned projects</option>
+                          </>
+                        ) : user?.role === 'Program Manager' ? (
                           <>
                             {uniqueProjects.length !== 1 && <option value="">-- Select Assigned Project --</option>}
                             {uniqueProjects.map(p => (
@@ -806,12 +850,26 @@ export default function SchedulePage() {
                         ) : (
                           <>
                             <option value="">-- General / Global --</option>
-                            {uniqueProjects.map(p => (
-                              <option key={p.id} value={p.id}>{p.displayName}</option>
-                            ))}
+                            {uniqueProjects.length === 0 && user?.role === 'Trainer' ? (
+                              <option disabled value="">(No assigned projects mapped to your account)</option>
+                            ) : (
+                              uniqueProjects.map(p => (
+                                <option key={p.id} value={p.id}>{p.displayName}</option>
+                              ))
+                            )}
                           </>
                         )}
                       </select>
+                      {projectsError && (
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
+                          ⚠️ Error: {projectsError}. Showing General / Global only.
+                        </p>
+                      )}
+                      {user?.role === 'Trainer' && !projectsLoading && !projectsError && uniqueProjects.length === 0 && (
+                        <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                          ℹ️ No projects assigned. Classes will be scheduled under General / Global.
+                        </p>
+                      )}
                     </div>
 
                     <div>
