@@ -80,7 +80,7 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       },
       {
         model: Participant,
-        attributes: ['id', 'name', 'score', 'employeeId', 'storeName'],
+        attributes: ['id', 'name', 'score', 'employeeId', 'zone'],
         include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       },
       {
@@ -430,16 +430,7 @@ router.get('/attendance', requireAuth, async (req, res) => {
       const groupKey = `${projId}_${learnerKey}`;
 
       if (!groupedByProjectAndLearner[groupKey]) {
-        let zone = 'N/A';
-        if (p.storeName && p.storeName.trim()) {
-          const match = p.storeName.match(/(North|West|East|South)/i);
-          if (match) {
-            zone = match[0].charAt(0).toUpperCase() + match[0].slice(1).toLowerCase();
-          }
-        }
-        if (zone === 'N/A' && p.User?.location) {
-          zone = getZoneFromCoords(null, null, p.User.location);
-        }
+        const zone = (p.zone && p.zone.trim()) || (p.User?.location && p.User.location.trim()) || 'Unmapped';
 
         groupedByProjectAndLearner[groupKey] = {
           id: p.id,
@@ -709,9 +700,16 @@ router.get('/gamification', requireAuth, async (req, res) => {
           required: true,
           include: [
             {
+              model: Project,
+              attributes: ['id', 'name', 'project_code', 'zone', 'region', 'territory']
+            },
+            {
               model: Quiz,
               required: true,
-              include: [{ model: Question, as: 'questions' }]
+              include: [
+                { model: Question, as: 'questions' },
+                { model: Project, attributes: ['id', 'name', 'project_code', 'zone', 'region', 'territory'] }
+              ]
             }
           ]
         }
@@ -837,7 +835,10 @@ router.get('/gamification', requireAuth, async (req, res) => {
         ? Math.min(100, Math.max(0, Math.round((correctCount / questionsCount) * 100)))
         : null;
 
-      const zoneName = p.storeName && p.storeName.trim() ? p.storeName.trim() : 'N/A';
+      const proj = p.Session?.Project || p.Session?.Quiz?.Project;
+      const zoneName = (p.zone && p.zone.trim()) || (p.User?.location && p.User.location.trim()) || proj?.zone || 'Unmapped';
+      const territoryName = (proj?.territory && proj.territory.trim()) ? proj.territory.trim() : 'Unmapped';
+      const projectName = proj?.name || 'Project';
 
       // User aggregation for leaderboard & badges
       const userKey = p.employeeId ? p.employeeId.trim().toLowerCase() : p.name.trim().toLowerCase();
@@ -846,6 +847,8 @@ router.get('/gamification', requireAuth, async (req, res) => {
           name: p.name,
           employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
           zone: zoneName,
+          territory: territoryName,
+          project: projectName,
           arenaPoints: 0,
           totalCorrect: 0,
           totalQuestions: 0,
@@ -887,11 +890,8 @@ router.get('/gamification', requireAuth, async (req, res) => {
       if (isFinished && participantPercentage === 100) {
         userAggregates[userKey].hasPerfectSession = true;
       }
-      if (p.storeName && p.storeName.trim().length > 0) {
+      if (zoneName !== 'Unmapped') {
         userAggregates[userKey].hasRegisteredZone = true;
-      }
-      if (zoneName !== 'N/A' && userAggregates[userKey].zone === 'N/A') {
-        userAggregates[userKey].zone = zoneName;
       }
 
       // Track most recent attempt for participant summary
@@ -907,7 +907,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
       if (participantPercentage !== null && participantPercentage >= 90) attemptBadges.push('champion');
       if (minResponseTime < 3000) attemptBadges.push('fastest');
       if (participantPercentage === 100) attemptBadges.push('expert');
-      if (p.storeName && p.storeName.trim().length > 0) attemptBadges.push('team');
+      if (zoneName !== 'Unmapped') attemptBadges.push('team');
       if (isFinished && participantPercentage === 100) attemptBadges.push('perfect');
 
       // Table row
@@ -916,6 +916,9 @@ router.get('/gamification', requireAuth, async (req, res) => {
         name: p.name,
         employeeId: p.employeeId && p.employeeId.trim() ? p.employeeId.trim() : 'N/A',
         zone: zoneName,
+        territory: territoryName,
+        project: projectName,
+        projectName: projectName,
         sessionId: p.Session?.id || '',
         sessionName: p.Session?.session_name || p.Session?.roomCode || 'Session',
         roomCode: p.Session?.roomCode || '',
@@ -982,7 +985,9 @@ router.get('/gamification', requireAuth, async (req, res) => {
         userId: u.userId,
         name: u.name,
         employeeId: u.employeeId,
-        zone: u.zone,
+        zone: u.zone || 'Unmapped',
+        territory: u.territory || 'Unmapped',
+        project: u.project || 'Unmapped',
         quizzesCompleted: u.completedCount,
         distinctQuizzesAttempted: u.quizzesSet && u.quizzesSet.size > 0 ? u.quizzesSet.size : (u.completedCount > 0 ? 1 : 0),
         totalAttempts: u.attempts,
@@ -1129,7 +1134,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
       const c = (p.Responses || []).filter(r => r.points_awarded > 0 || r.is_correct).length;
       return c === qLen;
     });
-    const personalTeamUnlocked = personalAttempts.some(p => p.storeName && p.storeName.trim().length > 0);
+    const personalTeamUnlocked = personalAttempts.some(p => (p.zone && p.zone.trim().length > 0) || (p.Session?.Project?.zone));
     const personalPerfectUnlocked = personalAttempts.some(p => {
       const qLen = p.Session?.Quiz?.questions?.length || 0;
       if (qLen === 0) return false;
@@ -1211,7 +1216,7 @@ router.get('/gamification', requireAuth, async (req, res) => {
       {
         id: 'team',
         label: 'Zone Warrior',
-        desc: 'Participated with assigned store/zone',
+        desc: 'Participated with registered zone',
         icon: '🎯',
         color: '#2EA8FF',
         unlocked: isEmployee ? personalTeamUnlocked : teamZoneCount > 0,
@@ -1426,10 +1431,11 @@ router.get('/analytics/data/:id', requireAuth, requireRole(['Admin', 'Super Admi
     // Role-based security check
     const user = req.user;
     const isSuper = ['Admin', 'Super Admin'].includes(user.role);
+    const isLeadership = ['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(user.role);
+    if (report.level === 'LEVEL_3_MASTER_MONTHLY' && !isLeadership) {
+      return res.status(403).json({ error: 'Forbidden: Only executive leadership and administrators can access Master Monthly reports' });
+    }
     if (user.role === 'T&D Manager') {
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
-        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to view enterprise Master Monthly reports' });
-      }
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(user, 'all', 'all');
       if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
@@ -1438,7 +1444,7 @@ router.get('/analytics/data/:id', requireAuth, requireRole(['Admin', 'Super Admi
     } else if (user.role === 'Client') {
       const clientService = require('../utils/clientService');
       const clientProjectIds = await clientService.getAccessibleClientProjectIds(user);
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+      if (!report.projectId || !clientProjectIds.includes(report.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You are not authorized to view this report' });
       }
     } else if (!isSuper) {
@@ -1465,10 +1471,11 @@ router.get('/analytics/export/excel/:id', requireAuth, requireRole(['Admin', 'Su
 
     // Security check
     const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    const isLeadership = ['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(req.user.role);
+    if (report.level === 'LEVEL_3_MASTER_MONTHLY' && !isLeadership) {
+      return res.status(403).json({ error: 'Forbidden: Only executive leadership and administrators can export Master Monthly reports' });
+    }
     if (req.user.role === 'T&D Manager') {
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
-        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to export enterprise Master Monthly reports' });
-      }
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
@@ -1477,7 +1484,7 @@ router.get('/analytics/export/excel/:id', requireAuth, requireRole(['Admin', 'Su
     } else if (req.user.role === 'Client') {
       const clientService = require('../utils/clientService');
       const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+      if (!report.projectId || !clientProjectIds.includes(report.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You are not authorized to export this report' });
       }
     } else if (!isSuper) {
@@ -1491,7 +1498,11 @@ router.get('/analytics/export/excel/:id', requireAuth, requireRole(['Admin', 'Su
     let outcomeRows = [];
     try {
       const pIds = report.projectId ? [report.projectId] : await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      outcomeRows = await intelligenceService.getMasterTrainingOutcomeData(pIds);
+      outcomeRows = await intelligenceService.getMasterTrainingOutcomeData(pIds, {
+        period: report.period,
+        sessionId: report.sessionId,
+        level: report.level
+      });
     } catch (e) {
       outcomeRows = [];
     }
@@ -1517,10 +1528,11 @@ router.get('/analytics/export/ppt/:id', requireAuth, requireRole(['Admin', 'Supe
 
     // Security check
     const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    const isLeadership = ['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(req.user.role);
+    if (report.level === 'LEVEL_3_MASTER_MONTHLY' && !isLeadership) {
+      return res.status(403).json({ error: 'Forbidden: Only executive leadership and administrators can export Master Monthly decks' });
+    }
     if (req.user.role === 'T&D Manager') {
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY') {
-        return res.status(403).json({ error: 'Forbidden: T&D Managers are not authorized to export enterprise Master Monthly decks' });
-      }
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (!report.projectId || !tdProjectIds.includes(report.projectId)) {
@@ -1529,7 +1541,7 @@ router.get('/analytics/export/ppt/:id', requireAuth, requireRole(['Admin', 'Supe
     } else if (req.user.role === 'Client') {
       const clientService = require('../utils/clientService');
       const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
-      if (report.level === 'LEVEL_3_MASTER_MONTHLY' || !report.projectId || !clientProjectIds.includes(report.projectId)) {
+      if (!report.projectId || !clientProjectIds.includes(report.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You are not authorized to export this presentation' });
       }
     } else if (!isSuper) {
@@ -1557,10 +1569,11 @@ router.post('/analytics/generate-on-demand', requireAuth, requireRole(['Admin', 
 
     // Check project permission
     const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
+    const isLeadership = ['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(req.user.role);
+    if (Number(level) === 3 && !isLeadership) {
+      return res.status(403).json({ error: 'Forbidden: Only executive leadership and administrators can generate Master Monthly reports' });
+    }
     if (req.user.role === 'T&D Manager') {
-      if (Number(level) === 3) {
-        return res.status(403).json({ error: 'Forbidden: T&D Managers cannot generate enterprise Master Monthly reports' });
-      }
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (Number(level) === 2) {
@@ -1577,9 +1590,6 @@ router.post('/analytics/generate-on-demand', requireAuth, requireRole(['Admin', 
         }
       }
     } else if (req.user.role === 'Client') {
-      if (Number(level) === 3) {
-        return res.status(403).json({ error: 'Forbidden: Clients cannot generate enterprise Master Monthly reports' });
-      }
       const clientService = require('../utils/clientService');
       const clientProjectIds = await clientService.getAccessibleClientProjectIds(req.user);
       if (Number(level) === 2) {
@@ -1595,10 +1605,20 @@ router.post('/analytics/generate-on-demand', requireAuth, requireRole(['Admin', 
           return res.status(403).json({ error: 'Forbidden: You are not authorized to generate report for this session' });
         }
       }
-    } else if (projectId && !isSuper) {
+    } else if (!isSuper) {
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      if (!accessibleProjectIds.includes(projectId)) {
-        return res.status(403).json({ error: 'Forbidden: You are not authorized to generate reports for this project' });
+      if (Number(level) === 2) {
+        if (!projectId || !accessibleProjectIds.includes(projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate reports for this project' });
+        }
+      } else if (Number(level) === 1) {
+        const session = await Session.findOne({
+          where: sessionId ? { id: sessionId } : { quizId },
+          include: [{ model: Quiz, attributes: ['projectId'] }]
+        });
+        if (!session || !session.Quiz || !accessibleProjectIds.includes(session.Quiz.projectId)) {
+          return res.status(403).json({ error: 'Forbidden: You are not authorized to generate report for this session' });
+        }
       }
     }
 
@@ -1627,7 +1647,7 @@ router.post('/analytics/generate-on-demand', requireAuth, requireRole(['Admin', 
 });
 
 // 6. POST /api/reports/analytics/monthly-closing
-router.post('/analytics/monthly-closing', requireAuth, async (req, res) => {
+router.post('/analytics/monthly-closing', requireAuth, requireRole(['Admin', 'Super Admin']), async (req, res) => {
   try {
     const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
     if (!isSuper) {
@@ -1648,7 +1668,7 @@ router.post('/analytics/monthly-closing', requireAuth, async (req, res) => {
 });
 
 // 7. GET /api/reports/analytics/audit
-router.get('/analytics/audit', requireAuth, async (req, res) => {
+router.get('/analytics/audit', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const isSuper = ['Admin', 'Super Admin'].includes(req.user.role);
     const accessibleProjectIds = isSuper ? null : await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
@@ -1681,9 +1701,9 @@ router.get('/analytics/audit', requireAuth, async (req, res) => {
 // ─── MASTER TRAINING OUTCOME REPORT (21 Columns) ──────────────────────────────
 const intelligenceService = require('../utils/projectIntelligenceService');
 
-router.get('/master-outcome', requireAuth, async (req, res) => {
+router.get('/master-outcome', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Client', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
-    const { projectId = 'all', subProjectId = 'all' } = req.query;
+    const { projectId = 'all', subProjectId = 'all', period, sessionId, dateRange } = req.query;
     let projectIds;
     if (req.user.role === 'Client') {
       const clientService = require('../utils/clientService');
@@ -1695,7 +1715,7 @@ router.get('/master-outcome', requireAuth, async (req, res) => {
       projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId, subProjectId);
     }
 
-    const outcomeData = await intelligenceService.getMasterTrainingOutcomeData(projectIds);
+    const outcomeData = await intelligenceService.getMasterTrainingOutcomeData(projectIds, { period, sessionId, dateRange });
     res.json(outcomeData);
   } catch (error) {
     console.error('GET /api/reports/master-outcome error:', error);
@@ -1795,9 +1815,9 @@ router.get('/:sessionId', requireAuth, async (req, res) => {
         arenaPoints: p.score !== undefined && p.score !== null ? p.score : pointsEarned,
         timeSpent: `${timeSpentSec}s`,
         completion: `${completionPercentage}%`,
-        zone: p.storeName || null,
-        region: p.storeName || null,
-        storeName: p.storeName || null,
+        zone: (p.zone && p.zone.trim()) || session.Project?.zone || 'Unmapped',
+        region: session.Project?.region || null,
+        territory: session.Project?.territory || null,
         responses: responses.map(r => ({
           questionId: r.questionId,
           answer: r.answer,

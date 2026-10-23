@@ -41,7 +41,11 @@ const Participant = sequelize.define('Participant', {
     allowNull: true,
   },
   storeName: {
-    type: DataTypes.STRING,   // store name entered by learner
+    type: DataTypes.STRING,   // store name entered by learner (legacy/unrelated)
+    allowNull: true,
+  },
+  zone: {
+    type: DataTypes.STRING,   // authoritative zone captured from learner submission
     allowNull: true,
   },
 }, {

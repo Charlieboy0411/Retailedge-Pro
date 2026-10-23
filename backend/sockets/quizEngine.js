@@ -709,7 +709,10 @@ function quizEngine(io) {
           participant.connectionStatus = session.status === 'active' ? 'active' : 'rejoined';
           if (avatar) participant.avatar = avatar;
           if (cleanName) participant.name = cleanName;
-          if (cleanZone) participant.storeName = cleanZone;
+          if (cleanZone) {
+            participant.zone = cleanZone;
+            participant.storeName = null;
+          }
           if (deviceId) participant.deviceId = deviceId;
           await participant.save();
         } else {
@@ -723,7 +726,8 @@ function quizEngine(io) {
             connectionStatus: session.status === 'active' ? 'active' : 'waiting',
             userId:           userId       || null,
             deviceId:         deviceId     || null,
-            storeName:        cleanZone    || null,
+            zone:             cleanZone    || null,
+            storeName:        null,
           });
         }
 

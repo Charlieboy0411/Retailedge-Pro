@@ -71,8 +71,93 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       ],
       order: [['name', 'ASC']]
     });
-    res.json(projects);
+
+    const { Op } = require('sequelize');
+    const { determineProjectHealth } = require('../utils/reportAnalyticsEngine');
+
+    const projectsWithCounts = await Promise.all(projects.map(async (p) => {
+      const pJson = p.toJSON();
+      const sessions = await Session.findAll({
+        where: { projectId: p.id },
+        include: [{ model: Quiz, attributes: ['id', 'config'] }]
+      });
+      const sessionIds = sessions.map(s => s.id);
+
+      let distinctParticipantsCount = 0;
+      let totalPassed = 0;
+      let totalScored = 0;
+
+      if (sessionIds.length > 0) {
+        const parts = await Participant.findAll({
+          where: { sessionId: { [Op.in]: sessionIds } },
+          attributes: ['id', 'employeeId', 'userId', 'name', 'score', 'sessionId']
+        });
+
+        // Deduplicate participants strictly by canonical employeeId when available, or userId, or name
+        const uniqueSet = new Set();
+        parts.forEach(pt => {
+          const key = (pt.employeeId && pt.employeeId.trim() && pt.employeeId !== 'N/A')
+            ? pt.employeeId.trim().toLowerCase()
+            : (pt.userId || pt.name.trim().toLowerCase());
+          uniqueSet.add(key);
+        });
+        distinctParticipantsCount = uniqueSet.size;
+
+        // Map session passing score threshold
+        const sessionMap = new Map();
+        sessions.forEach(s => {
+          const passingScore = (s.Quiz?.config?.passing_score !== undefined && s.Quiz?.config?.passing_score !== null)
+            ? Number(s.Quiz.config.passing_score)
+            : 70;
+          sessionMap.set(s.id, passingScore);
+        });
+
+        parts.forEach(pt => {
+          if (pt.score !== null && pt.score !== undefined) {
+            totalScored++;
+            const thresh = sessionMap.get(pt.sessionId) || 70;
+            if (Number(pt.score) >= thresh) {
+              totalPassed++;
+            }
+          }
+        });
+      }
+
+      pJson.participantCount = distinctParticipantsCount;
+      pJson.participants_count = distinctParticipantsCount;
+      pJson.participants_covered = distinctParticipantsCount;
+      pJson.participants_planned = p.participants_planned || 0;
+
+      // Calculate Project Health dynamically from operational metrics
+      if (sessionIds.length === 0 || distinctParticipantsCount === 0 || totalScored === 0) {
+        // Missing or incomplete operational inputs
+        pJson.healthScore = null;
+        pJson.healthStatus = 'Unavailable';
+        pJson.healthBadge = '⚪ N/A';
+        pJson.passRate = 'N/A';
+        pJson.completionRate = p.participants_planned > 0 ? '0%' : 'N/A';
+      } else {
+        const passRate = Math.round((totalPassed / totalScored) * 100);
+        const completionRate = p.participants_planned > 0
+          ? Math.min(100, Math.round((distinctParticipantsCount / p.participants_planned) * 100))
+          : 100;
+
+        const health = determineProjectHealth(null, completionRate, passRate);
+        const healthScore = Math.round(0.6 * passRate + 0.4 * completionRate);
+
+        pJson.healthScore = healthScore;
+        pJson.healthStatus = health.status;
+        pJson.healthBadge = health.badge;
+        pJson.passRate = `${passRate}%`;
+        pJson.completionRate = `${completionRate}%`;
+      }
+
+      return pJson;
+    }));
+
+    res.json(projectsWithCounts);
   } catch (error) {
+    console.error('Server error fetching projects:', error);
     res.status(500).json({ error: 'Server error fetching projects' });
   }
 });
@@ -513,6 +598,140 @@ router.post('/:id/executive-metrics', requireAuth, requireRole(['Admin', 'Super 
   }
 });
 
+// GET /api/projects/:id/team - Project Team Roster & Directory (read-only for authorized roles)
+router.get('/:id/team', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!isUuid) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+    if (!accessibleProjectIds.includes(id)) {
+      return res.status(403).json({ error: 'Forbidden: You do not have permission to view this project team directory.' });
+    }
+
+    const project = await Project.findByPk(id, {
+      attributes: ['id', 'name', 'project_code', 'zone', 'region', 'territory']
+    });
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const STAKEHOLDER_ROLES = ['Client', 'Program Manager', 'Supervisor'];
+    const ProjectAssignment = require('../models/ProjectAssignment');
+    const Role = require('../models/Role');
+    const { Op } = require('sequelize');
+
+    // Query active project assignments strictly for designated stakeholder roles
+    const assignments = await ProjectAssignment.findAll({
+      where: {
+        projectId: id,
+        status: 'Active',
+        role: { [Op.in]: STAKEHOLDER_ROLES }
+      },
+      attributes: ['userId', 'role', 'zone', 'status']
+    }).catch(() => []);
+
+    const assignedUserIds = assignments.map(a => a.userId);
+    const assignmentMap = new Map();
+    assignments.forEach(a => assignmentMap.set(a.userId, a));
+
+    let assignedUsers = [];
+    if (assignedUserIds.length > 0) {
+      assignedUsers = await User.findAll({
+        where: { id: { [Op.in]: assignedUserIds } },
+        include: [
+          {
+            model: Role,
+            attributes: ['id', 'role_name'],
+            where: { role_name: { [Op.in]: STAKEHOLDER_ROLES } }
+          }
+        ],
+        attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location', 'status', 'projectId']
+      });
+    }
+
+    const stakeholderMap = new Map();
+
+    assignedUsers.forEach(u => {
+      // Disambiguate strictly by employee_id or canonical user ID (never by name alone)
+      const dedupeKey = (u.employee_id && u.employee_id.trim() && u.employee_id !== 'N/A')
+        ? u.employee_id.trim().toLowerCase()
+        : u.id;
+
+      if (!stakeholderMap.has(dedupeKey)) {
+        const assignment = assignmentMap.get(u.id);
+        const resolvedZone = (assignment?.zone && assignment.zone.trim())
+          || (project.zone && project.zone.trim())
+          || 'Unmapped';
+
+        stakeholderMap.set(dedupeKey, {
+          id: u.id,
+          name: u.name,
+          employeeId: (u.employee_id && u.employee_id.trim()) ? u.employee_id.trim() : 'N/A',
+          email: u.email || '—',
+          designation: (u.designation && u.designation.trim()) ? u.designation.trim() : 'Not Configured',
+          systemRole: u.Role?.role_name || 'Staff',
+          zone: resolvedZone,
+          status: u.status || 'Active'
+        });
+      }
+    });
+
+    const distinctStakeholders = Array.from(stakeholderMap.values()).sort((a, b) => {
+      const roleOrder = { 'Client': 1, 'Program Manager': 2, 'Supervisor': 3 };
+      const orderA = roleOrder[a.systemRole] || 99;
+      const orderB = roleOrder[b.systemRole] || 99;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.name.localeCompare(b.name);
+    });
+
+    // Group distinct stakeholders by Zone
+    const zonesMap = new Map();
+    const projectZone = project.zone || 'Unmapped';
+    zonesMap.set(projectZone, []);
+
+    distinctStakeholders.forEach(st => {
+      const z = st.zone || projectZone;
+      if (!zonesMap.has(z)) zonesMap.set(z, []);
+      zonesMap.get(z).push(st);
+    });
+
+    const stakeholdersByZone = Array.from(zonesMap.entries()).map(([zone, stakeholders]) => {
+      const presentRoles = new Set(stakeholders.map(s => s.systemRole));
+      const missingRoles = STAKEHOLDER_ROLES.filter(r => !presentRoles.has(r));
+
+      return {
+        zone,
+        stakeholders,
+        totalInZone: stakeholders.length,
+        missingDesignations: missingRoles
+      };
+    });
+
+    res.json({
+      project: {
+        id: project.id,
+        name: project.name,
+        code: project.project_code,
+        zone: project.zone || 'Unmapped',
+        territory: project.territory || 'Unmapped'
+      },
+      totalStakeholders: distinctStakeholders.length,
+      teamCount: distinctStakeholders.length,
+      team: distinctStakeholders,
+      stakeholdersByZone,
+      requiredStakeholderRoles: STAKEHOLDER_ROLES
+    });
+  } catch (error) {
+    console.error('GET /api/projects/:id/team error:', error);
+    const status = error.status || (error.message.includes('Forbidden') ? 403 : 500);
+    res.status(status).json({ error: error.message || 'Failed to fetch project team directory' });
+  }
+});
+
 // GET /api/projects/:id - Fetch single project with RBAC (must be at the end to prevent catching subroutes)
 router.get('/:id', requireAuth, async (req, res) => {
   try {
@@ -525,6 +744,11 @@ router.get('/:id', requireAuth, async (req, res) => {
     if (req.user.role === 'Client') {
       const clientService = require('../utils/clientService');
       const accessibleIds = await clientService.getAccessibleClientProjectIds(req.user, 'all', 'all');
+      if (!accessibleIds.includes(id)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
+      }
+    } else if (req.user.role === 'Program Manager' || req.user.role === 'T&D Manager') {
+      const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!accessibleIds.includes(id)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
       }

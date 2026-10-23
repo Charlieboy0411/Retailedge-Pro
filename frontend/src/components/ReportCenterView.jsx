@@ -483,7 +483,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                     <div>
                       <div style={{ fontSize: '0.68rem', color: '#64748B', fontWeight: 600 }}>ATTENDANCE %</div>
                       <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#0F172A' }}>
-                        {kpis.attendanceRate || '100%'}
+                        {kpis.attendanceRate || 'Not Recorded'}
                       </div>
                       {mom.attendance && (
                         <div style={{ fontSize: '0.65rem', fontWeight: 700, color: mom.attendance.direction === 'up' ? '#10B981' : '#EF4444' }}>
@@ -522,7 +522,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                 <div style={{ display: 'flex', gap: '8px', paddingTop: '10px', borderTop: '1px solid #E2E8F0' }}>
                   {/* View Modal */}
                   <button
-                    onClick={() => setSelectedReport(snap.title ? snap : rpt)}
+                    onClick={() => setSelectedReport(snap.title ? { ...rpt, ...snap } : rpt)}
                     style={{
                       flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px',
                       background: '#F1F5F9', color: '#334155', border: '1px solid #E2E8F0',
@@ -606,7 +606,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                   {selectedReport.title || 'Executive Intelligence Report'}
                 </h3>
                 <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: '2px' }}>
-                  Code: <code>{selectedReport.reportCode}</code> | Period: {selectedReport.period || '2026-08'}
+                  Code: <code>{selectedReport.reportCode}</code> | Period: {selectedReport.period || selectedReport.date || '—'}
                 </div>
               </div>
 
@@ -633,11 +633,11 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                 </h4>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
                   {[
-                    { label: 'Assigned Enrollees', val: selectedReport.executiveSummary?.quizAssignments || selectedReport.quizFunnel?.assigned || selectedReport.kpis?.assigned || 120 },
-                    { label: 'Opened / Started', val: selectedReport.quizFunnel?.started || selectedReport.kpis?.started || 120 },
-                    { label: 'Attempts Submitted', val: selectedReport.executiveSummary?.quizAttempts || selectedReport.quizFunnel?.attempted || selectedReport.kpis?.attempted || 112 },
-                    { label: 'Final Completions', val: selectedReport.executiveSummary?.quizCompletions || selectedReport.quizFunnel?.completed || selectedReport.kpis?.completed || 108 },
-                    { label: 'Passing Scores', val: selectedReport.quizFunnel?.passed || selectedReport.kpis?.passed || 92 }
+                    { label: 'Assigned Enrollees', val: selectedReport.executiveSummary?.quizAssignments ?? selectedReport.quizFunnel?.assigned ?? selectedReport.kpis?.assigned ?? 0 },
+                    { label: 'Opened / Started', val: selectedReport.quizFunnel?.started ?? selectedReport.kpis?.started ?? selectedReport.executiveSummary?.quizAssignments ?? 0 },
+                    { label: 'Attempts Submitted', val: selectedReport.executiveSummary?.quizAttempts ?? selectedReport.quizFunnel?.attempted ?? selectedReport.kpis?.attempted ?? 0 },
+                    { label: 'Final Completions', val: selectedReport.executiveSummary?.quizCompletions ?? selectedReport.quizFunnel?.completed ?? selectedReport.kpis?.completed ?? 0 },
+                    { label: 'Passing Scores', val: selectedReport.quizFunnel?.passed ?? selectedReport.kpis?.passed ?? 0 }
                   ].map((f, i) => (
                     <div key={i} style={{
                       background: 'var(--bg-glass)', border: '1px solid var(--border-color)',
@@ -668,14 +668,17 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedReport.onlineVsOfflineComparison.map((row, idx) => (
-                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
-                          <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.metric}</td>
-                          <td style={{ padding: '10px 14px' }}>{row.online}</td>
-                          <td style={{ padding: '10px 14px' }}>{row.offline}</td>
-                          <td style={{ padding: '10px 14px', fontWeight: 700 }}>{row.total}</td>
-                        </tr>
-                      ))}
+                      {selectedReport.onlineVsOfflineComparison.map((row, idx) => {
+                        const fmtCell = (val) => (val != null && !String(val).includes('NaN') ? val : 'N/A');
+                        return (
+                          <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                            <td style={{ padding: '10px 14px', fontWeight: 600 }}>{row.metric}</td>
+                            <td style={{ padding: '10px 14px' }}>{fmtCell(row.online)}</td>
+                            <td style={{ padding: '10px 14px' }}>{fmtCell(row.offline)}</td>
+                            <td style={{ padding: '10px 14px', fontWeight: 700 }}>{fmtCell(row.total)}</td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -720,7 +723,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
               {selectedReport.monthOverMonthComparison && (
                 <div>
                   <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
-                    3. MONTH-OVER-MONTH TREND COMPARISON (AUGUST 2026 VS JULY 2026)
+                    3. MONTH-OVER-MONTH TREND COMPARISON ({selectedReport.period ? `${selectedReport.period} VS ${selectedReport.comparisonPeriod || 'PRIOR'}` : 'HISTORICAL TRAJECTORY'})
                   </h4>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '10px' }}>
                     {Object.entries(selectedReport.monthOverMonthComparison.deltas || {}).map(([key, delta], i) => (
@@ -740,6 +743,78 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                       </div>
                     ))}
                   </div>
+                </div>
+              )}
+
+              {/* Zone Breakdown */}
+              {(selectedReport.zoneBreakdown || selectedReport.territoryStoreSummary || selectedReport.locationBreakdown) && (
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    4. ZONE BREAKDOWN
+                  </h4>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', background: 'var(--bg-glass)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Zone</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Territory</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Learners</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Attempts</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Completions</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Avg Score</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Pass Rate</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Arena Pts</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedReport.zoneBreakdown || selectedReport.territoryStoreSummary || selectedReport.locationBreakdown || []).map((t, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '10px 14px', fontWeight: 600 }}>{t.zone || selectedReport.zone || 'Unmapped'}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.territory || selectedReport.territory || 'Unmapped'}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.participants || t.learners || 0}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.attempts || 0}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.completions || t.attempts || 0}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.averageScore || t.avgScore || '—'}</td>
+                          <td style={{ padding: '10px 14px' }}>{t.passRate || '—'}</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 700 }}>{t.arenaPoints || 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              {/* Question Analytics */}
+              {(selectedReport.questionAnalytics || selectedReport.questions) && (
+                <div>
+                  <h4 style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '12px' }}>
+                    5. QUESTION INTELLIGENCE & CURRICULUM ACCURACY
+                  </h4>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem', background: 'var(--bg-glass)', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--border-color)' }}>
+                    <thead>
+                      <tr style={{ background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)', textAlign: 'left' }}>
+                        <th style={{ padding: '10px 14px', fontWeight: 700, width: '40px' }}>#</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Question Text</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Attempts</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Correct</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Accuracy</th>
+                        <th style={{ padding: '10px 14px', fontWeight: 700 }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(selectedReport.questionAnalytics || selectedReport.questions || []).map((q, idx) => (
+                        <tr key={idx} style={{ borderBottom: '1px solid var(--border-color)' }}>
+                          <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{idx + 1}</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 500 }}>{q.questionText || q.topic}</td>
+                          <td style={{ padding: '10px 14px' }}>{q.totalAttempts || 0}</td>
+                          <td style={{ padding: '10px 14px' }}>{q.correctAnswers || 0}</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 700 }}>{q.accuracy}%</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 700, color: q.status === 'Mastered' ? '#10B981' : q.status === 'Moderate' ? '#F59E0B' : '#EF4444' }}>
+                            {q.status === 'Mastered' ? '🟢 Mastered' : q.status === 'Moderate' ? '🟡 Moderate' : '🔴 Review'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -798,7 +873,7 @@ export default function ReportCenterView({ token, user, defaultProjectId = 'all'
                   }}
                 >
                   <option value="2">Level 2 — Project Monthly Report (Online vs Offline)</option>
-                  {['Admin', 'Super Admin'].includes(user?.role) && (
+                  {['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(user?.role) && (
                     <option value="3">Level 3 — Master Training Intelligence Report (All Projects)</option>
                   )}
                   <option value="1">Level 1 — Project / Quiz Report</option>

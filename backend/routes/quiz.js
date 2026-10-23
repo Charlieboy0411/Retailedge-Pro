@@ -519,12 +519,17 @@ router.get('/:id/offline-details', async (req, res) => {
       return qObj;
     });
 
+    const effectivePassingScore = (quiz.config?.passing_score !== undefined && quiz.config?.passing_score !== null)
+      ? Number(quiz.config.passing_score)
+      : 70;
+
     res.json({
       id: quiz.id,
       title: quiz.title,
       description: quiz.description,
       projectName: quiz.Project ? quiz.Project.name : 'No Project',
       questions: safeQuestions,
+      passingScore: effectivePassingScore,
       offlineState: availability.state,
       offlineStartTime: availability.startTime,
       offlineEndTime: availability.endTime,
@@ -615,7 +620,7 @@ router.post('/:id/offline-check-eligibility', async (req, res) => {
 
 // POST /api/quizzes/:id/offline-submit - Submit offline quiz responses and grade
 router.post('/:id/offline-submit', async (req, res) => {
-  const { name, employeeId, mobileNumber, storeName, userId, deviceId, answers } = req.body;
+  const { name, employeeId, mobileNumber, zone, storeName, userId, deviceId, answers } = req.body;
   try {
     const quiz = await Quiz.findByPk(req.params.id, {
       include: [{ model: Question, as: 'questions' }]
@@ -649,7 +654,10 @@ router.post('/:id/offline-submit', async (req, res) => {
     }
 
     const roomCode = `off-${quiz.id.substring(0, 8)}`;
-    const session = await Session.findOne({ where: { quizId: quiz.id, roomCode } });
+    let session = await Session.findOne({ where: { quizId: quiz.id, roomCode } });
+    if (!session) {
+      session = await Session.findOne({ where: { quizId: quiz.id } });
+    }
     if (!session) {
       return res.status(400).json({ error: 'Offline session not active.' });
     }
@@ -689,7 +697,13 @@ router.post('/:id/offline-submit', async (req, res) => {
       dbQuestionsMap[q.id] = q;
     });
 
-    (answers || []).forEach(ans => {
+    const answersArray = Array.isArray(answers)
+      ? answers
+      : (answers && typeof answers === 'object'
+          ? Object.keys(answers).map(k => ({ questionId: k, answer: answers[k] }))
+          : []);
+
+    answersArray.forEach(ans => {
       const question = dbQuestionsMap[ans.questionId];
       if (question) {
         const isCorrect = scoringEngine.isCorrectAnswer(question, ans.answer);
@@ -705,13 +719,15 @@ router.post('/:id/offline-submit', async (req, res) => {
       }
     });
 
-    // Create participant
+    // Create participant - captures name, employeeId, and zone only (no store or outlet)
+    const cleanZone = (zone && zone.trim()) || (storeName && ['North', 'West', 'East', 'South', 'Central'].includes(storeName.trim()) ? storeName.trim() : null) || null;
     const participant = await Participant.create({
       sessionId: session.id,
       name: name || 'Guest',
       employeeId: employeeId || null,
       mobileNumber: mobileNumber || null,
-      storeName: storeName || null,
+      zone: cleanZone,
+      storeName: null,
       connectionStatus: 'active',
       score: finalScore,
       userId: userId || null,
@@ -729,11 +745,26 @@ router.post('/:id/offline-submit', async (req, res) => {
     }
 
     const totalQuestions = quiz.questions ? quiz.questions.length : 0;
+    const percentage = totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0;
+    const effectivePassingScore = (quiz.config?.passing_score !== undefined && quiz.config?.passing_score !== null)
+      ? Number(quiz.config.passing_score)
+      : 70;
+    const passed = percentage >= effectivePassingScore;
+
     res.json({
       success: true,
+      participant: {
+        id: participant.id,
+        name: participant.name,
+        employeeId: participant.employeeId,
+        zone: participant.zone,
+        storeName: participant.storeName
+      },
       score: finalScore,
       totalQuestions,
-      percentage: totalQuestions > 0 ? Math.round((finalScore / totalQuestions) * 100) : 0
+      percentage,
+      passingScore: effectivePassingScore,
+      passed
     });
   } catch (err) {
     console.error('Offline submit error:', err);

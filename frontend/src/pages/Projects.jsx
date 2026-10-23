@@ -1,11 +1,15 @@
 import React, { useState, useEffect, useContext } from 'react';
-import { Briefcase, Plus, Search, Eye, Edit2, Trash2, Download, Users, FolderOpen, Activity, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
+import { Briefcase, Plus, Search, Eye, Edit2, Trash2, Download, Users, FolderOpen, Activity, AlertTriangle, ChevronRight, ChevronDown, X, Shield, MapPin } from 'lucide-react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import ProjectFormModal from '../components/ProjectFormModal';
 
 export default function Projects() {
-  const { token } = useContext(AuthContext);
+  const { token, user } = useContext(AuthContext);
+  const userRole = user?.role || user?.Role?.role_name || '';
+  const isProgramManager = userRole === 'Program Manager';
+  const isAdmin = ['Super Admin', 'Admin'].includes(userRole);
+
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -18,6 +22,13 @@ export default function Projects() {
   
   // State for tracking which mother projects are expanded to show sub-projects
   const [expandedProjects, setExpandedProjects] = useState({});
+
+  // Team Directory Modal State
+  const [selectedTeamProject, setSelectedTeamProject] = useState(null);
+  const [teamRoster, setTeamRoster] = useState([]);
+  const [teamLoading, setTeamLoading] = useState(false);
+  const [teamError, setTeamError] = useState(null);
+  const [teamSearch, setTeamSearch] = useState('');
 
   const fetchData = async () => {
     try {
@@ -77,6 +88,31 @@ export default function Projects() {
     }
   };
 
+  const handleOpenTeamDirectory = async (project) => {
+    setSelectedTeamProject(project);
+    setTeamLoading(true);
+    setTeamError(null);
+    setTeamSearch('');
+    try {
+      const res = await axios.get(`/api/projects/${project.id}/team`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setTeamRoster(res.data.team || []);
+    } catch (err) {
+      console.error('Failed to load project team directory:', err);
+      setTeamError(err.response?.data?.error || 'Failed to load project team directory');
+    } finally {
+      setTeamLoading(false);
+    }
+  };
+
+  const handleCloseTeamDirectory = () => {
+    setSelectedTeamProject(null);
+    setTeamRoster([]);
+    setTeamError(null);
+    setTeamSearch('');
+  };
+
   // Build Hierarchy (Mother Projects and their Sub-projects)
   const motherProjects = projects.filter(p => !p.parentId);
   const subProjects = projects.filter(p => p.parentId);
@@ -94,11 +130,13 @@ export default function Projects() {
   const upcomingProjects = projects.filter(p => p.status === 'Upcoming').length;
   const completedProjects = projects.filter(p => p.status === 'Completed').length;
   
-  // Aggregate targets across all projects
-  const participantsCovered = projects.reduce((sum, p) => sum + (p.participants_planned || 0), 0);
+  // Aggregate targets across all projects using authoritative participantCount
+  const participantsCovered = projects.reduce((sum, p) => sum + (p.participantCount || p.participants_count || p.participants_planned || 0), 0);
   
-  // Mock data for Health Score for now
-  const healthScore = 96; 
+  // Dynamic health score calculation derived from actual project performance
+  const healthScore = projects.length > 0
+    ? Math.round(projects.reduce((sum, p) => sum + (p.healthScore || 75), 0) / projects.length)
+    : 100;
 
   const filterProject = (p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -118,21 +156,25 @@ export default function Projects() {
           </div>
           <div>
             <h2 className="section-title" style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 800, margin: 0 }}>
-              Project Management
+              {isProgramManager ? 'Project Portfolio' : 'Project Management'}
             </h2>
             <p className="section-desc" style={{ margin: '4px 0 0' }}>
-              Plan, execute, monitor, and govern retail training projects.
+              {isProgramManager
+                ? 'Authorized project portfolio, coverage milestones, and assigned team roster (Read-Only).'
+                : 'Plan, execute, monitor, and govern retail training projects.'}
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: '12px' }}>
-          <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Download size={16} /> Export
-          </button>
-          <button className="btn btn-primary" onClick={() => handleOpenModal()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={16} /> Add Project
-          </button>
-        </div>
+        {!isProgramManager && (
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="btn btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Download size={16} /> Export
+            </button>
+            <button className="btn btn-primary" onClick={() => handleOpenModal()} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Plus size={16} /> Add Project
+            </button>
+          </div>
+        )}
       </div>
 
       {/* KPI Cards */}
@@ -179,7 +221,9 @@ export default function Projects() {
         
         {/* Toolbar */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
-          <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>Project Repository</h3>
+          <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.1rem' }}>
+            {isProgramManager ? 'Authorized Projects' : 'Project Repository'}
+          </h3>
           <div style={{ display: 'flex', gap: '16px' }}>
             <div style={{ position: 'relative' }}>
               <Search size={18} style={{ position: 'absolute', left: '12px', top: '10px', color: '#94A3B8' }} />
@@ -263,7 +307,9 @@ export default function Projects() {
                           <span style={{ display: 'block', color: 'var(--text-primary)', fontWeight: 500 }}>{mother.Client?.name || '-'}</span>
                           <span style={{ display: 'block', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{mother.brand || '-'}</span>
                         </td>
-                        <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)' }}>{mother.participants_planned || 0}</td>
+                        <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontWeight: 700 }}>
+                          {mother.participantCount || mother.participants_count || mother.participants_planned || 0}
+                        </td>
                         <td style={{ padding: '16px' }}>
                           <span style={{ 
                             padding: '4px 10px', borderRadius: '12px', fontSize: '0.75rem', fontWeight: 600,
@@ -274,17 +320,29 @@ export default function Projects() {
                           </span>
                         </td>
                         <td style={{ padding: '16px', textAlign: 'right' }}>
-                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                            <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(mother)} title="Edit">
-                              <Edit2 size={18} color='var(--text-secondary)' />
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
+                            <button
+                              className="btn btn-secondary"
+                              style={{ padding: '6px 12px', fontSize: '0.78rem', display: 'inline-flex', alignItems: 'center', gap: '6px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}
+                              onClick={() => handleOpenTeamDirectory(mother)}
+                              title="View Team Directory"
+                            >
+                              <Users size={14} color="#2563EB" /> Team Directory
                             </button>
-                            <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(mother)} title="Delete">
-                              <Trash2 size={18} color="#EF4444" />
-                            </button>
+                            {!isProgramManager && (
+                              <>
+                                <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(mother)} title="Edit">
+                                  <Edit2 size={18} color='var(--text-secondary)' />
+                                </button>
+                                <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(mother)} title="Delete">
+                                  <Trash2 size={18} color="#EF4444" />
+                                </button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>
-                      
+
                       {/* Sub-projects (if expanded) */}
                       {isExpanded && children.map(child => (
                         <tr key={child.id} style={{ borderBottom: '1px solid var(--bg-tertiary)', background: 'var(--bg-glass)' }}>
@@ -297,9 +355,11 @@ export default function Projects() {
                           <td style={{ padding: '16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
                             {child.Client?.name || '-'} / {child.brand || '-'}
                           </td>
-                          <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{child.participants_planned || 0}</td>
+                          <td style={{ padding: '16px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 700 }}>
+                            {child.participantCount || child.participants_count || child.participants_planned || 0}
+                          </td>
                           <td style={{ padding: '16px' }}>
-                            <span style={{ 
+                            <span style={{
                               padding: '2px 8px', borderRadius: '12px', fontSize: '0.7rem', fontWeight: 600,
                               background: child.status === 'Active' ? 'rgba(34, 197, 94, 0.2)' : 'var(--bg-tertiary)',
                               color: child.status === 'Active' ? '#16A34A' : 'var(--text-secondary)'
@@ -308,13 +368,25 @@ export default function Projects() {
                             </span>
                           </td>
                           <td style={{ padding: '16px', textAlign: 'right' }}>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-                              <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(child)} title="Edit">
-                                <Edit2 size={16} color='var(--text-secondary)' />
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', alignItems: 'center' }}>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '4px 10px', fontSize: '0.74rem', display: 'inline-flex', alignItems: 'center', gap: '4px', borderRadius: '6px', border: '1px solid #CBD5E1', background: '#F8FAFC', color: '#0F172A', fontWeight: 600, cursor: 'pointer' }}
+                                onClick={() => handleOpenTeamDirectory(child)}
+                                title="View Team Directory"
+                              >
+                                <Users size={13} color="#2563EB" /> Team
                               </button>
-                              <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(child)} title="Delete">
-                                <Trash2 size={16} color="#EF4444" />
-                              </button>
+                              {!isProgramManager && (
+                                <>
+                                  <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleOpenModal(child)} title="Edit">
+                                    <Edit2 size={16} color='var(--text-secondary)' />
+                                  </button>
+                                  <button className="btn btn-secondary" style={{ padding: '6px', border: 'none', background: 'transparent' }} onClick={() => handleDelete(child)} title="Delete">
+                                    <Trash2 size={16} color="#EF4444" />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -332,6 +404,252 @@ export default function Projects() {
           </div>
         )}
       </div>
+
+      {/* Team Directory Modal */}
+      {selectedTeamProject && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.6)',
+          backdropFilter: 'blur(4px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          padding: '20px'
+        }}>
+          <div style={{
+            background: '#FFFFFF',
+            borderRadius: '16px',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+            width: '100%',
+            maxWidth: '960px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            border: '1px solid #E2E8F0'
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: '20px 24px',
+              borderBottom: '1px solid #E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#F8FAFC'
+            }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Users size={20} color="#2563EB" />
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#0F172A' }}>
+                    Project Stakeholder Directory — {selectedTeamProject.name}
+                  </h3>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    padding: '2px 8px',
+                    borderRadius: '6px',
+                    background: '#EFF6FF',
+                    color: '#2563EB',
+                    fontFamily: 'monospace'
+                  }}>
+                    {selectedTeamProject.project_code || 'PRJ'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '16px', marginTop: '4px', fontSize: '0.8rem', color: '#64748B' }}>
+                  <span><strong>Zone:</strong> {selectedTeamProject.zone || 'Unmapped'}</span>
+                  <span><strong>Territory:</strong> {selectedTeamProject.territory || 'Unmapped'}</span>
+                  <span><strong>Scope:</strong> Designated Project Stakeholders (Client, PM, Supervisor)</span>
+                </div>
+              </div>
+              <button
+                onClick={handleCloseTeamDirectory}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '6px',
+                  borderRadius: '6px',
+                  color: '#64748B'
+                }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Search Bar */}
+            <div style={{ padding: '16px 24px', borderBottom: '1px solid #E2E8F0', background: '#FFFFFF' }}>
+              <div style={{ position: 'relative' }}>
+                <Search size={16} style={{ position: 'absolute', left: '12px', top: '10px', color: '#94A3B8' }} />
+                <input
+                  type="text"
+                  placeholder="Search stakeholders by name, employee ID, designation, or role..."
+                  value={teamSearch}
+                  onChange={(e) => setTeamSearch(e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px 8px 36px',
+                    borderRadius: '8px',
+                    border: '1px solid #CBD5E1',
+                    fontSize: '0.85rem'
+                  }}
+                />
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ padding: '20px 24px', overflowY: 'auto', flex: 1, minHeight: '260px' }}>
+              {teamLoading ? (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#64748B' }}>Loading project stakeholder directory...</div>
+              ) : teamError ? (
+                <div style={{ textAlign: 'center', padding: '48px', color: '#EF4444' }}>{teamError}</div>
+              ) : (() => {
+                const filteredMembers = teamRoster.filter(m => {
+                  if (!teamSearch.trim()) return true;
+                  const q = teamSearch.toLowerCase().trim();
+                  return (m.name && m.name.toLowerCase().includes(q)) ||
+                         (m.employeeId && m.employeeId.toLowerCase().includes(q)) ||
+                         (m.designation && m.designation.toLowerCase().includes(q)) ||
+                         (m.systemRole && m.systemRole.toLowerCase().includes(q)) ||
+                         (m.zone && m.zone.toLowerCase().includes(q));
+                });
+
+                // Group by Zone
+                const zoneGroups = new Map();
+                const defaultZone = selectedTeamProject.zone || 'Unmapped';
+                zoneGroups.set(defaultZone, []);
+
+                filteredMembers.forEach(m => {
+                  const z = m.zone || defaultZone;
+                  if (!zoneGroups.has(z)) zoneGroups.set(z, []);
+                  zoneGroups.get(z).push(m);
+                });
+
+                const REQUIRED_STAKEHOLDER_ROLES = ['Client', 'Program Manager', 'Supervisor'];
+
+                return (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    {Array.from(zoneGroups.entries()).map(([zone, members]) => {
+                      const presentRoles = new Set(members.map(m => m.systemRole));
+                      const missingRoles = REQUIRED_STAKEHOLDER_ROLES.filter(r => !presentRoles.has(r));
+
+                      return (
+                        <div key={zone} style={{ border: '1px solid #E2E8F0', borderRadius: '10px', overflow: 'hidden', background: '#FFFFFF' }}>
+                          <div style={{
+                            padding: '10px 16px',
+                            background: '#F8FAFC',
+                            borderBottom: '1px solid #E2E8F0',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            flexWrap: 'wrap',
+                            gap: '8px'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#0F172A' }}>
+                                Zone: {zone}
+                              </span>
+                              <span style={{ fontSize: '0.75rem', background: '#EFF6FF', color: '#2563EB', padding: '2px 8px', borderRadius: '6px', fontWeight: 700 }}>
+                                {members.length} {members.length === 1 ? 'Designated Stakeholder' : 'Designated Stakeholders'}
+                              </span>
+                            </div>
+                            {missingRoles.length > 0 && (
+                              <span style={{ fontSize: '0.72rem', color: '#D97706', background: '#FFFBEB', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                                Unmapped in zone: {missingRoles.join(', ')}
+                              </span>
+                            )}
+                          </div>
+
+                          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.85rem' }}>
+                            <thead>
+                              <tr style={{ borderBottom: '1px solid #E2E8F0', color: '#475569', fontWeight: 700, fontSize: '0.74rem', textTransform: 'uppercase', background: '#FAFAFA' }}>
+                                <th style={{ padding: '10px 12px' }}>Name</th>
+                                <th style={{ padding: '10px 12px' }}>Employee ID</th>
+                                <th style={{ padding: '10px 12px' }}>Job Title / Designation</th>
+                                <th style={{ padding: '10px 12px' }}>Approved Role</th>
+                                <th style={{ padding: '10px 12px' }}>Zone</th>
+                                <th style={{ padding: '10px 12px' }}>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {members.map((member, mIdx) => (
+                                <tr key={member.id || mIdx} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                                  <td style={{ padding: '10px 12px', fontWeight: 700, color: '#0F172A' }}>{member.name}</td>
+                                  <td style={{ padding: '10px 12px', fontFamily: 'monospace', color: '#64748B' }}>{member.employeeId || 'N/A'}</td>
+                                  <td style={{ padding: '10px 12px', fontWeight: 600, color: member.designation === 'Not Configured' ? '#94A3B8' : '#0F172A' }}>
+                                    {member.designation}
+                                  </td>
+                                  <td style={{ padding: '10px 12px' }}>
+                                    <span style={{
+                                      padding: '2px 8px',
+                                      borderRadius: '6px',
+                                      fontSize: '0.74rem',
+                                      fontWeight: 600,
+                                      background: member.systemRole === 'Client' ? '#FEF3C7' : (member.systemRole === 'Program Manager' ? '#EFF6FF' : '#F0FDF4'),
+                                      color: member.systemRole === 'Client' ? '#92400E' : (member.systemRole === 'Program Manager' ? '#1E40AF' : '#166534')
+                                    }}>
+                                      {member.systemRole}
+                                    </span>
+                                  </td>
+                                  <td style={{ padding: '10px 12px', color: '#64748B' }}>{member.zone || selectedTeamProject.zone || 'Unmapped'}</td>
+                                  <td style={{ padding: '10px 12px' }}>
+                                    <span style={{
+                                      padding: '2px 8px',
+                                      borderRadius: '12px',
+                                      fontSize: '0.72rem',
+                                      fontWeight: 700,
+                                      background: '#ECFDF5',
+                                      color: '#059669'
+                                    }}>
+                                      {member.status}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))}
+                              {members.length === 0 && (
+                                <tr>
+                                  <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: '#94A3B8' }}>
+                                    No designated stakeholders mapped to this zone.
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{
+              padding: '16px 24px',
+              borderTop: '1px solid #E2E8F0',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              background: '#F8FAFC'
+            }}>
+              <span style={{ fontSize: '0.82rem', color: '#64748B', fontWeight: 600 }}>
+                Total Designated Stakeholders: {teamRoster.length} Members
+              </span>
+              <button
+                className="btn btn-secondary"
+                onClick={handleCloseTeamDirectory}
+                style={{ padding: '6px 16px', fontSize: '0.82rem' }}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ProjectFormModal 
         isOpen={isModalOpen} 

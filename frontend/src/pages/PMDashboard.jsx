@@ -1583,12 +1583,14 @@ export default function PMDashboard() {
             {is403 ? <ShieldAlert size={36} /> : <AlertCircle size={36} />}
           </div>
           <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--text-primary, #0F172A)', margin: '0 0 10px 0' }}>
-            {is403 ? 'Access Denied' : 'Unable to Load Dashboard'}
+            {is403 ? 'Access Denied' : (apiError?.status === 401 ? 'Session Expired' : 'Unable to Load Dashboard')}
           </h2>
           <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary, #64748B)', margin: '0 0 24px 0', lineHeight: 1.6 }}>
             {is403 
               ? 'Access denied. Your account is not authorized to access the Program Manager Dashboard.' 
-              : (error || 'An unexpected error occurred while fetching dashboard data.')}
+              : (apiError?.status === 401
+                  ? 'Your session has expired or is invalid. Please log in again to continue.'
+                  : (error || 'An unexpected error occurred while fetching dashboard data.'))}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
             {is403 ? (
@@ -1599,6 +1601,27 @@ export default function PMDashboard() {
               >
                 <ArrowLeft size={16} /> Return to Dashboard
               </button>
+            ) : apiError?.status === 401 ? (
+              <>
+                <button
+                  onClick={() => {
+                    localStorage.removeItem('jwt');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                  }}
+                  className="btn btn-primary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 600, borderRadius: '8px' }}
+                >
+                  <ArrowLeft size={16} /> Log In Again
+                </button>
+                <button
+                  onClick={() => fetchAll(false)}
+                  className="btn btn-secondary"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', padding: '10px 24px', fontWeight: 600, borderRadius: '8px' }}
+                >
+                  <RefreshCw size={16} /> Retry
+                </button>
+              </>
             ) : (
               <button
                 onClick={() => fetchAll(false)}

@@ -29,6 +29,10 @@ const ProjectAssignment = sequelize.define('ProjectAssignment', {
     type: DataTypes.STRING,
     defaultValue: 'Program Manager',
   },
+  zone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   status: {
     type: DataTypes.STRING,
     defaultValue: 'Active',

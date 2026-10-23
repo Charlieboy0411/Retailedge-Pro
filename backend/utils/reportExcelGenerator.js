@@ -39,6 +39,28 @@ function styleDataCell(cell, isEven = false, align = 'left') {
 }
 
 /**
+ * Robust sanitizer for percentage values to eliminate double '%', 'null%%', 'NaN%', etc.
+ */
+function cleanPctString(val) {
+  if (val === null || val === undefined || val === '' || val === 'N/A' || val === 'null' || val === 'undefined') {
+    return 'N/A';
+  }
+  const str = String(val).replace(/%/g, '').trim();
+  if (str === 'N/A' || str === 'null' || str === 'undefined' || str === 'NaN' || str === '—') {
+    return 'N/A';
+  }
+  const num = parseFloat(str);
+  if (isNaN(num)) return 'N/A';
+  return `${num}%`;
+}
+
+function cleanNum(val, fallback = 0) {
+  if (val === null || val === undefined || val === '') return fallback;
+  const num = Number(val);
+  return isNaN(num) ? fallback : num;
+}
+
+/**
  * Builds the strictly 10-Sheet Executive Excel Workbook for RetailEdge Pro
  */
 async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) {
@@ -47,7 +69,7 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   wb.created = new Date();
 
   const title = reportData.title || 'Training & Assessment Intelligence Report';
-  const period = reportData.period || '2026-08';
+  const period = reportData.period || reportData.date || '2026-08';
   const exec = reportData.executiveSummary || reportData.kpis || {};
   const mom = reportData.monthOverMonthComparison || {};
   const deltas = mom.deltas || {};
@@ -71,8 +93,11 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   ws1.getCell('B3').value = `Reporting Period: ${period} | Level: ${reportData.level || 'Master'} | Generated: ${new Date().toLocaleDateString()}`;
   ws1.getCell('B3').font = { size: 9, color: { argb: 'FF64748B' } };
 
-  // Headers
-  const h1 = ['Metric', 'Current Value', 'MoM Change (vs July)'];
+  const priorPeriodLabel = mom.priorPeriod || reportData.comparisonPeriod;
+  const comparisonHeader = (priorPeriodLabel && !priorPeriodLabel.includes('N/A'))
+    ? `MoM Change (vs ${priorPeriodLabel})`
+    : 'Baseline Comparison (N/A)';
+  const h1 = ['Metric', 'Current Value', comparisonHeader];
   h1.forEach((h, idx) => {
     const c = ws1.getCell(5, idx + 2);
     c.value = h;
@@ -80,16 +105,16 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   });
 
   const execMetrics = [
-    ['Total Projects', exec.totalProjects || 1, '—'],
-    ['Training Sessions Conducted', exec.trainingSessions || exec.sessionsConducted || 12, '+15%'],
-    ['Participants Reached', exec.participants || exec.participantsTrained || 148, deltas.participants?.formatted || '+8%'],
-    ['Quiz Assignments', exec.quizAssignments || 280, '—'],
-    ['Quiz Completions', exec.quizCompletions || 254, deltas.completion?.formatted || '+12%'],
-    ['Quiz Completion Rate', exec.completionRate || '90.7%', deltas.completion?.formatted || '+12%'],
-    ['Average Assessment Score', exec.averageScore || '78.5%', deltas.avgScore?.formatted || '+4%'],
-    ['Assessment Pass Rate', exec.passRate || '84.2%', deltas.passRate?.formatted || '+5%'],
-    ['Attendance Rate', (exec.attendanceRate !== null && exec.attendanceRate !== undefined) ? `${exec.attendanceRate}%` : 'N/A', deltas.attendance?.formatted || '—'],
-    ['Certificates Issued', exec.certificatesIssued || 64, deltas.certificates?.formatted || '+14%']
+    ['Total Projects', cleanNum(exec.totalProjects, 1), '—'],
+    ['Training Sessions Conducted', cleanNum(exec.trainingSessions !== undefined ? exec.trainingSessions : exec.sessionsConducted, 0), deltas.sessions?.formatted || '—'],
+    ['Participants Reached', cleanNum(exec.participants !== undefined ? exec.participants : exec.participantsTrained, 0), deltas.participants?.formatted || '—'],
+    ['Quiz Assignments', cleanNum(exec.quizAssignments !== undefined ? exec.quizAssignments : exec.assigned, 0), '—'],
+    ['Quiz Completions', cleanNum(exec.quizCompletions !== undefined ? exec.quizCompletions : exec.completed, 0), deltas.completion?.formatted || '—'],
+    ['Quiz Completion Rate', cleanPctString(exec.completionRate !== undefined ? exec.completionRate : exec.quizCompletionRate), deltas.completion?.formatted || '—'],
+    ['Average Assessment Score', cleanPctString(exec.averageScore !== undefined ? exec.averageScore : exec.averageQuizScore), deltas.avgScore?.formatted || '—'],
+    ['Assessment Pass Rate', cleanPctString(exec.passRate !== undefined ? exec.passRate : exec.quizPassRate), deltas.passRate?.formatted || '—'],
+    ['Attendance Rate', cleanPctString(exec.attendanceRate), deltas.attendance?.formatted || '—'],
+    ['Certificates Issued', cleanNum(exec.certificatesIssued, 0), deltas.certificates?.formatted || '—']
   ];
 
   execMetrics.forEach((row, rIdx) => {
@@ -115,13 +140,34 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const matrix = reportData.projectPerformanceMatrix || [
-    { project: reportData.project || 'Galderma Retail Program', participants: 48, sessions: 6, attendance: '92%', quizCompletion: '95%', averageScore: '84%', passRate: '88%', certificates: 28, health: '🟢 Healthy' }
-  ];
+  const matrix = reportData.projectPerformanceMatrix || [];
+  if (matrix.length === 0 && reportData.project) {
+    matrix.push({
+      project: reportData.project,
+      participants: cleanNum(exec.participants || exec.participantsTrained, 0),
+      sessions: cleanNum(exec.trainingSessions || exec.sessionsConducted, 0),
+      attendance: cleanPctString(exec.attendanceRate),
+      quizCompletion: cleanPctString(exec.completionRate || exec.quizCompletionRate),
+      averageScore: cleanPctString(exec.averageScore || exec.averageQuizScore),
+      passRate: cleanPctString(exec.passRate || exec.quizPassRate),
+      certificates: cleanNum(exec.certificatesIssued, 0),
+      health: reportData.health || '🟢 Healthy'
+    });
+  }
 
   matrix.forEach((p, rIdx) => {
     const rowNum = rIdx + 2;
-    const row = [p.project || p.name, p.participants, p.sessions, p.attendance, p.quizCompletion, p.averageScore, p.passRate, p.certificates, p.health || '🟢 Healthy'];
+    const row = [
+      p.project || p.name || 'Project',
+      cleanNum(p.participants, 0),
+      cleanNum(p.sessions, 0),
+      cleanPctString(p.attendance),
+      cleanPctString(p.quizCompletion),
+      cleanPctString(p.averageScore),
+      cleanPctString(p.passRate),
+      cleanNum(p.certificates, 0),
+      p.health || '🟢 Healthy'
+    ];
     row.forEach((val, cIdx) => {
       const c = ws2.getCell(rowNum, cIdx + 1);
       c.value = val;
@@ -142,14 +188,23 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const quizzes = [
-    { title: 'Product Knowledge Assessment', project: reportData.project || 'Galderma', mode: 'ONLINE', assigned: 48, attempted: 45, completed: 44, comp: '92%', pass: '88%', avg: '82%' },
-    { title: 'In-Store SOP & Compliance Review', project: reportData.project || 'Galderma', mode: 'OFFLINE', assigned: 35, attempted: 32, completed: 30, comp: '86%', pass: '80%', avg: '76%' },
-    { title: 'Consultative Selling & Objection Handling', project: reportData.project || 'Unilever', mode: 'ONLINE', assigned: 40, attempted: 38, completed: 36, comp: '90%', pass: '85%', avg: '80%' }
-  ];
-
+  const quizzes = reportData.quizSummary || reportData.quizzes || [];
   quizzes.forEach((q, rIdx) => {
-    const row = [q.title, q.project, q.mode, q.assigned, q.attempted, q.completed, q.comp, q.pass, q.avg];
+    const totalAssignedVal = cleanNum(q.totalAssigned !== undefined ? q.totalAssigned : q.assigned, 0);
+    const completedVal = cleanNum(q.completed, 0);
+    const attemptedVal = cleanNum(q.attempted !== undefined ? q.attempted : completedVal, completedVal);
+    const compRateVal = cleanPctString(q.completionRate !== undefined ? q.completionRate : (q.comp !== undefined ? q.comp : (totalAssignedVal > 0 ? Math.round((completedVal / totalAssignedVal) * 100) : 0)));
+    const row = [
+      q.quizTitle || q.title || 'Assessment',
+      q.project || reportData.project || 'Project',
+      q.format || q.mode || reportData.quizMode || 'ONLINE',
+      totalAssignedVal,
+      attemptedVal,
+      completedVal,
+      compRateVal,
+      cleanPctString(q.passRate !== undefined ? q.passRate : q.pass),
+      cleanPctString(q.averageScore !== undefined ? q.averageScore : q.avg)
+    ];
     row.forEach((val, cIdx) => {
       const c = ws3.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -170,20 +225,27 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const formatRows = reportData.onlineVsOfflineComparison || [
-    { metric: 'Assigned', online: 120, offline: 65, total: 185 },
-    { metric: 'Attempted', online: 110, offline: 58, total: 168 },
-    { metric: 'Completed', online: 106, offline: 54, total: 160 },
-    { metric: 'Pending', online: 14, offline: 11, total: 25 },
-    { metric: 'Passed', online: 92, offline: 43, total: 135 },
-    { metric: 'Failed', online: 14, offline: 11, total: 25 },
-    { metric: 'Completion %', online: '88%', offline: '83%', total: '86%' },
-    { metric: 'Pass %', online: '87%', offline: '80%', total: '84%' },
-    { metric: 'Avg Score', online: '82%', offline: '76%', total: '79%' }
-  ];
+  let formatRows = reportData.onlineVsOfflineComparison;
+  if (!formatRows || formatRows.length === 0) {
+    formatRows = [
+      { metric: 'Assigned', online: 0, offline: 0, total: 0 },
+      { metric: 'Attempted', online: 0, offline: 0, total: 0 },
+      { metric: 'Completed', online: 0, offline: 0, total: 0 },
+      { metric: 'Pending', online: 0, offline: 0, total: 0 },
+      { metric: 'Passed', online: 0, offline: 0, total: 0 },
+      { metric: 'Failed', online: 0, offline: 0, total: 0 },
+      { metric: 'Completion %', online: '0%', offline: '0%', total: '0%' },
+      { metric: 'Pass %', online: '0%', offline: '0%', total: '0%' },
+      { metric: 'Avg Score', online: '0%', offline: '0%', total: '0%' }
+    ];
+  }
 
   formatRows.forEach((r, rIdx) => {
-    const row = [r.metric, r.online, r.offline, r.total];
+    const isPct = r.metric.includes('%') || r.metric.includes('Score');
+    const onlineVal = isPct ? cleanPctString(r.online) : (r.online !== undefined && r.online !== null ? r.online : 0);
+    const offlineVal = isPct ? cleanPctString(r.offline) : (r.offline !== undefined && r.offline !== null ? r.offline : 0);
+    const totalVal = isPct ? cleanPctString(r.total) : (r.total !== undefined && r.total !== null ? r.total : 0);
+    const row = [r.metric, onlineVal, offlineVal, totalVal];
     row.forEach((val, cIdx) => {
       const c = ws4.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -196,9 +258,9 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   // -------------------------------------------------------------
   const ws5 = wb.addWorksheet('5. Participant Performance');
   ws5.views = [{ showGridLines: true }];
-  const s5Headers = ['Participant Name', 'Employee ID', 'Project', 'Quiz Name', 'Mode', 'Score', 'Pass/Fail', 'Attendance %', 'Certification Impact'];
+  const s5Headers = ['Participant Name', 'Employee ID', 'Project', 'Zone', 'Territory', 'Quiz Name', 'Mode', 'Score', 'Pass/Fail', 'Attendance %', 'Certification Impact'];
   s5Headers.forEach((h, i) => {
-    ws5.getColumn(i + 1).width = i === 0 || i === 3 ? 24 : 16;
+    ws5.getColumn(i + 1).width = i === 0 || i === 5 ? 24 : (i >= 2 && i <= 4 ? 18 : 15);
     const c = ws5.getCell(1, i + 1);
     c.value = h;
     styleHeaderCell(c);
@@ -207,7 +269,22 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   const participants = reportData.participantResults || [];
 
   participants.forEach((p, rIdx) => {
-    const row = [p.name, p.employeeId, p.project || 'Galderma', p.quiz || 'Assessment', p.mode || 'ONLINE', p.score, p.status, p.attendance || '90%', p.cert || 'Eligible'];
+    const scorePct = cleanPctString(p.score);
+    const zoneVal = p.zone || reportData.zone || 'Unmapped';
+    const territoryVal = p.territory || reportData.territory || 'Unmapped';
+    const row = [
+      p.name || 'Participant',
+      p.employeeId || 'N/A',
+      p.project || reportData.project || 'Project',
+      zoneVal,
+      territoryVal,
+      p.quiz || reportData.quizName || 'Assessment',
+      p.mode || reportData.quizMode || 'ONLINE',
+      scorePct,
+      p.status || (p.passed !== undefined ? (p.passed ? 'Pass' : 'Fail') : (parseFloat(String(p.score).replace(/%/g, '')) >= (p.passingThreshold ? parseFloat(String(p.passingThreshold).replace(/%/g, '')) : 70) ? 'Pass' : 'Fail')),
+      p.attendance ? cleanPctString(p.attendance) : 'N/A',
+      p.cert || p.certificationImpact || '—'
+    ];
     row.forEach((val, cIdx) => {
       const c = ws5.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -228,10 +305,20 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const attendanceData = reportData.recentSessions || [];
+  const attendanceData = reportData.recentSessions || reportData.attendance || [];
 
   attendanceData.forEach((a, rIdx) => {
-    const row = [a.participant || a.participantName, a.employeeId, a.meeting || a.trainingTitle, a.join || a.joinTime, a.leave || a.leaveTime, a.dur || a.totalDuration, a.rejoins, a.att || a.attendancePercentage, a.status];
+    const row = [
+      a.participant || a.participantName || 'Learner',
+      a.employeeId || 'N/A',
+      a.meeting || a.trainingTitle || 'Training Meeting',
+      a.join || a.joinTime || '—',
+      a.leave || a.leaveTime || '—',
+      a.dur || a.totalDuration || '—',
+      a.rejoins !== undefined ? a.rejoins : '—',
+      cleanPctString(a.att || a.attendancePercentage),
+      a.status || 'Attended'
+    ];
     row.forEach((val, cIdx) => {
       const c = ws6.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -246,21 +333,24 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   ws7.views = [{ showGridLines: true }];
   const s7Headers = ['Q#', 'Question / Topic', 'Total Attempts', 'Correct', 'Incorrect', 'Accuracy %', 'Learning Status'];
   s7Headers.forEach((h, i) => {
-    ws7.getColumn(i + 1).width = i === 1 ? 38 : 15;
+    ws7.getColumn(i + 1).width = i === 1 ? 52 : 16;
     const c = ws7.getCell(1, i + 1);
     c.value = h;
     styleHeaderCell(c);
   });
 
-  const qAnalytics = reportData.questionAnalytics || reportData.questionIntelligence || [
-    { qNum: 1, topic: 'Product Knowledge & Core Active Ingredients', attempts: 48, cor: 44, inc: 4, acc: '91%', status: '🟢 High Mastered' },
-    { qNum: 2, topic: 'Customer Engagement & Handling Protocol', attempts: 48, cor: 41, inc: 7, acc: '85%', status: '🟢 High Mastered' },
-    { qNum: 3, topic: 'POS Billing & Inventory Scan SOP', attempts: 48, cor: 36, inc: 12, acc: '75%', status: '🟡 Good' },
-    { qNum: 4, topic: 'Objection Handling & Return Claims', attempts: 48, cor: 28, inc: 20, acc: '58%', status: '🔴 Reinforce Area' }
-  ];
+  const qAnalytics = reportData.questionAnalytics || reportData.questionIntelligence || [];
 
   qAnalytics.forEach((q, rIdx) => {
-    const row = [q.qNum || rIdx + 1, q.topic || q.questionText, q.attempts, q.cor || q.correct, q.inc || q.incorrect, q.acc || `${q.accuracy}%`, q.status || (parseInt(q.accuracy) >= 75 ? 'Mastered' : 'Needs Reinforcement')];
+    const attempts = cleanNum(q.attempts, 0);
+    const correct = cleanNum(q.cor !== undefined ? q.cor : q.correct, 0);
+    const incorrect = cleanNum(q.inc !== undefined ? q.inc : q.incorrect, Math.max(0, attempts - correct));
+    const accuracy = cleanPctString(q.acc || q.accuracy || q.accuracyPercentage || (attempts > 0 ? Math.round((correct / attempts) * 100) : 0));
+    const accNum = parseFloat(accuracy.replace(/%/g, '')) || 0;
+    const status = q.status || (accNum >= 80 ? 'Mastered' : accNum >= 60 ? 'Moderate' : 'Review');
+    const questionText = q.questionText || q.topic || `Question ${q.qNum || rIdx + 1}`;
+
+    const row = [q.qNum || rIdx + 1, questionText, attempts, correct, incorrect, accuracy, status];
     row.forEach((val, cIdx) => {
       const c = ws7.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -281,10 +371,19 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const certs = reportData.recentCertificates || [];
+  const certs = reportData.recentCertificates || reportData.certificates || [];
 
   certs.forEach((cItem, rIdx) => {
-    const row = [cItem.id || cItem.certificateId, cItem.name || cItem.participantName, cItem.prog || cItem.program, cItem.proj || cItem.projectName, cItem.date || cItem.issueDate, cItem.score || '85%', cItem.att || '90%', cItem.status];
+    const row = [
+      cItem.id || cItem.certificateId || cItem.certificate_id || 'CERT',
+      cItem.name || cItem.participantName || 'Learner',
+      cItem.prog || cItem.program || 'RetailEdge Pro Certified',
+      cItem.proj || cItem.projectName || reportData.project || 'Project',
+      cItem.date || cItem.issueDate || '—',
+      cleanPctString(cItem.score),
+      cleanPctString(cItem.att || cItem.attendance),
+      cItem.status || 'VALID'
+    ];
     row.forEach((val, cIdx) => {
       const c = ws8.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
@@ -311,16 +410,17 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c);
   });
 
-  const rows21 = (masterOutcomeRows && masterOutcomeRows.length > 0) ? masterOutcomeRows : [];
+  const rows21 = (masterOutcomeRows && masterOutcomeRows.length > 0) ? masterOutcomeRows : (reportData.masterOutcomeRows || []);
 
   rows21.forEach((item, rIdx) => {
     const row = [
-      item.client || 'RetailEdge Client', item.project || 'Project', item.subproject || 'Subproject',
-      item.trainingSession || 'Session', item.participant || 'Learner', item.employeeId || 'N/A',
-      item.trainer || 'Trainer', item.sessionDate || '', item.jitsiAttendance || 'Attended',
-      item.joinTime || '', item.leaveTime || '', item.totalDuration || '0m',
-      item.attendancePercentage || '0%', item.quizzesAssigned || 1, item.quizzesAttempted || 1,
-      item.quizType || 'ONLINE', item.quizScore || '0%', item.passFail || 'Pass',
+      item.client || 'RetailEdge Client', item.project || reportData.project || 'Project', item.subproject || item.project || 'Subproject',
+      item.trainingSession || reportData.quizName || 'Session', item.participant || 'Learner', item.employeeId || 'N/A',
+      item.trainer || reportData.trainer || 'Lead Trainer', item.sessionDate || reportData.date || reportData.period || '',
+      item.jitsiAttendance || 'No Meeting Recorded',
+      item.joinTime || '—', item.leaveTime || '—', item.totalDuration || '—',
+      cleanPctString(item.attendancePercentage), cleanNum(item.quizzesAssigned, 1), cleanNum(item.quizzesAttempted, 1),
+      item.quizType || reportData.quizMode || 'ONLINE', cleanPctString(item.quizScore), item.passFail || 'Pass',
       item.certificationEligibility || 'PENDING', item.certificateStatus || 'IN PROGRESS',
       item.certificateIdAndDate || 'N/A'
     ];
@@ -344,25 +444,37 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
     styleHeaderCell(c, COLORS.RED);
   });
 
-  const actions = reportData.alerts || reportData.actionPlan || [
-    { priority: 'High', cat: 'Quiz Re-test Required', who: 'Amit Kumar (EMP-103)', issue: 'Scored 54% on Product Knowledge Assessment', action: 'Schedule re-test module and share review flashcards', owner: 'Trainer' },
-    { priority: 'Medium', cat: 'Attendance Deficit', who: '18 Participants', issue: 'Below minimum 75% attendance threshold', action: 'Schedule make-up training session', owner: 'Program Manager' },
-    { priority: 'Low', cat: 'Knowledge Gap Reinforcement', who: 'Galderma Store Team', issue: 'Objection Handling module accuracy below 60%', action: 'Conduct 30-min targeted drill on return policies', owner: 'Lead Trainer' }
-  ];
-
-  actions.forEach((a, rIdx) => {
-    const row = [a.priority || 'High', a.cat || a.area, a.who || `${a.count || 1} Participants`, a.issue || a.description, a.action || 'Execute operational remediation', a.owner || 'PM & Trainer'];
+  const actions = reportData.alerts || reportData.actionPlan || [];
+  if (actions.length === 0) {
+    const row = ['Low', 'Operational Health', 'All Participants', 'All performance benchmarks met SLA standards', 'Maintain current operating tempo', 'Operations Team'];
     row.forEach((val, cIdx) => {
-      const c = ws10.getCell(rIdx + 2, cIdx + 1);
+      const c = ws10.getCell(2, cIdx + 1);
       c.value = val;
-      styleDataCell(c, rIdx % 2 === 1, cIdx === 3 || cIdx === 4 ? 'left' : 'center');
+      styleDataCell(c, false, cIdx === 3 || cIdx === 4 ? 'left' : 'center');
     });
-  });
+  } else {
+    actions.forEach((a, rIdx) => {
+      const row = [
+        a.priority || 'Medium',
+        a.cat || a.area || 'Operational Intervention',
+        a.who || (a.count ? `${a.count} Participants` : (a.description ? 'Affected Cohort' : 'Participants')),
+        a.issue || a.description || 'Intervention needed',
+        a.action || a.recommendedAction || 'Execute operational remediation',
+        a.owner || 'PM & Trainer'
+      ];
+      row.forEach((val, cIdx) => {
+        const c = ws10.getCell(rIdx + 2, cIdx + 1);
+        c.value = val;
+        styleDataCell(c, rIdx % 2 === 1, cIdx === 3 || cIdx === 4 ? 'left' : 'center');
+      });
+    });
+  }
 
   const buffer = await wb.xlsx.writeBuffer();
   return buffer;
 }
 
 module.exports = {
-  generate10SheetExcelWorkbook
+  generate10SheetExcelWorkbook,
+  cleanPctString
 };

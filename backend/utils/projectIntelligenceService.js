@@ -16,6 +16,37 @@ const JitsiInterval = require('../models/JitsiInterval');
 const ProjectAssignment = require('../models/ProjectAssignment');
 
 /**
+ * Canonical date range resolver with explicit start-inclusive and end-exclusive boundaries.
+ * Format support:
+ * - 'YYYY-MM': Start of month (inclusive) to start of next month (exclusive)
+ * - 'YYYY-MM-DD': Start of day (inclusive) to start of next day (exclusive)
+ */
+function resolvePeriodRange(period) {
+  if (!period || period === 'all') return null;
+  if (typeof period === 'object' && period.startDate && period.endDate) {
+    return {
+      startDate: new Date(period.startDate),
+      endDate: new Date(period.endDate)
+    };
+  }
+  if (typeof period === 'string') {
+    if (/^\d{4}-\d{2}$/.test(period)) {
+      const [year, month] = period.split('-').map(Number);
+      const startDate = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+      const endDate = new Date(Date.UTC(year, month, 1, 0, 0, 0, 0));
+      return { startDate, endDate };
+    }
+    if (/^\d{4}-\d{2}-\d{2}$/.test(period)) {
+      const [year, month, day] = period.split('-').map(Number);
+      const startDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+      const endDate = new Date(Date.UTC(year, month - 1, day + 1, 0, 0, 0, 0));
+      return { startDate, endDate };
+    }
+  }
+  return null;
+}
+
+/**
  * Validates PM ownership and returns authorized project IDs matching the filter.
  */
 async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId) {
@@ -27,7 +58,7 @@ async function getAccessibleProjectIds(user, targetProjectId, targetSubProjectId
   // 1. Determine all project IDs the user has permission to access
   let authorizedBaseIds = [];
 
-  if (['Admin', 'Super Admin'].includes(userRole)) {
+  if (['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations', 'Leadership'].includes(userRole)) {
     const allProjs = await Project.findAll({ attributes: ['id'] });
     authorizedBaseIds = allProjs.map(p => p.id);
   } else {
@@ -128,7 +159,8 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
       activeTrainingSessions: 0,
       totalParticipants: 0,
       participantsJoined: 0,
-      attendanceRate: 0,
+      attendanceRate: null,
+      hasAttendanceData: false,
       averageSessionDuration: '0m',
       quizzesAssigned: 0,
       quizAttempts: 0,
@@ -145,6 +177,8 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
     };
   }
 
+  const range = resolvePeriodRange(dateRange);
+
   // 1. Projects and Subprojects
   const projects = await Project.findAll({
     where: { id: { [Op.in]: projectIds } }
@@ -153,10 +187,16 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
   const activeSubprojects = projects.filter(p => p.parentId && p.status === 'Active').length;
 
   // 2. Training Sessions (Meetings and Content Trainings)
+  const trainingWhere = { projectId: { [Op.in]: projectIds } };
+  if (range) {
+    trainingWhere[Op.or] = [
+      { scheduledAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+      { [Op.and]: [{ scheduledAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+    ];
+  }
   const trainings = await Training.findAll({
-    where: { projectId: { [Op.in]: projectIds } }
+    where: trainingWhere
   });
-  const activeTrainingSessions = trainings.length;
 
   // 3. Quizzes Assigned
   const quizzes = await Quiz.findAll({
@@ -167,21 +207,35 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
   const quizIds = quizzes.map(q => q.id);
 
   // 4. Quiz Sessions & Attempts
+  const sessionWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { quizId: { [Op.in]: quizIds } }
+    ]
+  };
+  if (range) {
+    sessionWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { startedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ startedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
+
   const sessions = await Session.findAll({
-    where: {
-      [Op.or]: [
-        { projectId: { [Op.in]: projectIds } },
-        { quizId: { [Op.in]: quizIds } }
-      ]
-    },
+    where: sessionWhere,
     include: [
       {
         model: Participant,
         attributes: ['id', 'userId', 'name', 'score', 'connectionStatus', 'createdAt'],
-        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
+        include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
       }
     ]
   });
+
+  const activeTrainingSessions = trainings.length > 0 ? trainings.length : sessions.length;
 
   let totalAttempts = 0;
   let completedAttempts = 0;
@@ -190,12 +244,22 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
   const uniqueParticipantKeys = new Set();
 
   const quizQuestionCountMap = {};
+  const quizPassThresholdMap = {};
   quizzes.forEach(q => {
     quizQuestionCountMap[q.id] = q.questions ? q.questions.length : 1;
+    quizPassThresholdMap[q.id] = (q.config?.passing_score !== undefined && q.config?.passing_score !== null)
+      ? Number(q.config.passing_score)
+      : 70;
   });
 
   sessions.forEach(session => {
-    const totalQ = quizQuestionCountMap[session.quizId] || 1;
+    const totalQ = (session.Quiz && session.Quiz.questions && session.Quiz.questions.length > 0)
+      ? session.Quiz.questions.length
+      : (quizQuestionCountMap[session.quizId] || 1);
+    const passThreshold = (session.Quiz?.config?.passing_score !== undefined && session.Quiz?.config?.passing_score !== null)
+      ? Number(session.Quiz.config.passing_score)
+      : (quizPassThresholdMap[session.quizId] !== undefined ? quizPassThresholdMap[session.quizId] : 70);
+
     (session.Participants || []).forEach(p => {
       totalAttempts++;
       const pKey = p.userId || p.name;
@@ -207,26 +271,59 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
       const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
       const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
       totalScorePercentageSum += pct;
-      if (pct >= 60) {
+      if (pct >= passThreshold) {
         passedAttempts++;
       }
     });
   });
 
-  // 5. Total Participants Assigned to Projects
-  const totalAssignedUsers = await User.count({
-    where: { projectId: { [Op.in]: projectIds } }
-  });
-  const totalParticipants = Math.max(totalAssignedUsers, uniqueParticipantKeys.size);
+  // 5. Total Participants Assigned to Projects (count learners/staff, not management accounts)
+  let totalAssignedLearners = 0;
+  try {
+    const learnerRoles = await Role.findAll({
+      where: {
+        role_name: {
+          [Op.in]: ['Employee', 'Participant', 'Learner', 'Staff', 'Sales Associate', 'Store Associate']
+        }
+      },
+      attributes: ['id']
+    });
+    const learnerRoleIds = learnerRoles.map(r => r.id);
+
+    if (learnerRoleIds.length > 0) {
+      totalAssignedLearners = await User.count({
+        where: {
+          projectId: { [Op.in]: projectIds },
+          roleId: { [Op.in]: learnerRoleIds }
+        }
+      });
+    }
+  } catch (err) {
+    totalAssignedLearners = 0;
+  }
+
+  const totalParticipants = Math.max(totalAssignedLearners, uniqueParticipantKeys.size);
 
   // 6. Jitsi Attendance Telemetry
+  const jitsiWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { subProjectId: { [Op.in]: projectIds } }
+    ]
+  };
+  if (range) {
+    jitsiWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { firstJoinedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ firstJoinedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
+
   const jitsiRecords = await JitsiAttendance.findAll({
-    where: {
-      [Op.or]: [
-        { projectId: { [Op.in]: projectIds } },
-        { subProjectId: { [Op.in]: projectIds } }
-      ]
-    }
+    where: jitsiWhere
   });
 
   let totalAttendedMinutesSum = 0;
@@ -250,17 +347,14 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
     ? (avgDurationMinutes >= 60 ? `${Math.floor(avgDurationMinutes / 60)}h ${avgDurationMinutes % 60}m` : `${avgDurationMinutes}m`)
     : 'N/A';
 
-  // Exact Analytical Formulas specified by User:
-  // Assigned = total participant-quiz assignments
-  // Started = participants who opened the quiz
-  // Attempted = participants who submitted at least one response
-  // Completed = participants who submitted the complete quiz
-  // Passed = completed attempts >= passing score (60%)
-  // Failed = completed attempts below passing score
-  // Quiz Completion Rate = Completed ÷ Assigned × 100
-  // Quiz Attempt Rate = Attempted ÷ Assigned × 100
-  // Pass Rate = Passed ÷ Completed × 100
-  const totalQuizAssignments = Math.max(totalParticipants * Math.max(quizzesAssignedCount, 1), totalAttempts);
+  const distinctQuizzesInPeriod = new Set(sessions.map(s => s.quizId).filter(Boolean));
+  const effectiveQuizzesCount = (range && distinctQuizzesInPeriod.size > 0)
+    ? distinctQuizzesInPeriod.size
+    : Math.max(quizzesAssignedCount, 1);
+
+  const totalQuizAssignments = projectIds.length === 1
+    ? Math.max(totalParticipants * Math.max(effectiveQuizzesCount, 1), totalAttempts)
+    : Math.max(totalParticipants, totalAttempts);
   const quizStarted = totalAttempts;
   const quizAttempted = totalAttempts;
   const quizCompleted = completedAttempts;
@@ -273,11 +367,15 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
   const quizPassRate = quizCompleted > 0 ? Math.round((quizPassed / quizCompleted) * 100) : 0;
 
   // 7. Certificates Issued
+  const certWhere = {
+    projectId: { [Op.in]: projectIds },
+    status: { [Op.in]: ['ISSUED', 'VALID'] }
+  };
+  if (range) {
+    certWhere.createdAt = { [Op.gte]: range.startDate, [Op.lt]: range.endDate };
+  }
   const certificatesIssued = await Certificate.count({
-    where: {
-      projectId: { [Op.in]: projectIds },
-      status: { [Op.in]: ['ISSUED', 'VALID'] }
-    }
+    where: certWhere
   });
 
   return {
@@ -411,18 +509,32 @@ async function getProjectTrainingPerformance(projectIds) {
 /**
  * Jitsi Attendance intelligence with actual session vs scheduled duration.
  */
-async function getProjectJitsiAttendance(projectIds) {
+async function getProjectJitsiAttendance(projectIds, dateRange = {}) {
   if (!projectIds || projectIds.length === 0) {
     return { live: [], history: [], overview: { totalRecorded: 0, present: 0, belowThreshold: 0, averageDuration: '0m', minDuration: '0m', maxDuration: '0m' } };
   }
 
+  const range = resolvePeriodRange(dateRange);
+
+  const jitsiWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { subProjectId: { [Op.in]: projectIds } }
+    ]
+  };
+  if (range) {
+    jitsiWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { firstJoinedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ firstJoinedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
+
   const records = await JitsiAttendance.findAll({
-    where: {
-      [Op.or]: [
-        { projectId: { [Op.in]: projectIds } },
-        { subProjectId: { [Op.in]: projectIds } }
-      ]
-    },
+    where: jitsiWhere,
     include: [
       { model: Training, attributes: ['id', 'title', 'scheduledAt', 'duration'] },
       { model: JitsiInterval, as: 'intervals' }
@@ -496,16 +608,30 @@ async function getProjectJitsiAttendance(projectIds) {
 /**
  * Quiz Intelligence with Source indicator (Online/Offline) and filters.
  */
-async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
+async function getProjectQuizIntelligence(projectIds, dateRangeOrType = 'ALL', typeFilter = 'ALL') {
   if (!projectIds || projectIds.length === 0) {
     return {
-      kpis: { totalAssigned: 0, totalAttempts: 0, uniqueParticipants: 0, completedAttempts: 0, quizCompletionRate: 0, averageScore: 0, passRate: 0 },
+      kpis: { totalAssigned: 0, totalAttempts: 0, uniqueParticipants: 0, completedAttempts: 0, quizCompletionRate: 0, averageScore: 0, passRate: 0, failedAttempts: 0 },
       onlineAttempts: 0,
       offlineAttempts: 0,
       attemptsList: [],
       quizzes: []
     };
   }
+
+  let dateRange = {};
+  let effectiveTypeFilter = 'ALL';
+  if (typeof dateRangeOrType === 'object' && dateRangeOrType !== null) {
+    dateRange = dateRangeOrType;
+    effectiveTypeFilter = typeFilter || 'ALL';
+  } else if (typeof dateRangeOrType === 'string' && /^\d{4}-\d{2}/.test(dateRangeOrType)) {
+    dateRange = resolvePeriodRange(dateRangeOrType);
+    effectiveTypeFilter = typeFilter || 'ALL';
+  } else if (typeof dateRangeOrType === 'string') {
+    effectiveTypeFilter = dateRangeOrType;
+  }
+
+  const range = resolvePeriodRange(dateRange);
 
   const quizzes = await Quiz.findAll({
     where: { projectId: { [Op.in]: projectIds }, status: { [Op.ne]: 'archived' } },
@@ -516,19 +642,31 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
   });
   const quizIds = quizzes.map(q => q.id);
 
+  const sessionWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { quizId: { [Op.in]: quizIds } }
+    ]
+  };
+  if (range) {
+    sessionWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { startedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ startedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
+
   const sessions = await Session.findAll({
-    where: {
-      [Op.or]: [
-        { projectId: { [Op.in]: projectIds } },
-        { quizId: { [Op.in]: quizIds } }
-      ]
-    },
+    where: sessionWhere,
     include: [
       { model: Quiz, attributes: ['id', 'title', 'config'] },
       {
         model: Participant,
         attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'connectionStatus', 'createdAt'],
-        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
+        include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
       }
     ],
     order: [['createdAt', 'DESC']]
@@ -543,12 +681,16 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
   const attemptsList = [];
 
   const quizMap = {};
+  const quizPassThresholdMap = {};
   quizzes.forEach(q => {
     quizMap[q.id] = {
       title: q.title,
       projectName: q.Project ? q.Project.name : 'General',
       totalQuestions: q.questions ? q.questions.length : 1
     };
+    quizPassThresholdMap[q.id] = (q.config?.passing_score !== undefined && q.config?.passing_score !== null)
+      ? Number(q.config.passing_score)
+      : 70;
   });
 
   sessions.forEach(session => {
@@ -558,6 +700,9 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
       projectName: 'General',
       totalQuestions: 1
     };
+    const passThreshold = (session.Quiz?.config?.passing_score !== undefined && session.Quiz?.config?.passing_score !== null)
+      ? Number(session.Quiz.config.passing_score)
+      : (quizPassThresholdMap[session.quizId] !== undefined ? quizPassThresholdMap[session.quizId] : 70);
 
     (session.Participants || []).forEach(p => {
       const qType = isOffline ? 'OFFLINE' : 'ONLINE';
@@ -566,26 +711,30 @@ async function getProjectQuizIntelligence(projectIds, typeFilter = 'ALL') {
 
       uniqueAttemptedUsers.add(p.userId || p.name);
 
-      const totalQ = quizMeta.totalQuestions > 0 ? quizMeta.totalQuestions : 1;
+      const totalQ = (session.Quiz && session.Quiz.questions && session.Quiz.questions.length > 0)
+        ? session.Quiz.questions.length
+        : (quizMeta.totalQuestions > 0 ? quizMeta.totalQuestions : 1);
       const responses = p.Responses || [];
       const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
       const pct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
       scoreSum += pct;
 
-      const passed = pct >= 60;
+      const passed = pct >= passThreshold;
       if (passed) passedCount++;
       else failedCount++;
 
       // Filter by type if requested
-      if (typeFilter === 'ALL' || typeFilter.toUpperCase() === qType) {
+      if (effectiveTypeFilter === 'ALL' || effectiveTypeFilter.toUpperCase() === qType) {
         attemptsList.push({
           id: p.id,
           sessionId: session.id,
+          name: p.name,
           participantName: p.name,
           employeeId: p.employeeId || 'N/A',
           quizTitle: quizMeta.title,
           projectName: quizMeta.projectName,
           quizType: qType,
+          type: qType,
           score: `${correctCount}/${totalQ}`,
           percentage: pct,
           arenaPoints: p.score || 0,
@@ -697,7 +846,7 @@ async function getProjectCertificationIntelligence(projectIds) {
 /**
  * Multi-Project Comparison for PM (when "All My Projects" is selected).
  */
-async function getProjectComparison(user) {
+async function getProjectComparison(user, dateRange = null) {
   const projectIds = await getAccessibleProjectIds(user, 'all', 'all');
   if (projectIds.length === 0) return [];
 
@@ -713,7 +862,7 @@ async function getProjectComparison(user) {
   const comparison = [];
   for (const proj of targetList) {
     const familyIds = [proj.id, ...(proj.subProjects || []).map(sp => sp.id)];
-    const kpis = await getProjectKPIs(familyIds);
+    const kpis = await getProjectKPIs(familyIds, dateRange);
 
     // Compute Health Status based on measurable indicators:
     let health = 'Healthy';
@@ -1091,18 +1240,58 @@ async function getParticipant360(participantId, accessibleProjectIds = [], reque
  * 21-Column Master Training Outcome Data.
  * Reconciles column 21 as 'Certificate ID & Issue Date' to strictly produce 21 columns.
  */
-async function getMasterTrainingOutcomeData(projectIds) {
+async function getMasterTrainingOutcomeData(projectIds, options = {}) {
   if (!projectIds || projectIds.length === 0) return [];
+
+  const range = resolvePeriodRange(options.period || options.dateRange || (options.startDate && options.endDate ? options : null));
+  const isLevel1 = Boolean(options.sessionId || options.level === 'LEVEL_1_QUIZ');
+
+  // Build where clauses
+  const jitsiWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { subProjectId: { [Op.in]: projectIds } }
+    ]
+  };
+
+  const sessionWhere = {
+    projectId: { [Op.in]: projectIds }
+  };
+
+  if (options.sessionId) {
+    sessionWhere.id = options.sessionId;
+    // For single session quiz report, Jitsi records should be scoped to linked training or empty
+    jitsiWhere.id = null; // Quiz session reports only have quiz records unless training linked
+  } else if (range) {
+    sessionWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { startedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ startedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+    jitsiWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { firstJoinedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ firstJoinedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
+
+  const certWhere = {
+    projectId: { [Op.in]: projectIds }
+  };
+  if (range && !isLevel1) {
+    certWhere.createdAt = { [Op.gte]: range.startDate, [Op.lt]: range.endDate };
+  }
 
   // Query Jitsi attendances and quiz participants
   const [jitsiRecords, quizSessions, certificates] = await Promise.all([
     JitsiAttendance.findAll({
-      where: {
-        [Op.or]: [
-          { projectId: { [Op.in]: projectIds } },
-          { subProjectId: { [Op.in]: projectIds } }
-        ]
-      },
+      where: jitsiWhere,
       include: [
         { model: Training, attributes: ['id', 'title', 'scheduledAt', 'duration'] },
         { model: Project, attributes: ['id', 'name', 'clientId'] },
@@ -1111,20 +1300,24 @@ async function getMasterTrainingOutcomeData(projectIds) {
       ]
     }),
     Session.findAll({
-      where: { projectId: { [Op.in]: projectIds } },
+      where: sessionWhere,
       include: [
-        { model: Quiz, attributes: ['id', 'title', 'config'] },
+        {
+          model: Quiz,
+          attributes: ['id', 'title', 'config'],
+          include: [{ model: Question, as: 'questions', attributes: ['id'] }]
+        },
         { model: Project, attributes: ['id', 'name'] },
         {
           model: Participant,
           attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'createdAt'],
-          include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
+          include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
         },
         { model: User, as: 'host', attributes: ['id', 'name'] }
       ]
     }),
     Certificate.findAll({
-      where: { projectId: { [Op.in]: projectIds } },
+      where: certWhere,
       attributes: ['id', 'certificate_id', 'userId', 'projectId', 'status', 'issueDate']
     })
   ]);
@@ -1171,24 +1364,31 @@ async function getMasterTrainingOutcomeData(projectIds) {
   quizSessions.forEach(session => {
     const isOffline = session.roomCode?.startsWith('off-') || session.Quiz?.config?.isOffline;
     const trainerName = session.host ? session.host.name : 'Lead Trainer';
+    const projName = session.Project ? session.Project.name : 'Project';
 
     (session.Participants || []).forEach(p => {
       const cert = certMap[p.userId] || null;
-      const totalQ = session.Quiz?.questions ? session.Quiz.questions.length : 5;
       const responses = p.Responses || [];
+      const totalQ = (session.Quiz?.questions && session.Quiz.questions.length > 0)
+        ? session.Quiz.questions.length
+        : (responses.length > 0 ? responses.length : 1);
       const correctCount = responses.filter(r => r.points_awarded > 0 || r.is_correct).length;
       const scorePct = totalQ > 0 ? Math.min(100, Math.max(0, Math.round((correctCount / totalQ) * 100))) : 0;
-      const passed = scorePct >= 70;
+      const passThreshold = (session.Quiz?.config?.passing_score !== undefined && session.Quiz?.config?.passing_score !== null)
+        ? Number(session.Quiz.config.passing_score)
+        : 70;
+      const passed = scorePct >= passThreshold;
+      const dateSource = session.startedAt || p.createdAt;
 
       outcomeRows.push({
         client: 'RetailEdge Client',
-        project: session.Project ? session.Project.name : 'Main Project',
-        subproject: session.Project ? session.Project.name : 'N/A',
+        project: projName,
+        subproject: projName,
         trainingSession: session.Quiz ? session.Quiz.title : 'Assessment Session',
         participant: p.name,
         employeeId: p.employeeId || 'N/A',
         trainer: trainerName,
-        sessionDate: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : '—',
+        sessionDate: dateSource ? new Date(dateSource).toISOString().split('T')[0] : '—',
         jitsiAttendance: 'No Meeting Recorded',
         joinTime: '—',
         leaveTime: '—',
@@ -1213,20 +1413,33 @@ async function getMasterTrainingOutcomeData(projectIds) {
  * Context-Aware Action Center Recommendations.
  * Turns "What happened" into "What happened → Why → Who needs attention → What next?"
  */
-async function getProjectAlerts(projectIds) {
+async function getProjectAlerts(projectIds, dateRange = {}) {
   if (!projectIds || projectIds.length === 0) return [];
 
+  const range = resolvePeriodRange(dateRange);
   const alerts = [];
+
+  const jitsiWhere = {
+    [Op.or]: [
+      { projectId: { [Op.in]: projectIds } },
+      { subProjectId: { [Op.in]: projectIds } }
+    ],
+    attendancePercentage: { [Op.lt]: 75 }
+  };
+  if (range) {
+    jitsiWhere[Op.and] = [
+      {
+        [Op.or]: [
+          { firstJoinedAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } },
+          { [Op.and]: [{ firstJoinedAt: null }, { createdAt: { [Op.gte]: range.startDate, [Op.lt]: range.endDate } }] }
+        ]
+      }
+    ];
+  }
 
   // 1. Low Jitsi Attendance
   const lowAttendanceRecords = await JitsiAttendance.findAll({
-    where: {
-      [Op.or]: [
-        { projectId: { [Op.in]: projectIds } },
-        { subProjectId: { [Op.in]: projectIds } }
-      ],
-      attendancePercentage: { [Op.lt]: 75 }
-    },
+    where: jitsiWhere,
     attributes: ['id', 'participantName', 'employeeId', 'projectId', 'subProjectId', 'trainingId']
   });
 
@@ -1325,6 +1538,7 @@ async function getDataIntegrityMetrics() {
 }
 
 module.exports = {
+  resolvePeriodRange,
   getAccessibleProjectIds,
   getProjectKPIs,
   getProjectTrainingPerformance,

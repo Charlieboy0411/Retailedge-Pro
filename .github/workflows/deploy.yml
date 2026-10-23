@@ -28,9 +28,14 @@ jobs:
             git checkout -- .
             git pull origin main
 
-            echo "Installing backend..."
+            echo "Installing backend dependencies..."
             cd backend
             npm ci
+
+            echo "Executing database migration gate & schema verification..."
+            node scripts/deploy_migration_gate.js
+
+            echo "Restarting backend service..."
             NODE_ENV=production pm2 restart quizhive-api --update-env || NODE_ENV=production pm2 start server.js --name quizhive-api
             sudo python3 configure_nginx.py
 
@@ -46,5 +51,8 @@ jobs:
 
             sudo nginx -t
             sudo systemctl reload nginx || sudo systemctl restart nginx
+
+            echo "Validating local application health..."
+            curl -f -s http://localhost:5000/api/health || (echo "Health check failed!" && exit 1)
 
             echo "Deployment completed successfully!"

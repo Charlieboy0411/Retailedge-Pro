@@ -600,19 +600,33 @@ const optBtn = (active) => ({
 
   // ─── RESULT SCREEN ─────────────────────────────────────────────────────────
   const renderResult = () => {
-    const pct      = resultData?.percentage ?? 0;
-    const isPassing = pct >= 60;
+    const pct = resultData?.percentage ?? 0;
+    const effectivePassingScore = (resultData?.passingScore !== undefined && resultData?.passingScore !== null)
+      ? Number(resultData.passingScore)
+      : ((quizInfo?.passingScore !== undefined && quizInfo?.passingScore !== null)
+          ? Number(quizInfo.passingScore)
+          : ((quizInfo?.config?.passing_score !== undefined && quizInfo?.config?.passing_score !== null)
+              ? Number(quizInfo.config.passing_score)
+              : 70));
+    const isPassing = resultData?.passed !== undefined
+      ? Boolean(resultData.passed)
+      : pct >= effectivePassingScore;
 
     return (
-      <div style={{ width: '100%', maxWidth: '440px', margin: 'auto', padding: '44px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid ${C.greenBorder}`, boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
+      <div style={{ width: '100%', maxWidth: '440px', margin: 'auto', padding: '44px 32px', textAlign: 'center', background: C.card, borderRadius: '24px', border: `2px solid ${isPassing ? C.greenBorder : 'rgba(239,68,68,0.3)'}`, boxShadow: '0 12px 40px rgba(0,0,0,0.6)' }}>
         {/* Trophy icon */}
         <div style={{
           width: '84px', height: '84px', borderRadius: '50%', margin: '0 auto 24px auto',
-          background: C.greenBg, border: `2px solid ${C.green}`,
+          background: isPassing ? C.greenBg : 'rgba(239,68,68,0.08)',
+          border: `2px solid ${isPassing ? C.green : C.red}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: `0 0 24px ${C.greenBorder}`,
+          boxShadow: `0 0 24px ${isPassing ? C.greenBorder : 'rgba(239,68,68,0.2)'}`,
         }}>
-          <Check size={42} color={C.green} strokeWidth={2.5} />
+          {isPassing ? (
+            <Check size={42} color={C.green} strokeWidth={2.5} />
+          ) : (
+            <Award size={42} color={C.red} strokeWidth={2.5} />
+          )}
         </div>
 
         <h2 style={{ fontSize: '1.85rem', color: C.textPrimary, fontWeight: 800, fontFamily: 'Poppins, sans-serif', margin: 0 }}>
@@ -624,11 +638,11 @@ const optBtn = (active) => ({
 
         {/* Score card */}
         {resultData && (
-          <div style={{ background: 'rgba(0,200,150,0.05)', borderRadius: '18px', padding: '28px 24px', margin: '24px 0', border: `1.5px solid ${C.greenBorder}` }}>
+          <div style={{ background: isPassing ? 'rgba(0,200,150,0.05)' : 'rgba(239,68,68,0.04)', borderRadius: '18px', padding: '28px 24px', margin: '24px 0', border: `1.5px solid ${isPassing ? C.greenBorder : 'rgba(239,68,68,0.25)'}` }}>
             <div style={{ fontSize: '0.75rem', color: C.textMuted, letterSpacing: '2px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '10px' }}>
               Your Score
             </div>
-            <div style={{ fontSize: '3.2rem', fontWeight: 900, color: C.green, fontFamily: 'Poppins, sans-serif', lineHeight: 1 }}>
+            <div style={{ fontSize: '3.2rem', fontWeight: 900, color: isPassing ? C.green : C.red, fontFamily: 'Poppins, sans-serif', lineHeight: 1 }}>
               {resultData.score}
               <span style={{ fontSize: '1.4rem', color: C.textSub, fontWeight: 500 }}> / {resultData.totalQuestions}</span>
             </div>
@@ -643,6 +657,13 @@ const optBtn = (active) => ({
               fontWeight: 700, fontSize: '0.9rem',
             }}>
               <Award size={15} /> {pct}% Accuracy
+            </div>
+
+            {/* Explicit threshold label */}
+            <div style={{ marginTop: '10px', fontSize: '0.82rem', fontWeight: 600, color: isPassing ? C.green : C.red }}>
+              {isPassing
+                ? `✓ Passing benchmark achieved (≥ ${effectivePassingScore}%)`
+                : `Did not meet passing threshold (${pct}% vs ${effectivePassingScore}% required)`}
             </div>
           </div>
         )}
