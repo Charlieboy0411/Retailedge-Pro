@@ -151,7 +151,7 @@ function App() {
             <Route path="gamification" element={<Gamification />} />
             <Route path="portal"       element={<PromotorPortal />} />
             <Route path="schedule"     element={
-              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']}>
+              <RoleGuard allowedRoles={['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']}>
                 <SchedulePage />
               </RoleGuard>
             } />

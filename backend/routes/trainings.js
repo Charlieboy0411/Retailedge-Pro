@@ -172,7 +172,7 @@ router.get('/', requireAuth, async (req, res) => {
       const clientService = require('../utils/clientService');
       const projectIds = await clientService.getAccessibleClientProjectIds(req.user, req.query.projectId || 'all', 'all');
       whereClause.projectId = { [Op.in]: projectIds };
-    } else if (!['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(userRole)) {
+    } else if (!['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations'].includes(userRole)) {
       const orConditions = [];
 
       if (userProjectId) {
@@ -241,9 +241,11 @@ router.get('/', requireAuth, async (req, res) => {
         whereClause.projectId = { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] };
       }
     } else {
-      // For Admins, support filter by project if query is passed
+      // For Admins and Executive Leadership, support filter by project if query is passed
       const { projectId } = req.query;
-      if (projectId && projectId !== 'all') {
+      if (projectId === '') {
+        whereClause.projectId = null;
+      } else if (projectId && projectId !== 'all') {
         if (String(projectId).includes(',')) {
           whereClause.projectId = { [Op.in]: String(projectId).split(',').map(id => id.trim()).filter(Boolean) };
         } else {
@@ -274,8 +276,8 @@ router.get('/', requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/trainings - Create new training material (Admin/Trainer/PM only)
-router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), upload.single('file'), async (req, res) => {
+// POST /api/trainings - Create new training material (Admin/Trainer/PM/Leadership)
+router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
   try {
     const { title, description, type, url, duration, projectId, scheduledAt } = req.body;
     let finalUrl = url;
@@ -288,7 +290,7 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
       return res.status(400).json({ error: 'Title and URL/File are required' });
     }
 
-    if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+    if (projectId && !['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations'].includes(req.user.role)) {
       if (req.user.role === 'T&D Manager') {
         const tdService = require('../utils/tdService');
         const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
@@ -302,7 +304,7 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
           return res.status(403).json({ error: 'Forbidden: You do not have permission to add trainings for this project.' });
         }
       }
-    } else if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+    } else if (!projectId && !['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations'].includes(req.user.role)) {
       if (type === 'Meeting' && ['Trainer', 'T&D Manager'].includes(req.user.role)) {
         // Allowed: General / Global meeting scheduling for Trainer and T&D Manager
       } else {
@@ -484,7 +486,7 @@ router.post('/:id/progress', requireAuth, async (req, res) => {
 });
 
 // PUT /api/trainings/:id - Update training material
-router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), upload.single('file'), async (req, res) => {
+router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) {
@@ -537,7 +539,7 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
 });
 
 // DELETE /api/trainings/:id - Delete a training material
-router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) {
@@ -566,7 +568,7 @@ router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program
 });
 
 // POST /api/trainings/schedule-meeting - Schedule a training meeting & send simulated emails
-router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const { title, description, projectId, scheduledAt, url, inviteeIds } = req.body;
 
@@ -574,7 +576,7 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       return res.status(400).json({ error: 'Title, URL, and Date/Time are required' });
     }
 
-    if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+    if (projectId && !['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations'].includes(req.user.role)) {
       if (req.user.role === 'T&D Manager') {
         const tdService = require('../utils/tdService');
         const accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
@@ -588,7 +590,7 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
           return res.status(403).json({ error: 'Forbidden: You do not have permission to schedule meetings for this project.' });
         }
       }
-    } else if (!projectId && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager'].includes(req.user.role)) {
+    } else if (!projectId && !['Admin', 'Super Admin', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations'].includes(req.user.role)) {
       return res.status(400).json({ error: 'Project is required to schedule a meeting.' });
     }
 
@@ -977,7 +979,7 @@ router.get('/:id/live-attendance', requireAuth, async (req, res) => {
 });
 
 // POST /api/trainings/:id/end-meeting - Trainer ends meeting, closing all open intervals
-router.post('/:id/end-meeting', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+router.post('/:id/end-meeting', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const trainingId = req.params.id;
     const training = await Training.findByPk(trainingId);

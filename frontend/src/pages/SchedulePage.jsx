@@ -41,7 +41,7 @@ export default function SchedulePage() {
     platform: 'google_meet'
   });
 
-  const canManage = ['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager'].includes(user?.role);
+  const canManage = ['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations'].includes(user?.role);
   const isTrainee = !canManage;
 
   // Deduplicate projects by ID and append clarifying details if distinct IDs share same name
