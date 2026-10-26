@@ -50,6 +50,10 @@ const JitsiAttendance = sequelize.define('JitsiAttendance', {
     type: DataTypes.STRING,
     allowNull: true,
   },
+  zone: {
+    type: DataTypes.STRING,
+    allowNull: true,
+  },
   jitsiParticipantId: {
     type: DataTypes.STRING,
     allowNull: true,

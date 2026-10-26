@@ -345,6 +345,32 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
 });
 
 // ─── ATTENDEE JOIN IDENTITY & ZONE VALIDATION HELPERS ─────────────────────────
+function normalizeZoneTitle(z) {
+  if (!z || typeof z !== 'string') return '';
+  const trimmed = z.trim();
+  if (!trimmed) return '';
+  const lower = trimmed.toLowerCase();
+  if (lower === 'pan india' || lower === 'pan-india' || lower === 'all india') return 'Pan India';
+  if (lower === 'north') return 'North';
+  if (lower === 'south') return 'South';
+  if (lower === 'east') return 'East';
+  if (lower === 'west') return 'West';
+  if (lower === 'central') return 'Central';
+  return trimmed.split(/\s+/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+}
+
+function sortZonesCanonical(zones) {
+  const CANONICAL_ORDER = ['North', 'South', 'East', 'West', 'Central', 'Pan India'];
+  return zones.sort((a, b) => {
+    const idxA = CANONICAL_ORDER.indexOf(a);
+    const idxB = CANONICAL_ORDER.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b);
+  });
+}
+
 async function getAuthoritativeTrainingZones(training) {
   const Project = require('../models/Project');
   const ProjectAssignment = require('../models/ProjectAssignment');
@@ -355,29 +381,40 @@ async function getAuthoritativeTrainingZones(training) {
   if (training.projectId) {
     const project = await Project.findByPk(training.projectId);
     if (project) {
-      if (project.zone && typeof project.zone === 'string') {
-        project.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+      // 1. Explicit project zone configuration takes precedence
+      if (project.zone && typeof project.zone === 'string' && project.zone.trim()) {
+        project.zone.split(',')
+          .map(z => normalizeZoneTitle(z))
+          .filter(Boolean)
+          .forEach(z => zonesSet.add(z));
+      } else {
+        // 2. If project zone is not set on the project itself, inspect active subprojects and assignments
+        const subprojects = await Project.findAll({
+          where: { parentId: project.id, status: { [Op.ne]: 'Archived' } },
+          attributes: ['zone']
+        });
+        subprojects.forEach(sp => {
+          if (sp.zone && typeof sp.zone === 'string') {
+            sp.zone.split(',')
+              .map(z => normalizeZoneTitle(z))
+              .filter(Boolean)
+              .forEach(z => zonesSet.add(z));
+          }
+        });
+
+        const assignments = await ProjectAssignment.findAll({
+          where: { projectId: project.id, status: 'Active', zone: { [Op.ne]: null } },
+          attributes: ['zone']
+        });
+        assignments.forEach(a => {
+          if (a.zone && typeof a.zone === 'string') {
+            a.zone.split(',')
+              .map(z => normalizeZoneTitle(z))
+              .filter(Boolean)
+              .forEach(z => zonesSet.add(z));
+          }
+        });
       }
-
-      const subprojects = await Project.findAll({
-        where: { parentId: project.id, status: { [Op.ne]: 'Archived' } },
-        attributes: ['zone']
-      });
-      subprojects.forEach(sp => {
-        if (sp.zone && typeof sp.zone === 'string') {
-          sp.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
-        }
-      });
-
-      const assignments = await ProjectAssignment.findAll({
-        where: { projectId: project.id, status: 'Active', zone: { [Op.ne]: null } },
-        attributes: ['zone']
-      });
-      assignments.forEach(a => {
-        if (a.zone && typeof a.zone === 'string') {
-          a.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
-        }
-      });
     }
   } else {
     // General / Global meeting: collect configured zones across all active projects
@@ -387,7 +424,10 @@ async function getAuthoritativeTrainingZones(training) {
     });
     allProjects.forEach(p => {
       if (p.zone && typeof p.zone === 'string') {
-        p.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+        p.zone.split(',')
+          .map(z => normalizeZoneTitle(z))
+          .filter(Boolean)
+          .forEach(z => zonesSet.add(z));
       }
     });
 
@@ -397,14 +437,18 @@ async function getAuthoritativeTrainingZones(training) {
     });
     allAssignments.forEach(a => {
       if (a.zone && typeof a.zone === 'string') {
-        a.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+        a.zone.split(',')
+          .map(z => normalizeZoneTitle(z))
+          .filter(Boolean)
+          .forEach(z => zonesSet.add(z));
       }
     });
   }
 
-  return Array.from(zonesSet)
-    .filter(z => z && z !== 'Unmapped' && z !== 'N/A')
-    .sort();
+  const validList = Array.from(zonesSet)
+    .filter(z => z && z !== 'Unmapped' && z !== 'N/A');
+
+  return sortZonesCanonical(validList);
 }
 
 // GET /api/trainings/:id/join-context - Public endpoint to retrieve session context and valid zones for attendee join
@@ -499,7 +543,10 @@ router.post('/:id/guest-join', async (req, res) => {
       return res.status(400).json({ error: 'Zone selection is required' });
     }
 
-    const training = await Training.findByPk(trainingId);
+    const Project = require('../models/Project');
+    const training = await Training.findByPk(trainingId, {
+      include: [{ model: Project, attributes: ['id', 'name', 'zone'] }]
+    });
     if (!training) {
       return res.status(404).json({ error: 'Training meeting not found' });
     }
@@ -511,11 +558,13 @@ router.post('/:id/guest-join', async (req, res) => {
       });
     }
 
-    if (!validZones.includes(cleanZone)) {
+    const matchedZone = validZones.find(z => z.toLowerCase() === cleanZone.toLowerCase());
+    if (!matchedZone) {
       return res.status(400).json({
         error: `Invalid zone "${cleanZone}". Please select from configured project zones: ${validZones.join(', ')}.`
       });
     }
+    const authoritativeZone = matchedZone;
 
     const User = require('../models/User');
     const Role = require('../models/Role');
@@ -550,20 +599,20 @@ router.post('/:id/guest-join', async (req, res) => {
           where: { userId: targetUser.id, projectId: training.projectId, status: 'Active' }
         });
 
-        if (existingAssignment && existingAssignment.zone && existingAssignment.zone.trim() !== cleanZone) {
+        if (existingAssignment && existingAssignment.zone && existingAssignment.zone.trim().toLowerCase() !== authoritativeZone.toLowerCase()) {
           return res.status(400).json({
             error: `Zone conflict: Employee is officially assigned to zone "${existingAssignment.zone}". Please select your assigned zone or contact your supervisor.`
           });
         }
 
         if (existingAssignment && !existingAssignment.zone) {
-          await existingAssignment.update({ zone: cleanZone });
+          await existingAssignment.update({ zone: authoritativeZone });
         } else if (!existingAssignment) {
           await ProjectAssignment.create({
             userId: targetUser.id,
             projectId: training.projectId,
             role: targetUser.Role?.role_name || 'Employee',
-            zone: cleanZone,
+            zone: authoritativeZone,
             status: 'Active'
           });
         }
@@ -586,7 +635,7 @@ router.post('/:id/guest-join', async (req, res) => {
         password: tempPassword,
         roleId: employeeRole.id,
         projectId: training.projectId || null,
-        location: cleanZone,
+        location: authoritativeZone,
         department: 'Field Operations'
       });
 
@@ -595,7 +644,7 @@ router.post('/:id/guest-join', async (req, res) => {
           userId: targetUser.id,
           projectId: training.projectId,
           role: 'Employee',
-          zone: cleanZone,
+          zone: authoritativeZone,
           status: 'Active'
         });
       }
@@ -610,12 +659,12 @@ router.post('/:id/guest-join', async (req, res) => {
       defaults: {
         completed: false,
         timeSpent: 1,
-        zone: cleanZone
+        zone: authoritativeZone
       }
     });
 
     if (!created && (!progress.zone || progress.zone === 'N/A')) {
-      await progress.update({ zone: cleanZone });
+      await progress.update({ zone: authoritativeZone });
     }
 
     const token = jwt.sign(
@@ -638,7 +687,16 @@ router.post('/:id/guest-join', async (req, res) => {
         email: targetUser.email,
         role: targetUser.Role?.role_name || 'Employee',
         projectId: training.projectId || targetUser.projectId,
-        zone: cleanZone
+        zone: authoritativeZone
+      },
+      meeting: {
+        id: training.id,
+        title: training.title,
+        description: training.description,
+        url: training.url,
+        scheduledAt: training.scheduledAt,
+        duration: training.duration,
+        projectName: training.Project ? training.Project.name : 'General (Global)'
       }
     });
   } catch (error) {
@@ -1024,6 +1082,29 @@ router.post('/:id/jitsi-event', requireAuth, async (req, res) => {
     const participantName = authUser.name;
     const employeeId = authUser.employee_id || null;
 
+    // Resolve authoritative zone from TrainingProgress, ProjectAssignment, or User location
+    let zone = null;
+    const progress = await TrainingProgress.findOne({
+      where: { userId, trainingId }
+    });
+    if (progress && progress.zone && progress.zone !== 'N/A') {
+      zone = progress.zone;
+    } else if (training.projectId) {
+      const ProjectAssignment = require('../models/ProjectAssignment');
+      const assignment = await ProjectAssignment.findOne({
+        where: { userId, projectId: training.projectId, status: 'Active' }
+      });
+      if (assignment && assignment.zone) {
+        zone = assignment.zone;
+      }
+    }
+    if (!zone && req.body.zone) {
+      zone = String(req.body.zone).trim();
+    }
+    if (!zone && authUser.location) {
+      zone = authUser.location;
+    }
+
     let attendance = await JitsiAttendance.findOne({
       where: {
         trainingId,
@@ -1041,6 +1122,7 @@ router.post('/:id/jitsi-event', requireAuth, async (req, res) => {
           userId,
           participantName,
           employeeId,
+          zone,
           jitsiParticipantId: jitsiParticipantId || null,
           scheduledDurationMinutes,
           totalAttendedMinutes: 0,
@@ -1061,6 +1143,7 @@ router.post('/:id/jitsi-event', requireAuth, async (req, res) => {
           await attendance.update({
             status: 'Online',
             lastHeartbeatAt: now,
+            ...(!attendance.zone && zone ? { zone } : {}),
             ...(jitsiParticipantId ? { jitsiParticipantId } : {})
           });
           return res.json({ success: true, attendance, message: 'Already joined (idempotent)' });
@@ -1071,6 +1154,7 @@ router.post('/:id/jitsi-event', requireAuth, async (req, res) => {
           status: 'Online',
           rejoinCount: rejoins,
           lastHeartbeatAt: now,
+          ...(!attendance.zone && zone ? { zone } : {}),
           ...(jitsiParticipantId ? { jitsiParticipantId } : {})
         });
       }

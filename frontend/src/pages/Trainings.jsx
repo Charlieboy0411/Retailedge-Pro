@@ -448,10 +448,10 @@ export default function Trainings() {
       )}
 
       {/* Main Workspace Layout - responsive stacked on mobile */}
-      <div style={{ display: 'flex', gap: '16px', flex: 1, overflow: 'hidden', flexWrap: 'wrap' }}>
+      <div className="lms-workspace-layout">
         
         {/* Left Side: Course Modules List */}
-        <div className="glass-card" style={{ width: '280px', minWidth: '220px', flex: '0 0 auto', display: 'flex', flexDirection: 'column', padding: '16px', overflowY: 'auto', maxHeight: '100%' }}>
+        <div className="glass-card lms-modules-sidebar">
           <h3 style={{ fontSize: '1rem', marginBottom: '16px', color: 'var(--text-primary)' }}>Modules & Chapters</h3>
           
           <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', flex: 1 }}>
@@ -517,7 +517,7 @@ export default function Trainings() {
         </div>
 
         {/* Right Side: Material Detail and Player */}
-        <div className="glass-card" style={{ flex: 1, minWidth: '280px', display: 'flex', flexDirection: 'column', padding: '20px', overflowY: 'auto' }}>
+        <div className="glass-card lms-player-container">
           {selectedTraining ? (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
               
@@ -729,10 +729,10 @@ export default function Trainings() {
               </div>
 
               {/* Title & Info */}
-              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.4rem', color: 'var(--text-primary)' }}>{selectedTraining.title}</h3>
-                  <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)', lineHeight: '1.6' }}>{selectedTraining.description || 'No description provided.'}</p>
+              <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '12px' }}>
+                <div style={{ flex: 1, minWidth: '220px' }}>
+                  <h3 style={{ margin: '0 0 8px 0', fontSize: '1.35rem', color: 'var(--text-primary)', wordBreak: 'break-word' }}>{selectedTraining.title}</h3>
+                  <p style={{ margin: '0 0 16px 0', color: 'var(--text-secondary)', lineHeight: '1.6', wordBreak: 'break-word' }}>{selectedTraining.description || 'No description provided.'}</p>
                   
                   {selectedTraining.Project && (
                     <span className="badge badge-success">Project: {selectedTraining.Project.name}</span>
