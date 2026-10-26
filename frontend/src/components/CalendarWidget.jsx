@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { ChevronLeft, ChevronRight, Calendar as CalendarIcon, Video, Clock, ExternalLink } from 'lucide-react';
+import { getKolkataDateStr, getKolkataTodayStr, formatKolkataDate, formatKolkataTime } from '../utils/dateTimeUtils';
 
 export default function CalendarWidget({ meetings = [], title = "Training & Meetings Schedule" }) {
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDateStr, setSelectedDateStr] = useState(getKolkataTodayStr());
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -21,7 +22,8 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
 
   const meetingsByDate = meetings.reduce((map, meeting) => {
     if (!meeting.scheduledAt) return map;
-    const dateStr = new Date(meeting.scheduledAt).toISOString().split('T')[0];
+    const dateStr = getKolkataDateStr(meeting.scheduledAt);
+    if (!dateStr) return map;
     if (!map[dateStr]) map[dateStr] = [];
     map[dateStr].push(meeting);
     return map;
@@ -108,7 +110,7 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
           const dateStr = makeDateStr(day);
           const hasMeetings = !!meetingsByDate[dateStr];
           const isSelected = dateStr === selectedDateStr;
-          const isToday = new Date().toISOString().split('T')[0] === dateStr;
+          const isToday = getKolkataTodayStr() === dateStr;
 
           return (
             <button
@@ -172,13 +174,13 @@ export default function CalendarWidget({ meetings = [], title = "Training & Meet
         overflowY: 'auto'
       }}>
         <div style={{ fontSize: '0.72rem', fontWeight: 700, color: '#64748B', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Schedule for {new Date(selectedDateStr).toLocaleDateString([], { dateStyle: 'medium' })}
+          Schedule for {formatKolkataDate(selectedDateStr, { dateStyle: 'medium' })}
         </div>
         
         {selectedDayMeetings.length > 0 ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {selectedDayMeetings.map((meeting) => {
-              const timeStr = new Date(meeting.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+              const timeStr = formatKolkataTime(meeting.scheduledAt);
               return (
                 <div key={meeting.id} style={{
                   padding: '10px 12px',

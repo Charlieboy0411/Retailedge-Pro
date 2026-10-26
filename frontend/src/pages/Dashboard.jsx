@@ -13,6 +13,7 @@ import ClientCockpit from '../components/ClientCockpit';
 import EmployeeDashboard from '../components/EmployeeDashboard';
 import CalendarWidget from '../components/CalendarWidget';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { formatKolkataDateTime, kolkataToUtcIso } from '../utils/dateTimeUtils';
 
 export default function Dashboard() {
   const { token, user } = useContext(AuthContext);
@@ -327,7 +328,12 @@ export default function Dashboard() {
     }
 
     try {
-      const response = await axios.post('/api/trainings/schedule-meeting', { ...meetingForm, url: formattedUrl }, {
+      const payload = {
+        ...meetingForm,
+        scheduledAt: kolkataToUtcIso(meetingForm.scheduledAt),
+        url: formattedUrl
+      };
+      const response = await axios.post('/api/trainings/schedule-meeting', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setScheduledMeetingDetails({
@@ -901,7 +907,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block' }}>Date & Time</span>
-                      <span style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>{scheduledMeetingDetails?.scheduledAt ? new Date(scheduledMeetingDetails.scheduledAt).toLocaleString() : 'N/A'}</span>
+                      <span style={{ color: 'var(--text-primary)', fontSize: '0.9rem' }}>{scheduledMeetingDetails?.scheduledAt ? formatKolkataDateTime(scheduledMeetingDetails.scheduledAt) : 'N/A'}</span>
                     </div>
                   </div>
                   <div>

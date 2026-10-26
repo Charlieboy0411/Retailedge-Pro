@@ -8,6 +8,14 @@ import {
   Circle, Users, Trophy, Award, MapPin, ClipboardList, Plus, X, Mail
 } from 'lucide-react';
 import { getSocket } from '../utils/socketService';
+import {
+  getKolkataDateStr,
+  getKolkataTodayStr,
+  formatKolkataDateTime,
+  formatKolkataTime,
+  formatKolkataDate,
+  kolkataToUtcIso
+} from '../utils/dateTimeUtils';
 
 export default function SchedulePage() {
   const { token, user } = useContext(AuthContext);
@@ -25,7 +33,7 @@ export default function SchedulePage() {
 
   // Calendar States
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDateStr, setSelectedDateStr] = useState(getKolkataTodayStr());
 
   // Modal for scheduling meetings (for Trainer/PM/Admin)
   const [isMeetingModalOpen, setIsMeetingModalOpen] = useState(false);
@@ -223,9 +231,16 @@ export default function SchedulePage() {
       return;
     }
 
+    const normalizedScheduledAt = kolkataToUtcIso(meetingForm.scheduledAt);
+    if (!normalizedScheduledAt) {
+      alert("Please enter a valid date and time.");
+      return;
+    }
+
     try {
       await axios.post('/api/trainings', {
         ...meetingForm,
+        scheduledAt: normalizedScheduledAt,
         type: 'Meeting'
       }, {
         headers: { Authorization: `Bearer ${token}` }
@@ -250,7 +265,7 @@ export default function SchedulePage() {
   // Calendar lookup map
   const itemsByDate = filteredItems.reduce((map, item) => {
     if (!item.scheduledAt) return map;
-    const dateStr = new Date(item.scheduledAt).toISOString().split('T')[0];
+    const dateStr = getKolkataDateStr(item.scheduledAt);
     if (!map[dateStr]) map[dateStr] = [];
     map[dateStr].push(item);
     return map;
@@ -415,7 +430,7 @@ export default function SchedulePage() {
                   const dateStr = makeDateStr(day);
                   const dayItems = itemsByDate[dateStr] || [];
                   const isSelected = dateStr === selectedDateStr;
-                  const isToday = new Date().toISOString().split('T')[0] === dateStr;
+                  const isToday = getKolkataTodayStr() === dateStr;
 
                   return (
                     <div
@@ -497,7 +512,7 @@ export default function SchedulePage() {
                   Selected Date Details
                 </h4>
                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginTop: '4px' }}>
-                  {new Date(selectedDateStr).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                  {formatKolkataDate(selectedDateStr)}
                 </div>
               </div>
 
@@ -506,7 +521,7 @@ export default function SchedulePage() {
                   selectedDateItems.map((item) => {
                     const isMeeting = item.type === 'Meeting';
                     const timeStr = item.scheduledAt 
-                      ? new Date(item.scheduledAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      ? formatKolkataTime(item.scheduledAt)
                       : '';
                     
                     return (
@@ -648,9 +663,8 @@ export default function SchedulePage() {
                   <tbody>
                     {meetings.length > 0 ? (
                       meetings.map((m) => {
-                        const dateObj = m.scheduledAt ? new Date(m.scheduledAt) : null;
-                        const dateFormatted = dateObj 
-                          ? dateObj.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })
+                        const dateFormatted = m.scheduledAt
+                          ? formatKolkataDateTime(m.scheduledAt)
                           : 'N/A';
                         
                         let platformLabel = 'Jitsi Meet';

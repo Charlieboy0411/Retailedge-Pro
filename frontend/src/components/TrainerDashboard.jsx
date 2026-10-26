@@ -13,6 +13,12 @@ import CalendarWidget from './CalendarWidget';
 import ProjectFolder from './ProjectFolder';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { PageHeader, KpiCard, StatusBadge, EmptyState, LoadingSkeleton } from './ui';
+import {
+  getKolkataDateStr,
+  getKolkataTodayStr,
+  formatKolkataDateTime,
+  kolkataToUtcIso
+} from '../utils/dateTimeUtils';
 
 /**
  * RetailEdge PRO — Trainer Operational Workspace
@@ -451,7 +457,12 @@ export default function TrainerDashboard({
     }
 
     try {
-      const response = await axios.post('/api/trainings/schedule-meeting', { ...meetingForm, url: formattedUrl }, {
+      const payload = {
+        ...meetingForm,
+        scheduledAt: kolkataToUtcIso(meetingForm.scheduledAt),
+        url: formattedUrl
+      };
+      const response = await axios.post('/api/trainings/schedule-meeting', payload, {
         headers: { Authorization: `Bearer ${token}` }
       });
       setScheduledMeetingDetails({
@@ -678,7 +689,7 @@ export default function TrainerDashboard({
     .sort((a, b) => a.name.localeCompare(b.name));
 
   // ─── OPERATIONAL KPI CALCULATIONS ───
-  const todayDateStr = new Date().toISOString().split('T')[0];
+  const todayDateStr = getKolkataTodayStr();
   const filteredSessions = operationalSessions.filter(s => {
     if (selectedProjectId === 'all') return true;
     return s.projectId === selectedProjectId;
@@ -686,7 +697,7 @@ export default function TrainerDashboard({
 
   const todaySessionsList = filteredSessions.filter(s => {
     if (!s.scheduledAt) return false;
-    return s.scheduledAt.startsWith(todayDateStr);
+    return getKolkataDateStr(s.scheduledAt) === todayDateStr;
   });
   const todaySessionsCount = todaySessionsList.length;
 
@@ -1807,7 +1818,7 @@ export default function TrainerDashboard({
 
                 <div style={{ background: '#F8FAFC', borderRadius: '10px', padding: '14px', textAlign: 'left', marginBottom: '20px', border: '1px solid #E2E8F0', fontSize: '0.82rem' }}>
                   <div style={{ marginBottom: '6px' }}><strong>Topic:</strong> {scheduledMeetingDetails?.title}</div>
-                  <div><strong>Date:</strong> {scheduledMeetingDetails?.scheduledAt ? new Date(scheduledMeetingDetails.scheduledAt).toLocaleString() : 'N/A'}</div>
+                  <div><strong>Date:</strong> {scheduledMeetingDetails?.scheduledAt ? formatKolkataDateTime(scheduledMeetingDetails.scheduledAt) : 'N/A'}</div>
                 </div>
 
                 <button

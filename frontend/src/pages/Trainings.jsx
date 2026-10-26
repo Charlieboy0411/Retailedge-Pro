@@ -7,6 +7,7 @@ import CalendarWidget from '../components/CalendarWidget';
 import { copyTextToClipboard } from '../utils/clipboard';
 import { JitsiMeeting } from '@jitsi/react-sdk';
 import { createJitsiTelemetrySession } from '../utils/jitsiTelemetry';
+import { kolkataToUtcIso, formatKolkataDateTime } from '../utils/dateTimeUtils';
 
 export default function Trainings() {
   const { token, user } = useContext(AuthContext);
@@ -133,7 +134,7 @@ export default function Trainings() {
       formData.append('type', newTraining.type);
       formData.append('duration', newTraining.duration);
       if (newTraining.projectId) formData.append('projectId', newTraining.projectId);
-      if (newTraining.scheduledAt) formData.append('scheduledAt', newTraining.scheduledAt);
+      if (newTraining.scheduledAt) formData.append('scheduledAt', kolkataToUtcIso(newTraining.scheduledAt));
       
       let formattedUrl = newTraining.url.trim();
       if (formattedUrl && !/^https?:\/\//i.test(formattedUrl) && !newTraining.file) {
@@ -476,7 +477,7 @@ export default function Trainings() {
                     <div style={{ fontWeight: selectedTraining?.id === t.id ? 600 : 400, color: 'var(--text-primary)', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{t.title}</div>
                     <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
                       {t.type === 'Meeting' && t.scheduledAt 
-                        ? `${new Date(t.scheduledAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })} • Meeting`
+                        ? `${formatKolkataDateTime(t.scheduledAt, { dateStyle: 'short', timeStyle: 'short' })} • Meeting`
                         : `${t.duration} • ${t.type}`}
                     </div>
                   </div>
@@ -560,7 +561,7 @@ export default function Trainings() {
                     {/* Scheduled date badge */}
                     {selectedTraining.scheduledAt && (
                       <div style={{ background: 'rgba(37,99,235,0.1)', padding: '10px 16px', borderRadius: '8px', border: '1px solid rgba(37,99,235,0.3)', color: '#60A5FA', fontSize: '0.9rem', fontWeight: 600, display: 'flex', gap: '8px', alignItems: 'center' }}>
-                        🗓️ Scheduled: {new Date(selectedTraining.scheduledAt).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' })}
+                        🗓️ Scheduled: {formatKolkataDateTime(selectedTraining.scheduledAt, { dateStyle: 'long', timeStyle: 'short' })}
                       </div>
                     )}
 

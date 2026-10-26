@@ -5,6 +5,7 @@ import {
   Layers, Sparkles
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatKolkataDateTime } from '../utils/dateTimeUtils';
 
 /**
  * Reusable ProjectFolder Component
@@ -376,7 +377,7 @@ export default function ProjectFolder({
                         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '4px', fontSize: '0.76rem', color: 'var(--text-secondary)' }}>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Clock size={12} />
-                            {session.scheduledAt ? new Date(session.scheduledAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short' }) : 'Flexible'}
+                            {session.scheduledAt ? formatKolkataDateTime(session.scheduledAt, { dateStyle: 'short', timeStyle: 'short' }) : 'Flexible'}
                           </span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                             <Users size={12} />

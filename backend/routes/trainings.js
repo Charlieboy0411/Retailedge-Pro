@@ -5,6 +5,7 @@ const TrainingProgress = require('../models/TrainingProgress');
 const Certificate = require('../models/Certificate');
 const Project = require('../models/Project');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
+const { kolkataToUtcIso, formatKolkataDateTime } = require('../utils/dateTimeUtils');
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
@@ -69,7 +70,7 @@ async function sendInviteEmail(user, title, description, scheduledAt, url, proje
       from: process.env.SMTP_USER ? `"QuizHive LMS" <${process.env.SMTP_USER}>` : '"QuizHive LMS" <no-reply@quizhive.com>',
       to: `${user.name} <${user.email}>`,
       subject: `Invitation: ${title} (${projectName})`,
-      text: `Hi ${user.name},\n\nYou have been invited to a training meeting for project "${projectName}".\n\nDetails:\n- Topic: ${title}\n- Description: ${description || 'No description provided.'}\n- Date & Time: ${new Date(scheduledAt).toLocaleString()}\n- Join Link: ${url}\n\nPlease join the meeting on time.\n\nBest regards,\nLMS Training Team`,
+      text: `Hi ${user.name},\n\nYou have been invited to a training meeting for project "${projectName}".\n\nDetails:\n- Topic: ${title}\n- Description: ${description || 'No description provided.'}\n- Date & Time: ${formatKolkataDateTime(scheduledAt)} (IST)\n- Join Link: ${url}\n\nPlease join the meeting on time.\n\nBest regards,\nLMS Training Team`,
       html: `
         <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; background-color: #f8fafc; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
           <h2 style="color: #7c3aed; margin-top: 0; font-size: 1.5rem;">📅 Meeting Invitation: ${title}</h2>
@@ -88,7 +89,7 @@ async function sendInviteEmail(user, title, description, scheduledAt, url, proje
               </tr>
               <tr>
                 <td style="padding: 6px 0; color: #64748b;">Date & Time:</td>
-                <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${new Date(scheduledAt).toLocaleString()}</td>
+                <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${formatKolkataDateTime(scheduledAt)} (IST)</td>
               </tr>
               <tr>
                 <td style="padding: 6px 0; color: #64748b;">Join Link:</td>
@@ -317,6 +318,16 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
       formattedUrl = 'https://' + formattedUrl;
     }
 
+    let normalizedScheduledAt = null;
+    if (scheduledAt) {
+      normalizedScheduledAt = kolkataToUtcIso(scheduledAt);
+      if (!normalizedScheduledAt) {
+        return res.status(400).json({ error: 'Invalid scheduledAt date/time format.' });
+      }
+    } else if (type === 'Meeting') {
+      return res.status(400).json({ error: 'Scheduled date and time is required for meeting sessions.' });
+    }
+
     const newTraining = await Training.create({
       title,
       description,
@@ -324,7 +335,7 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
       url: formattedUrl,
       duration: duration || '10 mins',
       projectId: projectId || null,
-      scheduledAt: scheduledAt || null
+      scheduledAt: normalizedScheduledAt
     });
 
     res.status(201).json(newTraining);
@@ -529,7 +540,17 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
     }
     if (duration !== undefined) training.duration = duration;
     if (projectId !== undefined) training.projectId = projectId || null;
-    if (scheduledAt !== undefined) training.scheduledAt = scheduledAt || null;
+    if (scheduledAt !== undefined) {
+      if (scheduledAt) {
+        const normalized = kolkataToUtcIso(scheduledAt);
+        if (!normalized) {
+          return res.status(400).json({ error: 'Invalid scheduledAt date/time format.' });
+        }
+        training.scheduledAt = normalized;
+      } else {
+        training.scheduledAt = null;
+      }
+    }
 
     await training.save();
     res.json(training);
@@ -576,6 +597,11 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       return res.status(400).json({ error: 'Title, URL, and Date/Time are required' });
     }
 
+    const normalizedScheduledAt = kolkataToUtcIso(scheduledAt);
+    if (!normalizedScheduledAt) {
+      return res.status(400).json({ error: 'Invalid scheduledAt date/time format.' });
+    }
+
     if (projectId && !['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations'].includes(req.user.role)) {
       if (req.user.role === 'T&D Manager') {
         const tdService = require('../utils/tdService');
@@ -607,7 +633,7 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       url: formattedUrl,
       duration: '1 hour', // default duration
       projectId: projectId || null,
-      scheduledAt: new Date(scheduledAt)
+      scheduledAt: normalizedScheduledAt
     });
 
     // 2. Fetch invitees details
@@ -635,14 +661,14 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
     console.log('\n================================================================================');
     console.log(`✉️  SIMULATED EMAIL NOTIFICATIONS FOR MEETING: "${title}"`);
     console.log(`Project: ${projectName}`);
-    console.log(`Scheduled At: ${new Date(scheduledAt).toLocaleString()}`);
+    console.log(`Scheduled At: ${formatKolkataDateTime(normalizedScheduledAt)} (IST)`);
     console.log(`Google Meet Link: ${url}`);
     console.log('================================================================================');
     
     for (const user of invitees) {
       console.log(`\nTo: ${user.name} <${user.email}>`);
       console.log(`Subject: Meeting Invitation: ${title} - ${projectName}`);
-      console.log(`Body:\nHi ${user.name},\n\nYou have been invited to a training meeting for project "${projectName}".\n\nDetails:\n- Topic: ${title}\n- Description: ${description || 'No description provided.'}\n- Date & Time: ${new Date(scheduledAt).toLocaleString()}\n- Join Link: ${url}\n\nPlease join the meeting on time.\n\nBest regards,\nLMS Training Team`);
+      console.log(`Body:\nHi ${user.name},\n\nYou have been invited to a training meeting for project "${projectName}".\n\nDetails:\n- Topic: ${title}\n- Description: ${description || 'No description provided.'}\n- Date & Time: ${formatKolkataDateTime(normalizedScheduledAt)} (IST)\n- Join Link: ${url}\n\nPlease join the meeting on time.\n\nBest regards,\nLMS Training Team`);
       console.log('--------------------------------------------------------------------------------');
       
       const defaultZone = getZoneFromCoords(null, null, user.location);
