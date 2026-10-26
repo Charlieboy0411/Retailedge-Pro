@@ -3,11 +3,62 @@ const router = express.Router();
 const User = require('../models/User');
 const Project = require('../models/Project');
 const Role = require('../models/Role');
+const ProjectAssignment = require('../models/ProjectAssignment');
 const UserQuery = require('../models/UserQuery');
+const sequelize = require('../config/database');
 const { Op } = require('sequelize');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 router.use(requireAuth);
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function formatUserResponse(u) {
+  if (!u) return u;
+  const uJson = typeof u.toJSON === 'function' ? u.toJSON() : { ...u };
+  const assignmentProjectIds = (uJson.ProjectAssignments || [])
+    .map(a => a.projectId)
+    .filter(Boolean);
+  const allProjectIds = Array.from(new Set([uJson.projectId, ...assignmentProjectIds].filter(Boolean)));
+  uJson.projectIds = allProjectIds;
+  uJson.projectId = allProjectIds.length > 0 ? allProjectIds.join(',') : null;
+  return uJson;
+}
+
+async function validateAndExtractProjectIds(input) {
+  if (input === undefined) return null; // not specified in request
+  let ids = [];
+  if (Array.isArray(input)) {
+    ids = input.map(id => String(id).trim()).filter(Boolean);
+  } else if (typeof input === 'string') {
+    ids = input.split(',').map(id => id.trim()).filter(Boolean);
+  }
+  ids = Array.from(new Set(ids));
+
+  for (const id of ids) {
+    if (!UUID_REGEX.test(id)) {
+      const err = new Error(`Invalid project ID format: "${id}"`);
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  if (ids.length > 0) {
+    const existing = await Project.findAll({
+      where: { id: { [Op.in]: ids } },
+      attributes: ['id', 'name']
+    });
+    if (existing.length !== ids.length) {
+      const existingIds = new Set(existing.map(p => p.id));
+      const missing = ids.filter(id => !existingIds.has(id));
+      const err = new Error(`Selected project does not exist: ${missing.join(', ')}`);
+      err.status = 400;
+      throw err;
+    }
+  }
+
+  return ids;
+}
 
 // GET /api/users/my-team - List direct reports for the requesting Supervisor / Manager
 router.get('/my-team', async (req, res) => {
@@ -16,12 +67,13 @@ router.get('/my-team', async (req, res) => {
       where: { managerId: req.user.id },
       include: [
         { model: Role, attributes: ['id', 'role_name'] },
-        { model: Project, attributes: ['id', 'name'] }
+        { model: Project, attributes: ['id', 'name'] },
+        { model: ProjectAssignment, where: { status: 'Active' }, required: false, attributes: ['id', 'projectId', 'role', 'zone', 'status'] }
       ],
       attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location', 'status', 'createdAt'],
       order: [['name', 'ASC']]
     });
-    res.json(subordinates);
+    res.json(subordinates.map(formatUserResponse));
   } catch (error) {
     console.error('GET /api/users/my-team error:', error);
     res.status(500).json({ error: 'Failed to fetch team members', details: error.message });
@@ -35,6 +87,7 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
     
     const where = {};
+    const andConditions = [];
 
     // Server-side project scoping for Program Manager
     if (userRole === 'Program Manager') {
@@ -43,7 +96,7 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
 
       // If targetProj is a project name rather than UUID, resolve ID
       let resolvedTarget = targetProj;
-      if (targetProj !== 'all' && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetProj)) {
+      if (targetProj !== 'all' && !UUID_REGEX.test(targetProj)) {
         const pMatch = await Project.findOne({ where: { name: targetProj }, attributes: ['id'] });
         if (pMatch) resolvedTarget = pMatch.id;
       }
@@ -52,20 +105,49 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
       if (accessibleProjectIds.length === 0) {
         return res.json([]);
       }
-      where.projectId = { [Op.in]: accessibleProjectIds };
+
+      const assignedUserRows = await ProjectAssignment.findAll({
+        where: { projectId: { [Op.in]: accessibleProjectIds }, status: 'Active' },
+        attributes: ['userId']
+      });
+      const assignedUserIds = assignedUserRows.map(a => a.userId);
+
+      andConditions.push({
+        [Op.or]: [
+          { projectId: { [Op.in]: accessibleProjectIds } },
+          ...(assignedUserIds.length > 0 ? [{ id: { [Op.in]: assignedUserIds } }] : [])
+        ]
+      });
     } else {
       if (projectId) {
-        where.projectId = projectId;
+        const assignedUserRows = await ProjectAssignment.findAll({
+          where: { projectId, status: 'Active' },
+          attributes: ['userId']
+        });
+        const assignedUserIds = assignedUserRows.map(a => a.userId);
+        andConditions.push({
+          [Op.or]: [
+            { projectId },
+            ...(assignedUserIds.length > 0 ? [{ id: { [Op.in]: assignedUserIds } }] : [])
+          ]
+        });
       }
     }
 
     if (search) {
-      where[Op.or] = [
-        { name: { [Op.like]: `%${search}%` } },
-        { employee_id: { [Op.like]: `%${search}%` } },
-        { email: { [Op.like]: `%${search}%` } }
-      ];
+      andConditions.push({
+        [Op.or]: [
+          { name: { [Op.like]: `%${search}%` } },
+          { employee_id: { [Op.like]: `%${search}%` } },
+          { email: { [Op.like]: `%${search}%` } }
+        ]
+      });
     }
+
+    if (andConditions.length > 0) {
+      where[Op.and] = andConditions;
+    }
+
     if (status) where.status = status;
     if (designation) where.designation = { [Op.like]: `%${designation}%` };
     if (location) where.location = { [Op.like]: `%${location}%` };
@@ -83,6 +165,12 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
     else include.push({ model: Project });
     
     include.push({ model: User, as: 'manager', attributes: ['id', 'name'] });
+    include.push({
+      model: ProjectAssignment,
+      where: { status: 'Active' },
+      required: false,
+      attributes: ['id', 'projectId', 'role', 'zone', 'status']
+    });
 
     const users = await User.findAll({
       where,
@@ -90,7 +178,7 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
       order: [['name', 'ASC']]
     });
 
-    res.json(users);
+    res.json(users.map(formatUserResponse));
   } catch (error) {
     console.error('GET /api/users error:', error);
     const statusCode = error.status || (error.message.includes('Forbidden') || error.message.includes('Unauthorized') ? 403 : 500);
@@ -103,10 +191,15 @@ router.get('/profile', async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
       attributes: { exclude: ['password'] },
-      include: [Role, Project, { model: User, as: 'manager', attributes: ['id', 'name'] }]
+      include: [
+        Role,
+        Project,
+        { model: User, as: 'manager', attributes: ['id', 'name'] },
+        { model: ProjectAssignment, where: { status: 'Active' }, required: false }
+      ]
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    res.json(formatUserResponse(user));
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -131,7 +224,7 @@ router.post('/queries', async (req, res) => {
     const queryWithUser = await UserQuery.findByPk(query.id, {
       include: [{ model: User, attributes: ['id', 'name', 'email', 'employee_id'] }]
     });
-    
+
     const io = req.app.get('io');
     if (io) {
       io.emit('new_query_submitted', queryWithUser);
@@ -180,10 +273,15 @@ router.patch('/queries/:id/resolve', requireRole(['Admin', 'Super Admin']), asyn
 router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
-      include: [Role, Project, { model: User, as: 'manager' }]
+      include: [
+        Role,
+        Project,
+        { model: User, as: 'manager' },
+        { model: ProjectAssignment, where: { status: 'Active' }, required: false }
+      ]
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
-    res.json(user);
+    res.json(formatUserResponse(user));
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -193,14 +291,17 @@ router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trai
 router.post('/', requireRole(['Admin', 'Super Admin']), async (req, res) => {
   try {
     let { 
-      name, email, password, employee_id, roleName, projectId, 
+      name, email, password, employee_id, roleName, projectId, projectIds,
       managerId, designation, location, doj, employment_type, skills 
     } = req.body;
 
     if (!employee_id || employee_id.trim() === '') {
       employee_id = null;
     }
-    
+
+    const rawProjectInput = projectIds !== undefined ? projectIds : projectId;
+    const selectedProjectIds = (await validateAndExtractProjectIds(rawProjectInput)) || [];
+
     // Find role or create it
     let role = await Role.findOne({ where: { role_name: roleName } });
     if (!role) {
@@ -214,26 +315,54 @@ router.post('/', requireRole(['Admin', 'Super Admin']), async (req, res) => {
     const bcrypt = require('bcrypt');
     const hashedPassword = await bcrypt.hash(password || 'password123', 10);
 
-    const newUser = await User.create({
-      name,
-      email,
-      password: hashedPassword,
-      employee_id,
-      roleId: role.id,
-      projectId: projectId || null,
-      managerId: managerId || null,
-      designation,
-      location,
-      doj,
-      employment_type: employment_type || 'Full-time',
-      skills: skills || [],
-      status: 'Active'
+    const t = await sequelize.transaction();
+    let newUser;
+    try {
+      newUser = await User.create({
+        name,
+        email,
+        password: hashedPassword,
+        employee_id,
+        roleId: role.id,
+        projectId: selectedProjectIds.length > 0 ? selectedProjectIds[0] : null,
+        managerId: managerId || null,
+        designation,
+        location,
+        doj,
+        employment_type: employment_type || 'Full-time',
+        skills: skills || [],
+        status: 'Active'
+      }, { transaction: t });
+
+      for (const pid of selectedProjectIds) {
+        await ProjectAssignment.create({
+          userId: newUser.id,
+          projectId: pid,
+          role: role.role_name,
+          status: 'Active'
+        }, { transaction: t });
+      }
+
+      await t.commit();
+    } catch (txError) {
+      await t.rollback();
+      throw txError;
+    }
+
+    const createdUser = await User.findByPk(newUser.id, {
+      include: [
+        Role,
+        Project,
+        { model: User, as: 'manager' },
+        { model: ProjectAssignment, where: { status: 'Active' }, required: false }
+      ]
     });
     
-    res.status(201).json(newUser);
+    res.status(201).json(formatUserResponse(createdUser));
   } catch (error) {
-    console.error("User creation error:", error);
-    res.status(400).json({ error: 'Failed to create user', details: error.message });
+    console.error("User creation error:", error.message);
+    const statusCode = error.status || 400;
+    res.status(statusCode).json({ error: error.message || 'Failed to create user', details: error.message });
   }
 });
 
@@ -242,18 +371,45 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
-    
+
+    // Extract & validate project IDs if provided in request
+    const rawProjectInput = req.body.projectIds !== undefined ? req.body.projectIds : req.body.projectId;
+    const selectedProjectIds = await validateAndExtractProjectIds(rawProjectInput);
+
     // Enforce project authorization for Program Manager
     if (req.user.role === 'Program Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      if (!user.projectId || !accessibleProjectIds.includes(user.projectId)) {
+
+      // 1. Check if PM has permission to modify this user
+      const targetAssignments = await ProjectAssignment.findAll({
+        where: { userId: user.id, status: 'Active' },
+        attributes: ['projectId']
+      });
+      const targetExistingProjects = Array.from(new Set([user.projectId, ...targetAssignments.map(a => a.projectId)].filter(Boolean)));
+      const hasAccessToTarget = targetExistingProjects.length === 0 || targetExistingProjects.some(pid => accessibleProjectIds.includes(pid));
+      if (!hasAccessToTarget) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to modify users outside your assigned project.' });
+      }
+
+      // 2. If assigning projects, verify PM cannot assign projects outside their authorized scope
+      if (selectedProjectIds !== null) {
+        const unauthorizedAssignments = selectedProjectIds.filter(pid => !accessibleProjectIds.includes(pid));
+        if (unauthorizedAssignments.length > 0) {
+          return res.status(403).json({ error: 'Forbidden: You cannot assign projects outside your authorized scope.' });
+        }
       }
     }
 
     const updateData = { ...req.body };
-    
+    delete updateData.projectIds;
+    delete updateData.ProjectAssignments;
+    delete updateData.Role;
+    delete updateData.Project;
+    delete updateData.manager;
+
+    // Determine target role name
+    let targetRoleName = updateData.roleName;
     if (updateData.roleName) {
       let role = await Role.findOne({ where: { role_name: updateData.roleName } });
       if (!role) {
@@ -263,29 +419,106 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
         });
       }
       updateData.roleId = role.id;
-    }
-    
-    if (updateData.password) {
-      const bcrypt = require('bcrypt');
-      updateData.password = await bcrypt.hash(updateData.password, 10);
-    }
-    
-    if (typeof updateData.skills === 'string') {
-      updateData.skills = updateData.skills.split(',').map(s => s.trim()).filter(s => s);
+      delete updateData.roleName;
+    } else {
+      const currentRole = await Role.findByPk(user.roleId);
+      targetRoleName = currentRole ? currentRole.role_name : 'Employee';
     }
 
-    if (updateData.projectId === '') updateData.projectId = null;
+    // Password handling: preserve existing password if blank/whitespace
+    if (updateData.password && updateData.password.trim() !== '') {
+      const bcrypt = require('bcrypt');
+      updateData.password = await bcrypt.hash(updateData.password, 10);
+    } else {
+      delete updateData.password;
+    }
+
+    if (typeof updateData.skills === 'string') {
+      updateData.skills = updateData.skills.split(',').map(s => s.trim()).filter(Boolean);
+    }
+
     if (updateData.managerId === '') updateData.managerId = null;
-    
-    await user.update(updateData);
-    
+
+    // Database transaction for coordinated User and ProjectAssignment updates
+    const t = await sequelize.transaction();
+    try {
+      if (selectedProjectIds !== null) {
+        // In Users table: projectId is a single UUID foreign key.
+        // Set to first project in selectedProjectIds, or null if none.
+        updateData.projectId = selectedProjectIds.length > 0 ? selectedProjectIds[0] : null;
+
+        await user.update(updateData, { transaction: t });
+
+        // Synchronize ProjectAssignment records
+        const existingAssignments = await ProjectAssignment.findAll({
+          where: { userId: user.id },
+          transaction: t
+        });
+
+        // 1. Remove deselected assignments for THIS user only
+        const toRemoveIds = existingAssignments
+          .filter(a => !selectedProjectIds.includes(a.projectId))
+          .map(a => a.id);
+        if (toRemoveIds.length > 0) {
+          await ProjectAssignment.destroy({
+            where: { id: { [Op.in]: toRemoveIds } },
+            transaction: t
+          });
+        }
+
+        // 2. Add or reactivate selected assignments
+        for (const pid of selectedProjectIds) {
+          const existing = existingAssignments.find(a => a.projectId === pid);
+          if (existing) {
+            if (existing.status !== 'Active' || existing.role !== targetRoleName) {
+              await existing.update({
+                status: 'Active',
+                role: targetRoleName
+              }, { transaction: t });
+            }
+          } else {
+            await ProjectAssignment.create({
+              userId: user.id,
+              projectId: pid,
+              role: targetRoleName,
+              status: 'Active'
+            }, { transaction: t });
+          }
+        }
+      } else {
+        // Project selections unchanged
+        delete updateData.projectId;
+        await user.update(updateData, { transaction: t });
+
+        // If role was updated, keep role synced on existing active assignments
+        if (targetRoleName) {
+          await ProjectAssignment.update(
+            { role: targetRoleName },
+            { where: { userId: user.id, status: 'Active' }, transaction: t }
+          );
+        }
+      }
+
+      await t.commit();
+    } catch (txError) {
+      await t.rollback();
+      throw txError;
+    }
+
     const updatedUser = await User.findByPk(user.id, {
-      include: [Role, Project, { model: User, as: 'manager' }]
+      include: [
+        Role,
+        Project,
+        { model: User, as: 'manager' },
+        { model: ProjectAssignment, where: { status: 'Active' }, required: false }
+      ]
     });
-    
-    res.json(updatedUser);
+
+    res.json(formatUserResponse(updatedUser));
   } catch (error) {
-    res.status(400).json({ error: 'Failed to update user', details: error.message });
+    console.error('PUT /api/users/:id error:', error.message);
+    const statusCode = error.status || 400;
+    res.status(statusCode).json({ error: error.message || 'Failed to update user', details: error.message });
   }
 });
 

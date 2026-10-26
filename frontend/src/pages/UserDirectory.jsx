@@ -119,7 +119,7 @@ export default function UserDirectory() {
       fetchManagers();
     } catch (error) {
       console.error('Failed to add user', error);
-      alert('Failed to add user');
+      alert(error.response?.data?.error || error.response?.data?.details || 'Failed to add user');
     }
   };
 
@@ -143,7 +143,7 @@ export default function UserDirectory() {
       fetchManagers();
     } catch (error) {
       console.error('Failed to update user', error);
-      alert(error.response?.data?.error || 'Failed to update user');
+      alert(error.response?.data?.error || error.response?.data?.details || 'Failed to update user. Please check your project selections and try again.');
     }
   };
 
@@ -275,7 +275,7 @@ export default function UserDirectory() {
             password: '',
             employee_id: u.employee_id || '',
             roleName: u.Role?.role_name || 'Employee',
-            projectId: u.projectId || '',
+            projectId: u.projectId || (u.projectIds && u.projectIds.join(',')) || '',
             managerId: u.managerId || '',
             location: u.location || '',
             status: u.status || 'Active'
@@ -352,7 +352,7 @@ export default function UserDirectory() {
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Department/Project(s)</label>
-                  {['Program Manager', 'Operation Manager'].includes(newUser.roleName) ? (
+                  {['Program Manager', 'Operation Manager', 'Trainer'].includes(newUser.roleName) ? (
                     <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '8px', background: 'var(--bg-tertiary)' }}>
                       {projects.map(p => {
                         const isChecked = newUser.projectId && newUser.projectId.split(',').includes(p.id);
@@ -461,7 +461,7 @@ export default function UserDirectory() {
                 </div>
                 <div>
                   <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>Department/Project(s)</label>
-                  {['Program Manager', 'Operation Manager'].includes(editUser.roleName) ? (
+                  {['Program Manager', 'Operation Manager', 'Trainer'].includes(editUser.roleName) ? (
                     <div style={{ maxHeight: '120px', overflowY: 'auto', border: '1px solid var(--border-glass)', borderRadius: '8px', padding: '8px', background: 'var(--bg-tertiary)' }}>
                       {projects.map(p => {
                         const isChecked = editUser.projectId && editUser.projectId.split(',').includes(p.id);
