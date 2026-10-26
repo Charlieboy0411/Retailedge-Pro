@@ -344,61 +344,306 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
   }
 });
 
-// POST /api/trainings/:id/guest-join - Create a guest user and return token for a specific meeting
+// ─── ATTENDEE JOIN IDENTITY & ZONE VALIDATION HELPERS ─────────────────────────
+async function getAuthoritativeTrainingZones(training) {
+  const Project = require('../models/Project');
+  const ProjectAssignment = require('../models/ProjectAssignment');
+  const { Op } = require('sequelize');
+
+  const zonesSet = new Set();
+
+  if (training.projectId) {
+    const project = await Project.findByPk(training.projectId);
+    if (project) {
+      if (project.zone && typeof project.zone === 'string') {
+        project.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+      }
+
+      const subprojects = await Project.findAll({
+        where: { parentId: project.id, status: { [Op.ne]: 'Archived' } },
+        attributes: ['zone']
+      });
+      subprojects.forEach(sp => {
+        if (sp.zone && typeof sp.zone === 'string') {
+          sp.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+        }
+      });
+
+      const assignments = await ProjectAssignment.findAll({
+        where: { projectId: project.id, status: 'Active', zone: { [Op.ne]: null } },
+        attributes: ['zone']
+      });
+      assignments.forEach(a => {
+        if (a.zone && typeof a.zone === 'string') {
+          a.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+        }
+      });
+    }
+  } else {
+    // General / Global meeting: collect configured zones across all active projects
+    const allProjects = await Project.findAll({
+      where: { zone: { [Op.ne]: null }, status: { [Op.ne]: 'Archived' } },
+      attributes: ['zone']
+    });
+    allProjects.forEach(p => {
+      if (p.zone && typeof p.zone === 'string') {
+        p.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+      }
+    });
+
+    const allAssignments = await ProjectAssignment.findAll({
+      where: { zone: { [Op.ne]: null }, status: 'Active' },
+      attributes: ['zone']
+    });
+    allAssignments.forEach(a => {
+      if (a.zone && typeof a.zone === 'string') {
+        a.zone.split(',').map(z => z.trim()).filter(Boolean).forEach(z => zonesSet.add(z));
+      }
+    });
+  }
+
+  return Array.from(zonesSet)
+    .filter(z => z && z !== 'Unmapped' && z !== 'N/A')
+    .sort();
+}
+
+// GET /api/trainings/:id/join-context - Public endpoint to retrieve session context and valid zones for attendee join
+router.get('/:id/join-context', async (req, res) => {
+  try {
+    const trainingId = req.params.id;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(trainingId)) {
+      return res.status(400).json({ error: 'Invalid meeting ID format' });
+    }
+
+    const training = await Training.findByPk(trainingId, {
+      include: [{ model: Project, attributes: ['id', 'name', 'zone'] }]
+    });
+
+    if (!training) {
+      return res.status(404).json({ error: 'Training meeting not found' });
+    }
+
+    const validZones = await getAuthoritativeTrainingZones(training);
+
+    let matchedEmployee = null;
+    if (req.query.employeeId && typeof req.query.employeeId === 'string') {
+      const cleanEmpId = req.query.employeeId.trim();
+      if (cleanEmpId) {
+        const User = require('../models/User');
+        const ProjectAssignment = require('../models/ProjectAssignment');
+        const user = await User.findOne({ where: { employee_id: cleanEmpId } });
+        if (user) {
+          let authoritativeZone = null;
+          if (training.projectId) {
+            const assignment = await ProjectAssignment.findOne({
+              where: { userId: user.id, projectId: training.projectId, status: 'Active' }
+            });
+            if (assignment && assignment.zone) {
+              authoritativeZone = assignment.zone;
+            }
+          }
+          if (!authoritativeZone && user.location) {
+            authoritativeZone = user.location;
+          }
+          matchedEmployee = {
+            name: user.name,
+            authoritativeZone: authoritativeZone && validZones.includes(authoritativeZone) ? authoritativeZone : null
+          };
+        }
+      }
+    }
+
+    res.json({
+      meetingId: training.id,
+      title: training.title,
+      description: training.description,
+      type: training.type,
+      scheduledAt: training.scheduledAt,
+      projectId: training.projectId || null,
+      projectName: training.Project ? training.Project.name : 'General (Global)',
+      validZones,
+      zonesConfigured: validZones.length > 0,
+      matchedEmployee
+    });
+  } catch (error) {
+    console.error('GET /api/trainings/:id/join-context error:', error);
+    res.status(500).json({ error: 'Failed to retrieve meeting context', details: error.message });
+  }
+});
+
+// POST /api/trainings/:id/guest-join - Standardized attendee registration & session binding
 router.post('/:id/guest-join', async (req, res) => {
   try {
     const trainingId = req.params.id;
-    const { name } = req.body;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(trainingId)) {
+      return res.status(400).json({ error: 'Invalid meeting ID format' });
+    }
+
+    const { name, employeeId, zone } = req.body;
     
-    if (!name || !name.trim()) {
-      return res.status(400).json({ error: 'Name is required' });
+    const cleanName = (typeof name === 'string' ? name : '').trim();
+    const cleanEmployeeId = (typeof employeeId === 'string' ? employeeId : (employeeId !== undefined && employeeId !== null ? String(employeeId) : '')).trim();
+    const cleanZone = (typeof zone === 'string' ? zone : '').trim();
+
+    if (!cleanName || cleanName.length < 2) {
+      return res.status(400).json({ error: 'Full Name is required (minimum 2 characters)' });
+    }
+
+    if (!cleanEmployeeId) {
+      return res.status(400).json({ error: 'Employee ID is required' });
+    }
+
+    if (!cleanZone) {
+      return res.status(400).json({ error: 'Zone selection is required' });
     }
 
     const training = await Training.findByPk(trainingId);
     if (!training) {
-      return res.status(404).json({ error: 'Training material not found' });
+      return res.status(404).json({ error: 'Training meeting not found' });
+    }
+
+    const validZones = await getAuthoritativeTrainingZones(training);
+    if (validZones.length === 0) {
+      return res.status(400).json({
+        error: 'Zones are not configured for this project. Please contact your Program Manager or Trainer before joining.'
+      });
+    }
+
+    if (!validZones.includes(cleanZone)) {
+      return res.status(400).json({
+        error: `Invalid zone "${cleanZone}". Please select from configured project zones: ${validZones.join(', ')}.`
+      });
     }
 
     const User = require('../models/User');
     const Role = require('../models/Role');
+    const ProjectAssignment = require('../models/ProjectAssignment');
     const jwt = require('jsonwebtoken');
     const bcrypt = require('bcrypt');
 
-    const employeeRole = await Role.findOne({ where: { role_name: 'Employee' } });
-    if (!employeeRole) {
-      return res.status(500).json({ error: 'Employee role not found' });
+    // 1. Authoritative lookup by canonical employee_id (preserves leading zeros)
+    let targetUser = await User.findOne({
+      where: { employee_id: cleanEmployeeId },
+      include: [Role]
+    });
+
+    if (targetUser) {
+      // Identity Check: Name consistency
+      const existingNorm = targetUser.name.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const inputNorm = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+      const nameMatch = existingNorm === inputNorm ||
+                        existingNorm.includes(inputNorm) ||
+                        inputNorm.includes(existingNorm);
+
+      if (!nameMatch) {
+        return res.status(400).json({
+          error: `Employee ID "${cleanEmployeeId}" is registered to another employee. Please verify your Employee ID.`
+        });
+      }
+
+      // Zone conflict check with authoritative records
+      if (training.projectId) {
+        const existingAssignment = await ProjectAssignment.findOne({
+          where: { userId: targetUser.id, projectId: training.projectId, status: 'Active' }
+        });
+
+        if (existingAssignment && existingAssignment.zone && existingAssignment.zone.trim() !== cleanZone) {
+          return res.status(400).json({
+            error: `Zone conflict: Employee is officially assigned to zone "${existingAssignment.zone}". Please select your assigned zone or contact your supervisor.`
+          });
+        }
+
+        if (existingAssignment && !existingAssignment.zone) {
+          await existingAssignment.update({ zone: cleanZone });
+        } else if (!existingAssignment) {
+          await ProjectAssignment.create({
+            userId: targetUser.id,
+            projectId: training.projectId,
+            role: targetUser.Role?.role_name || 'Employee',
+            zone: cleanZone,
+            status: 'Active'
+          });
+        }
+      }
+    } else {
+      // 2. New employee identity creation
+      const employeeRole = await Role.findOne({ where: { role_name: 'Employee' } });
+      if (!employeeRole) {
+        return res.status(500).json({ error: 'Employee role not found' });
+      }
+
+      const sanitizedEmp = cleanEmployeeId.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const guestEmail = `emp_${sanitizedEmp}_${Date.now()}@retailedgepro.in`;
+      const tempPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
+
+      targetUser = await User.create({
+        name: cleanName,
+        employee_id: cleanEmployeeId, // Preserves original string format and leading zeros
+        email: guestEmail,
+        password: tempPassword,
+        roleId: employeeRole.id,
+        projectId: training.projectId || null,
+        location: cleanZone,
+        department: 'Field Operations'
+      });
+
+      if (training.projectId) {
+        await ProjectAssignment.create({
+          userId: targetUser.id,
+          projectId: training.projectId,
+          role: 'Employee',
+          zone: cleanZone,
+          status: 'Active'
+        });
+      }
     }
 
-    const guestEmail = `guest_${Date.now()}_${Math.floor(Math.random() * 1000)}@guest.quizhive.com`;
-    const tempPassword = await bcrypt.hash(Math.random().toString(36).slice(-8), 10);
-
-    const guestUser = await User.create({
-      name: name.trim(),
-      email: guestEmail,
-      password: tempPassword,
-      roleId: employeeRole.id,
-      projectId: training.projectId || null,
-      department: 'Guest Attendee'
+    // 3. Idempotent attendance/progress registration
+    const [progress, created] = await TrainingProgress.findOrCreate({
+      where: {
+        userId: targetUser.id,
+        trainingId: training.id
+      },
+      defaults: {
+        completed: false,
+        timeSpent: 1,
+        zone: cleanZone
+      }
     });
 
-    // Create initial progress to track that they joined
-    await TrainingProgress.create({
-      userId: guestUser.id,
-      trainingId: training.id,
-      completed: false,
-      timeSpent: 1
-    });
+    if (!created && (!progress.zone || progress.zone === 'N/A')) {
+      await progress.update({ zone: cleanZone });
+    }
 
     const token = jwt.sign(
-      { id: guestUser.id, email: guestUser.email, role: 'Employee', projectId: guestUser.projectId },
+      {
+        id: targetUser.id,
+        email: targetUser.email,
+        role: targetUser.Role?.role_name || 'Employee',
+        projectId: training.projectId || targetUser.projectId
+      },
       process.env.JWT_SECRET || 'fallback_secret',
       { expiresIn: '24h' }
     );
 
-    // Return the token and user so the frontend can log them in
-    res.json({ token, user: guestUser });
+    res.json({
+      token,
+      user: {
+        id: targetUser.id,
+        name: targetUser.name,
+        employee_id: targetUser.employee_id,
+        email: targetUser.email,
+        role: targetUser.Role?.role_name || 'Employee',
+        projectId: training.projectId || targetUser.projectId,
+        zone: cleanZone
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to process guest join', details: error.message });
+    console.error('POST /api/trainings/:id/guest-join error:', error);
+    res.status(500).json({ error: 'Failed to process join request', details: error.message });
   }
 });
 
