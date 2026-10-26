@@ -193,7 +193,7 @@ async function runTests() {
   // --- 8. Backup Gate Success with Verified Flag ---
   console.log('\n--- 8. Backup Gate Success with Verification Flag ---');
   process.env.RDS_BACKUP_VERIFIED = 'true';
-  const backupSuccessRes = await migrationGate.ensureBackupOrSnapshot({ host: 'dummy.rds.amazonaws.com', port: 5432, database: 'db', user: 'u', password: 'p' });
+  const backupSuccessRes = await migrationGate.ensureBackupOrSnapshot({ host: 'retailedgepro-db.ctdrw76fsnhe.ap-south-1.rds.amazonaws.com', port: 5432, database: 'db', user: 'u', password: 'p' });
   testAssert(backupSuccessRes.success === true, 'Backup check succeeds when verified by release operator');
   testAssert(backupSuccessRes.type === 'VERIFIED_RDS_SNAPSHOT_EVIDENCE', 'Records verified backup type');
   testAssert(backupSuccessRes.identifier === 'retaildb', 'Records verified snapshot identifier');
