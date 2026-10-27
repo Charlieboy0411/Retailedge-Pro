@@ -219,6 +219,43 @@ async function runTestSuite() {
     assert(betaTrainers.some(t => t.id === trainerB.id), 'Project Beta contains Trainer Beta');
     assert(!betaTrainers.some(t => t.id === trainerA.id), 'Project Beta does NOT contain Trainer Alpha');
 
+    // 1b. Inactive assignment excluded
+    await ProjectAssignment.destroy({ where: { userId: trainerB.id, projectId: projectAlpha.id } });
+    await ProjectAssignment.create({
+      userId: trainerB.id,
+      projectId: projectAlpha.id,
+      status: 'Inactive',
+      zone: 'North'
+    });
+    const alphaAfterInactiveRes = await fetch(`${BASE_URL}/api/projects/${projectAlpha.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    const alphaAfterInactive = await alphaAfterInactiveRes.json();
+    assert(!alphaAfterInactive.some(t => t.id === trainerB.id), 'Trainer with Inactive ProjectAssignment is NOT returned');
+
+    // 1c. Project with no trainers returns empty array
+    const [projectGamma] = await Project.findOrCreate({
+      where: { name: 'Project Gamma (Empty Trainers)' },
+      defaults: { status: 'Active', project_type: 'Standalone' }
+    });
+    const gammaTrainersRes = await fetch(`${BASE_URL}/api/projects/${projectGamma.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(gammaTrainersRes.status === 200, `GET /api/projects/:id/trainers on empty project returns 200 OK (got: ${gammaTrainersRes.status})`);
+    const gammaTrainers = await gammaTrainersRes.json();
+    assert(Array.isArray(gammaTrainers) && gammaTrainers.length === 0, `Empty project returns empty trainer array (got: ${gammaTrainers.length})`);
+
+    // 1d. Safe handling of invalid project IDs
+    const invalidFormatRes = await fetch(`${BASE_URL}/api/projects/not-a-valid-uuid/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(invalidFormatRes.status === 400, `Malformed project ID rejected with 400 (got: ${invalidFormatRes.status})`);
+
+    const nonExistentProjRes = await fetch(`${BASE_URL}/api/projects/00000000-0000-0000-0000-000000000000/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(nonExistentProjRes.status === 404, `Non-existent project ID rejected with 404 (got: ${nonExistentProjRes.status})`);
+
     // ─── TEST 2: Server-Side Trainer Eligibility Enforcement ───
     console.log('\n--- 2. Server-Side Trainer Eligibility Validation ---');
     const tomorrow = new Date(Date.now() + 86400000).toISOString();

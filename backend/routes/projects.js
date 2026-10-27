@@ -249,8 +249,7 @@ router.get('/:id/trainers', requireAuth, async (req, res) => {
         roleId: trainerRole.id,
         [Op.or]: [
           ...(candidateUserIds.size > 0 ? [{ id: { [Op.in]: Array.from(candidateUserIds) } }] : []),
-          { projectId: projectId },
-          { projectId: { [Op.like]: `%${projectId}%` } }
+          { projectId: projectId }
         ]
       },
       attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location'],
