@@ -186,7 +186,101 @@ async function verifyCatalog20261026(client) {
   };
 }
 
-// ─── BACKUP & SNAPSHOT VERIFICATION GATE ─────────────────────────────────────
+// ─── CATALOG VERIFIER: MIGRATION 20261027 ──────────────────────────────────────
+async function verifyCatalog20261027(client) {
+  // 1. Check "Trainings" columns
+  const colQuery = `
+    SELECT table_name, column_name, data_type, character_maximum_length, is_nullable
+    FROM information_schema.columns
+    WHERE table_name = 'Trainings'
+      AND column_name IN ('trainerId', 'createdBy', 'platform', 'status');
+  `;
+  const colRes = await client.query(colQuery);
+  const trainerIdCol = colRes.rows.find(r => r.column_name === 'trainerId');
+  const createdByCol = colRes.rows.find(r => r.column_name === 'createdBy');
+  const platformCol = colRes.rows.find(r => r.column_name === 'platform');
+  const statusCol = colRes.rows.find(r => r.column_name === 'status');
+
+  // 2. Check indexes on "Trainings"
+  const idxQuery = `
+    SELECT
+      t.relname AS table_name,
+      i.relname AS index_name,
+      ix.indisvalid AS is_valid,
+      ix.indisready AS is_ready,
+      pg_get_indexdef(ix.indexrelid) AS index_definition
+    FROM pg_index ix
+    JOIN pg_class i ON i.oid = ix.indexrelid
+    JOIN pg_class t ON t.oid = ix.indrelid
+    WHERE t.relname = 'Trainings'
+      AND i.relname IN ('idx_trainings_trainer_id', 'idx_trainings_proj_trainer');
+  `;
+  const idxRes = await client.query(idxQuery);
+  const trainerIdx = idxRes.rows.find(r => r.index_name === 'idx_trainings_trainer_id');
+  const projTrainerIdx = idxRes.rows.find(r => r.index_name === 'idx_trainings_proj_trainer');
+
+  const trainerIdValid = !!(trainerIdCol &&
+    trainerIdCol.data_type === 'uuid' &&
+    trainerIdCol.is_nullable === 'YES');
+
+  const createdByValid = !!(createdByCol &&
+    createdByCol.data_type === 'uuid' &&
+    createdByCol.is_nullable === 'YES');
+
+  const platformValid = !!(platformCol &&
+    platformCol.data_type === 'character varying' &&
+    platformCol.character_maximum_length === 50 &&
+    platformCol.is_nullable === 'YES');
+
+  const statusValid = !!(statusCol &&
+    statusCol.data_type === 'character varying' &&
+    statusCol.character_maximum_length === 50 &&
+    statusCol.is_nullable === 'YES');
+
+  const trainerIdxValid = !!(trainerIdx &&
+    trainerIdx.table_name === 'Trainings' &&
+    trainerIdx.is_valid === true &&
+    trainerIdx.is_ready === true &&
+    trainerIdx.index_definition.includes('trainerId'));
+
+  const projTrainerIdxValid = !!(projTrainerIdx &&
+    projTrainerIdx.table_name === 'Trainings' &&
+    projTrainerIdx.is_valid === true &&
+    projTrainerIdx.is_ready === true &&
+    projTrainerIdx.index_definition.includes('projectId') &&
+    projTrainerIdx.index_definition.includes('trainerId'));
+
+  const allValid = trainerIdValid && createdByValid && platformValid && statusValid && trainerIdxValid && projTrainerIdxValid;
+  const anyPresent = !!(trainerIdCol || createdByCol || platformCol || statusCol || trainerIdx || projTrainerIdx);
+
+  let incompatibleError = null;
+  if (trainerIdCol && !trainerIdValid) {
+    incompatibleError = `Incompatible column Trainings.trainerId (type=${trainerIdCol.data_type}, nullable=${trainerIdCol.is_nullable})`;
+  } else if (createdByCol && !createdByValid) {
+    incompatibleError = `Incompatible column Trainings.createdBy (type=${createdByCol.data_type}, nullable=${createdByCol.is_nullable})`;
+  } else if (platformCol && !platformValid) {
+    incompatibleError = `Incompatible column Trainings.platform (type=${platformCol.data_type}, length=${platformCol.character_maximum_length}, nullable=${platformCol.is_nullable})`;
+  } else if (statusCol && !statusValid) {
+    incompatibleError = `Incompatible column Trainings.status (type=${statusCol.data_type}, length=${statusCol.character_maximum_length}, nullable=${statusCol.is_nullable})`;
+  } else if (trainerIdx && !trainerIdxValid) {
+    incompatibleError = `Invalid or broken index idx_trainings_trainer_id (is_valid=${trainerIdx.is_valid})`;
+  } else if (projTrainerIdx && !projTrainerIdxValid) {
+    incompatibleError = `Invalid or broken index idx_trainings_proj_trainer (is_valid=${projTrainerIdx.is_valid})`;
+  }
+
+  return {
+    allValid,
+    anyPresent,
+    incompatibleError,
+    trainerIdValid,
+    createdByValid,
+    platformValid,
+    statusValid,
+    trainerIdxValid,
+    projTrainerIdxValid
+  };
+}
+
 // ─── BACKUP & SNAPSHOT VERIFICATION GATE ─────────────────────────────────────
 async function ensureBackupOrSnapshot(dbConfig) {
   console.log('\n--- Step: Backup & Snapshot Readiness Check ---');
@@ -267,23 +361,22 @@ async function ensureBackupOrSnapshot(dbConfig) {
     }
   }
 
-  // 2. Verified AWS Administrator Evidence Check
-  // Validates explicit console verification evidence provided by authorized administrator:
-  // Snapshot "retaildb" on "retailedgepro-db" in "ap-south-1" (PostgreSQL 18.3, Status: available)
-  if ((targetSnapshotId === 'retaildb' && instanceIdentifier === 'retailedgepro-db') || process.env.RDS_BACKUP_VERIFIED === 'true') {
+  // 2. Explicit Administrator / Test Mock Override
+  // Requires explicit opt-in via RDS_BACKUP_VERIFIED === 'true' (e.g. for CI mock pipelines)
+  if (process.env.RDS_BACKUP_VERIFIED === 'true') {
     const verifiedSnapshotId = targetSnapshotId || 'retaildb';
-    console.log(`[BACKUP] ✅ Verified RDS snapshot acknowledged from authorized AWS Console evidence:`);
+    console.log(`[BACKUP] ✅ Verified RDS snapshot acknowledged via explicit operator override:`);
     console.log(`         Snapshot Identifier: ${verifiedSnapshotId}`);
-    console.log(`         Source DB Instance:  ${instanceIdentifier} (ap-south-1)`);
+    console.log(`         Source DB Instance:  ${instanceIdentifier} (${region})`);
     console.log(`         Snapshot Type:       Manual`);
-    console.log(`         Snapshot Status:     Available`);
+    console.log(`         Snapshot Status:     available`);
     console.log(`         Engine:              PostgreSQL 18.3`);
     return {
       success: true,
       type: 'VERIFIED_RDS_SNAPSHOT_EVIDENCE',
       identifier: verifiedSnapshotId,
       source: instanceIdentifier,
-      region: 'ap-south-1',
+      region,
       status: 'available'
     };
   }
@@ -308,6 +401,12 @@ const MIGRATION_PIPELINE = [
     sqlFile: path.join(__dirname, '../migrations/20261026_add_zone_to_jitsi_attendance.sql'),
     verify: verifyCatalog20261026,
     description: 'Add nullable zone to JitsiAttendances with project & employee composite indexes'
+  },
+  {
+    name: '20261027_add_trainer_and_scheduling_to_trainings',
+    sqlFile: path.join(__dirname, '../migrations/20261027_add_trainer_and_scheduling_to_trainings.sql'),
+    verify: verifyCatalog20261027,
+    description: 'Add trainerId, createdBy, platform, status to Trainings with trainerId & (projectId, trainerId) indexes'
   }
 ];
 
@@ -421,6 +520,7 @@ module.exports = {
   getDbConfig,
   verifyCatalog20261021,
   verifyCatalog20261026,
+  verifyCatalog20261027,
   ensureBackupOrSnapshot,
   runMigrationPipeline,
   MIGRATION_PIPELINE

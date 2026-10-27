@@ -76,6 +76,8 @@ export default function TrainerDashboard({
   const [isUrlCustom, setIsUrlCustom] = useState(false);
 
   // Meeting form
+  const [eligibleTrainers, setEligibleTrainers] = useState([]);
+  const [trainersLoading, setTrainersLoading] = useState(false);
   const [meetingForm, setMeetingForm] = useState({
     title: '',
     description: '',
@@ -83,7 +85,8 @@ export default function TrainerDashboard({
     scheduledAt: '',
     url: '',
     inviteeIds: [],
-    platform: 'google_meet'
+    platform: 'google_meet',
+    trainerId: user?.id || ''
   });
 
   // Offline form state with strict scheduling & expiry in Asia/Kolkata (IST)
@@ -302,20 +305,6 @@ export default function TrainerDashboard({
 
   const currentTrend = computeDynamicTrend();
 
-  const handleProjectChange = (projId) => {
-    const projectMembers = usersList
-      .filter(u => {
-        const matchesProj = projId ? (u.projectId === projId || u.Project?.id === projId) : true;
-        const isSelf = u.id === user?.id;
-        return matchesProj && !isSelf;
-      })
-      .map(u => u.id);
-    setMeetingForm(prev => ({
-      ...prev,
-      projectId: projId,
-      inviteeIds: projectMembers
-    }));
-  };
 
   useEffect(() => {
     const idx = Math.floor(Math.random() * TIPS.length);
@@ -443,6 +432,46 @@ export default function TrainerDashboard({
     }
   }, [meetingForm.projectId, meetingForm.platform, projects, isMeetingModalOpen, isUrlCustom]);
 
+  const handleProjectChange = async (projId) => {
+    const projectMembers = usersList
+      .filter(u => {
+        const matchesProj = projId ? (u.projectId === projId || u.Project?.id === projId) : true;
+        const isSelf = u.id === user?.id;
+        return matchesProj && !isSelf;
+      })
+      .map(u => u.id);
+
+    setMeetingForm(prev => ({
+      ...prev,
+      projectId: projId,
+      inviteeIds: projectMembers,
+      trainerId: user?.id || ''
+    }));
+
+    if (projId) {
+      try {
+        setTrainersLoading(true);
+        const res = await axios.get(`/api/projects/${projId}/trainers`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const trainers = res.data || [];
+        setEligibleTrainers(trainers);
+        if (trainers.some(t => t.id === user?.id)) {
+          setMeetingForm(prev => ({ ...prev, trainerId: user.id }));
+        } else if (trainers.length > 0) {
+          setMeetingForm(prev => ({ ...prev, trainerId: trainers[0].id }));
+        }
+      } catch (err) {
+        console.error('Failed to load project trainers', err);
+        setEligibleTrainers([]);
+      } finally {
+        setTrainersLoading(false);
+      }
+    } else {
+      setEligibleTrainers([]);
+    }
+  };
+
   // Handle meeting scheduling submit
   const handleScheduleSubmit = async (e) => {
     e.preventDefault();
@@ -459,6 +488,7 @@ export default function TrainerDashboard({
     try {
       const payload = {
         ...meetingForm,
+        trainerId: meetingForm.trainerId || user?.id,
         scheduledAt: kolkataToUtcIso(meetingForm.scheduledAt),
         url: formattedUrl
       };
@@ -1756,6 +1786,30 @@ export default function TrainerDashboard({
                         style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', fontSize: '0.84rem', outline: 'none' }}
                       />
                     </div>
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '4px', fontSize: '0.8rem', color: '#475569', fontWeight: 600 }}>Responsible Trainer</label>
+                    <select
+                      value={meetingForm.trainerId}
+                      onChange={e => setMeetingForm({ ...meetingForm, trainerId: e.target.value })}
+                      disabled={trainersLoading}
+                      style={{ width: '100%', padding: '9px 12px', borderRadius: '8px', border: '1px solid #E2E8F0', background: '#FFFFFF', color: '#0F172A', fontSize: '0.84rem', outline: 'none' }}
+                    >
+                      {!meetingForm.projectId ? (
+                        <option value={user?.id}>{user?.name} (You - Trainer)</option>
+                      ) : trainersLoading ? (
+                        <option value="">Loading trainers...</option>
+                      ) : eligibleTrainers.length === 0 ? (
+                        <option value={user?.id}>{user?.name} (Assigned Trainer)</option>
+                      ) : (
+                        eligibleTrainers.map(t => (
+                          <option key={t.id} value={t.id}>
+                            {t.name} ({t.email}){t.id === user?.id ? ' — You' : ''}
+                          </option>
+                        ))
+                      )}
+                    </select>
                   </div>
 
                   <div>

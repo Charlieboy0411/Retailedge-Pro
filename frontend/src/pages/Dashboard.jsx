@@ -52,6 +52,8 @@ export default function Dashboard() {
   const [selectedQuizToLaunch, setSelectedQuizToLaunch] = useState(null);
   const [launchSessionName, setLaunchSessionName] = useState('');
 
+  const [eligibleTrainers, setEligibleTrainers] = useState([]);
+  const [trainersLoading, setTrainersLoading] = useState(false);
   const [meetingForm, setMeetingForm] = useState({
     title: '',
     description: '',
@@ -59,7 +61,8 @@ export default function Dashboard() {
     scheduledAt: '',
     url: '',
     inviteeIds: [],
-    platform: 'google_meet'
+    platform: 'google_meet',
+    trainerId: user?.role === 'Trainer' ? user.id : ''
   });
   const [meetings, setMeetings] = useState([]);
 
@@ -162,7 +165,7 @@ export default function Dashboard() {
     }
   }, [meetingForm.projectId, meetingForm.platform, projects, isMeetingModalOpen, isUrlCustom]);
 
-  const handleProjectChange = (projId) => {
+  const handleProjectChange = async (projId) => {
     const projectMembers = usersList
       .filter(u => {
         const matchesProj = projId ? (u.projectId === projId || u.Project?.id === projId) : true;
@@ -173,9 +176,39 @@ export default function Dashboard() {
     setMeetingForm(prev => ({
       ...prev,
       projectId: projId,
-      inviteeIds: projectMembers
+      inviteeIds: projectMembers,
+      trainerId: user?.role === 'Trainer' ? user.id : ''
     }));
+
+    if (projId) {
+      try {
+        setTrainersLoading(true);
+        const res = await axios.get(`/api/projects/${projId}/trainers`, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const trainers = res.data || [];
+        setEligibleTrainers(trainers);
+        if (user?.role === 'Trainer' && trainers.some(t => t.id === user.id)) {
+          setMeetingForm(prev => ({ ...prev, trainerId: user.id }));
+        } else if (trainers.length === 1) {
+          setMeetingForm(prev => ({ ...prev, trainerId: trainers[0].id }));
+        }
+      } catch (err) {
+        console.error('Failed to fetch project trainers:', err);
+        setEligibleTrainers([]);
+      } finally {
+        setTrainersLoading(false);
+      }
+    } else {
+      setEligibleTrainers([]);
+    }
   };
+
+  useEffect(() => {
+    if (isMeetingModalOpen && meetingForm.projectId) {
+      handleProjectChange(meetingForm.projectId);
+    }
+  }, [isMeetingModalOpen]);
 
   const fetchProjects = async () => {
     try {
@@ -319,6 +352,11 @@ export default function Dashboard() {
     e.preventDefault();
     if (!meetingForm.title || !meetingForm.scheduledAt || !meetingForm.url) {
       alert("Please fill in all required fields (Title, Date & Time, and Google Meet URL).");
+      return;
+    }
+
+    if (meetingForm.projectId && !meetingForm.trainerId) {
+      alert("Please select the responsible trainer assigned to this project.");
       return;
     }
 
@@ -784,6 +822,54 @@ export default function Dashboard() {
                         style={{ width: '100%', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-glass)', background: 'var(--bg-tertiary)', color: 'var(--text-primary)' }} 
                       />
                     </div>
+                  </div>
+
+                  {/* Responsible Trainer Selection */}
+                  <div>
+                    <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                      Select Responsible Trainer {meetingForm.projectId ? '*' : ''}
+                    </label>
+                    <select
+                      value={meetingForm.trainerId}
+                      onChange={e => setMeetingForm({ ...meetingForm, trainerId: e.target.value })}
+                      disabled={trainersLoading || (!meetingForm.projectId && user?.role !== 'Trainer')}
+                      required={!!meetingForm.projectId}
+                      style={{
+                        width: '100%',
+                        padding: '12px',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-glass)',
+                        background: 'var(--bg-tertiary)',
+                        color: 'var(--text-primary)',
+                        outline: 'none'
+                      }}
+                    >
+                      {!meetingForm.projectId ? (
+                        user?.role === 'Trainer' ? (
+                          <option value={user.id}>{user.name} (Assigned Trainer - Self)</option>
+                        ) : (
+                          <option value="">-- Select a project to view authorized trainers --</option>
+                        )
+                      ) : trainersLoading ? (
+                        <option value="">Loading authorized trainers...</option>
+                      ) : eligibleTrainers.length === 0 ? (
+                        <option value="">⚠️ No authorized trainers assigned to this project</option>
+                      ) : (
+                        <>
+                          <option value="">-- Select Responsible Trainer --</option>
+                          {eligibleTrainers.map(t => (
+                            <option key={t.id} value={t.id}>
+                              {t.name} ({t.email}){t.id === user?.id ? ' — You' : ''}
+                            </option>
+                          ))}
+                        </>
+                      )}
+                    </select>
+                    {meetingForm.projectId && !trainersLoading && eligibleTrainers.length === 0 && (
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
+                        ⚠️ No eligible trainers found with active assignment to this project.
+                      </p>
+                    )}
                   </div>
 
                   {/* Meeting Platform Selection */}

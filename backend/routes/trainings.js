@@ -116,6 +116,115 @@ async function sendInviteEmail(user, title, description, scheduledAt, url, proje
   }
 }
 
+async function validateTrainerEligibility(trainerId, projectId) {
+  if (!trainerId) return { valid: false, error: 'Trainer selection is required' };
+
+  const User = require('../models/User');
+  const Role = require('../models/Role');
+  const ProjectAssignment = require('../models/ProjectAssignment');
+
+  const trainerUser = await User.findByPk(trainerId, {
+    include: [{ model: Role, attributes: ['id', 'role_name'] }]
+  });
+
+  if (!trainerUser) {
+    return { valid: false, error: 'Assigned trainer user not found.' };
+  }
+
+  const roleName = trainerUser.Role ? trainerUser.Role.role_name : '';
+  if (roleName !== 'Trainer') {
+    return { valid: false, error: `Selected user "${trainerUser.name}" does not have the Trainer role (current role: ${roleName || 'None'}).` };
+  }
+
+  if (trainerUser.status !== 'Active') {
+    return { valid: false, error: `Selected trainer "${trainerUser.name}" is not Active (status: ${trainerUser.status}).` };
+  }
+
+  // If projectId is provided, verify active trainer assignment to that project
+  if (projectId) {
+    const activeAssignment = await ProjectAssignment.findOne({
+      where: {
+        userId: trainerId,
+        projectId: projectId,
+        status: 'Active'
+      }
+    });
+
+    const isPrimaryProject = trainerUser.projectId && String(trainerUser.projectId).split(',').map(s => s.trim()).includes(String(projectId));
+
+    if (!activeAssignment && !isPrimaryProject) {
+      return {
+        valid: false,
+        error: `Trainer "${trainerUser.name}" is not assigned to this project. Please select an eligible trainer assigned to this project.`
+      };
+    }
+  }
+
+  return { valid: true, trainer: trainerUser };
+}
+
+async function sendTrainerAssignmentEmail(trainerUser, title, description, scheduledAt, url, projectName, action = 'scheduled') {
+  if (!trainerUser || !trainerUser.email) return;
+
+  const actionMap = {
+    scheduled: { subject: `Class Assignment: ${title} (${projectName})`, heading: '🎓 New Live Training Class Assigned' },
+    rescheduled: { subject: `Class Rescheduled: ${title} (${projectName})`, heading: '⏰ Training Class Rescheduled' },
+    reassigned: { subject: `Class Assigned to You: ${title} (${projectName})`, heading: '🔄 Training Class Assigned to You' },
+    cancelled: { subject: `Class Cancelled: ${title} (${projectName})`, heading: '🚫 Training Class Cancelled' }
+  };
+  const meta = actionMap[action] || actionMap.scheduled;
+
+  console.log('\n================================================================================');
+  console.log(`✉️  TRAINER NOTIFICATION [${action.toUpperCase()}]: "${title}"`);
+  console.log(`Trainer: ${trainerUser.name} <${trainerUser.email}>`);
+  console.log(`Project: ${projectName}`);
+  console.log(`Scheduled At: ${scheduledAt ? formatKolkataDateTime(scheduledAt) : 'TBD'} (IST)`);
+  console.log(`Meeting Link: ${url}`);
+  console.log('================================================================================');
+
+  try {
+    const transporter = await getTransporter();
+    const info = await transporter.sendMail({
+      from: process.env.SMTP_USER ? `"QuizHive LMS" <${process.env.SMTP_USER}>` : '"QuizHive LMS" <no-reply@quizhive.com>',
+      to: `${trainerUser.name} <${trainerUser.email}>`,
+      subject: meta.subject,
+      text: `Hi ${trainerUser.name},\n\nYou have been assigned as the trainer for "${title}" under project "${projectName}".\n\nDate & Time: ${scheduledAt ? formatKolkataDateTime(scheduledAt) : 'TBD'} (IST)\nMeeting Link: ${url}\n\nPlease prepare your materials and host the session on time.\n\nBest regards,\nRetailEdge PRO LMS Operations`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; padding: 25px; color: #1e293b; background-color: #f8fafc; border-radius: 12px; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0;">
+          <h2 style="color: #2563eb; margin-top: 0; font-size: 1.5rem;">${meta.heading}</h2>
+          <p>Hi <strong>${trainerUser.name}</strong>,</p>
+          <p>You have been assigned as the responsible trainer for training class on project <strong style="color: #f36f21;">"${projectName}"</strong>.</p>
+          <div style="background-color: #ffffff; padding: 18px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 20px 0;">
+            <p style="margin: 0 0 10px 0;"><strong>Session Details:</strong></p>
+            <table style="width: 100%; font-size: 0.9rem; border-collapse: collapse;">
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; width: 110px;">Topic:</td>
+                <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${title}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b; vertical-align: top;">Description:</td>
+                <td style="padding: 6px 0; color: #334155;">${description || 'No description provided.'}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b;">Date & Time:</td>
+                <td style="padding: 6px 0; font-weight: 600; color: #0f172a;">${scheduledAt ? formatKolkataDateTime(scheduledAt) : 'TBD'} (IST)</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 0; color: #64748b;">Host Link:</td>
+                <td style="padding: 6px 0;"><a href="${url}" style="color: #2563eb; font-weight: 600; text-decoration: none;">Launch / Join Live Meeting</a></td>
+              </tr>
+            </table>
+          </div>
+          <p style="font-size: 0.85rem; color: #64748b;">This session has been added directly to your Trainer Workspace and Calendar.</p>
+        </div>
+      `
+    });
+    console.log(`✉️ Trainer notification sent to ${trainerUser.email} (Msg ID: ${info.messageId})`);
+  } catch (err) {
+    console.error(`❌ Error sending notification to trainer ${trainerUser.email}:`, err);
+  }
+}
+
 function getZoneFromCoords(lat, lng, defaultLocation) {
   if (lat === undefined || lat === null || lng === undefined || lng === null) {
     if (defaultLocation) {
@@ -214,19 +323,40 @@ router.get('/', requireAuth, async (req, res) => {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       const { projectId } = req.query;
+      let projectCondition;
       if (projectId === '') {
-        whereClause.projectId = null;
+        projectCondition = { projectId: null };
       } else if (projectId && projectId !== 'all') {
         if (!accessibleProjectIds.includes(projectId)) {
           return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
         }
-        whereClause.projectId = projectId;
+        projectCondition = { projectId: projectId };
       } else {
-        whereClause[Op.or] = [
-          { projectId: { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] } },
-          { projectId: null }
-        ];
+        projectCondition = {
+          [Op.or]: [
+            { projectId: { [Op.in]: accessibleProjectIds.length > 0 ? accessibleProjectIds : ['00000000-0000-0000-0000-000000000000'] } },
+            { projectId: null }
+          ]
+        };
       }
+
+      // Safeguard 5: A trainer must not see another trainer's assigned meeting merely because they created it.
+      // - Meeting items (type === 'Meeting'):
+      //   - If trainerId is not null: visible ONLY if trainerId === req.user.id
+      //   - If trainerId is null (legacy session): visible to project trainers as before
+      // - Non-meeting items (type !== 'Meeting'): visible to project trainers as before
+      whereClause = {
+        [Op.and]: [
+          projectCondition,
+          {
+            [Op.or]: [
+              { type: { [Op.ne]: 'Meeting' } },
+              { [Op.and]: [{ type: 'Meeting' }, { trainerId: req.user.id }] },
+              { [Op.and]: [{ type: 'Meeting' }, { trainerId: null }] }
+            ]
+          }
+        ]
+      };
     } else if (userRole === 'Program Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
@@ -255,9 +385,14 @@ router.get('/', requireAuth, async (req, res) => {
       }
     }
 
+    const User = require('../models/User');
     const trainings = await Training.findAll({
       where: whereClause,
-      include: [{ model: Project, attributes: ['id', 'name'] }],
+      include: [
+        { model: Project, attributes: ['id', 'name'] },
+        { model: User, as: 'Trainer', attributes: ['id', 'name', 'email'] },
+        { model: User, as: 'Creator', attributes: ['id', 'name', 'email'] }
+      ],
       order: [['createdAt', 'ASC']]
     });
 
@@ -328,6 +463,57 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
       return res.status(400).json({ error: 'Scheduled date and time is required for meeting sessions.' });
     }
 
+    let assignedTrainerId = null;
+    let trainerUser = null;
+
+    if (type === 'Meeting') {
+      if (req.user.role === 'Trainer' && !req.body.trainerId && (!req.body.trainerIds || !req.body.trainerIds.length)) {
+        assignedTrainerId = req.user.id;
+      } else {
+        assignedTrainerId = req.body.trainerId || (Array.isArray(req.body.trainerIds) && req.body.trainerIds[0]) || null;
+      }
+
+      // Auto-resolve project trainer if not explicitly specified and project has an active assigned trainer
+      if (!assignedTrainerId && projectId) {
+        const Role = require('../models/Role');
+        const User = require('../models/User');
+        const ProjectAssignment = require('../models/ProjectAssignment');
+        const trainerRole = await Role.findOne({ where: { role_name: 'Trainer' } });
+        if (trainerRole) {
+          const assignments = await ProjectAssignment.findAll({
+            where: { projectId, status: 'Active' },
+            include: [{
+              model: User,
+              where: { roleId: trainerRole.id, status: 'Active' },
+              attributes: ['id']
+            }]
+          });
+          if (assignments.length === 1 && assignments[0].User) {
+            assignedTrainerId = assignments[0].User.id;
+          } else if (assignments.length === 0) {
+            const directTrainers = await User.findAll({
+              where: { roleId: trainerRole.id, status: 'Active' },
+              attributes: ['id', 'projectId']
+            });
+            const matching = directTrainers.filter(u =>
+              u.projectId && String(u.projectId).split(',').map(s => s.trim()).includes(String(projectId))
+            );
+            if (matching.length === 1) {
+              assignedTrainerId = matching[0].id;
+            }
+          }
+        }
+      }
+
+      if (assignedTrainerId) {
+        const eligibility = await validateTrainerEligibility(assignedTrainerId, projectId);
+        if (!eligibility.valid) {
+          return res.status(400).json({ error: eligibility.error });
+        }
+        trainerUser = eligibility.trainer;
+      }
+    }
+
     const newTraining = await Training.create({
       title,
       description,
@@ -335,8 +521,21 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
       url: formattedUrl,
       duration: duration || '10 mins',
       projectId: projectId || null,
-      scheduledAt: normalizedScheduledAt
+      scheduledAt: normalizedScheduledAt,
+      trainerId: assignedTrainerId || null,
+      createdBy: req.user.id,
+      platform: req.body.platform || 'google_meet',
+      status: 'Scheduled'
     });
+
+    if (type === 'Meeting' && assignedTrainerId && trainerUser) {
+      let projectName = 'General (Global)';
+      if (projectId) {
+        const proj = await Project.findByPk(projectId);
+        if (proj) projectName = proj.name;
+      }
+      sendTrainerAssignmentEmail(trainerUser, title, description, normalizedScheduledAt, formattedUrl, projectName, 'scheduled');
+    }
 
     res.status(201).json(newTraining);
   } catch (error) {
@@ -825,7 +1024,7 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
       }
     }
 
-    const { title, description, type, url, duration, projectId, scheduledAt } = req.body;
+    const { title, description, type, url, duration, projectId, scheduledAt, trainerId, platform, status } = req.body;
     let finalUrl = url;
     if (req.file) {
       finalUrl = `/uploads/${req.file.filename}`;
@@ -843,20 +1042,98 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
     }
     if (duration !== undefined) training.duration = duration;
     if (projectId !== undefined) training.projectId = projectId || null;
+    if (platform !== undefined) training.platform = platform;
+    if (status !== undefined) {
+      const prevStatus = training.status;
+      training.status = status;
+      if (status === 'Cancelled' && prevStatus !== 'Cancelled' && training.trainerId) {
+        const User = require('../models/User');
+        const trainer = await User.findByPk(training.trainerId);
+        let projectName = 'General (Global)';
+        if (training.projectId) {
+          const proj = await Project.findByPk(training.projectId);
+          if (proj) projectName = proj.name;
+        }
+        if (trainer) {
+          sendTrainerAssignmentEmail(trainer, training.title, training.description, training.scheduledAt, training.url, projectName, 'cancelled');
+        }
+      }
+    }
+
+    let scheduledAtChanged = false;
     if (scheduledAt !== undefined) {
       if (scheduledAt) {
         const normalized = kolkataToUtcIso(scheduledAt);
         if (!normalized) {
           return res.status(400).json({ error: 'Invalid scheduledAt date/time format.' });
         }
-        training.scheduledAt = normalized;
+        if (training.scheduledAt !== normalized) {
+          scheduledAtChanged = true;
+          training.scheduledAt = normalized;
+        }
       } else {
+        if (training.scheduledAt !== null) scheduledAtChanged = true;
         training.scheduledAt = null;
       }
     }
 
+    // Handle trainer assignment/reassignment
+    if (trainerId !== undefined && trainerId !== training.trainerId) {
+      const User = require('../models/User');
+      const oldTrainerId = training.trainerId;
+      const targetProjectId = projectId !== undefined ? projectId : training.projectId;
+
+      if (trainerId) {
+        const eligibility = await validateTrainerEligibility(trainerId, targetProjectId);
+        if (!eligibility.valid) {
+          return res.status(400).json({ error: eligibility.error });
+        }
+        training.trainerId = trainerId;
+
+        let projectName = 'General (Global)';
+        if (targetProjectId) {
+          const proj = await Project.findByPk(targetProjectId);
+          if (proj) projectName = proj.name;
+        }
+
+        // Notify newly assigned trainer
+        sendTrainerAssignmentEmail(eligibility.trainer, training.title, training.description, training.scheduledAt, training.url, projectName, 'reassigned');
+
+        // If old trainer existed, notify them of cancellation/reassignment
+        if (oldTrainerId) {
+          const oldTrainer = await User.findByPk(oldTrainerId);
+          if (oldTrainer) {
+            sendTrainerAssignmentEmail(oldTrainer, training.title, training.description, training.scheduledAt, training.url, projectName, 'cancelled');
+          }
+        }
+      } else {
+        training.trainerId = null;
+      }
+    } else if (scheduledAtChanged && training.trainerId) {
+      const User = require('../models/User');
+      const trainer = await User.findByPk(training.trainerId);
+      let projectName = 'General (Global)';
+      if (training.projectId) {
+        const proj = await Project.findByPk(training.projectId);
+        if (proj) projectName = proj.name;
+      }
+      if (trainer) {
+        sendTrainerAssignmentEmail(trainer, training.title, training.description, training.scheduledAt, training.url, projectName, 'rescheduled');
+      }
+    }
+
     await training.save();
-    res.json(training);
+
+    const User = require('../models/User');
+    const updatedTraining = await Training.findByPk(training.id, {
+      include: [
+        { model: Project, attributes: ['id', 'name'] },
+        { model: User, as: 'Trainer', attributes: ['id', 'name', 'email'] },
+        { model: User, as: 'Creator', attributes: ['id', 'name', 'email'] }
+      ]
+    });
+
+    res.json(updatedTraining);
   } catch (error) {
     res.status(500).json({ error: 'Failed to update training', details: error.message });
   }
@@ -884,6 +1161,20 @@ router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program
       }
     }
 
+    // If meeting had an assigned trainer, notify them of cancellation before deletion
+    if (training.type === 'Meeting' && training.trainerId) {
+      const User = require('../models/User');
+      const trainer = await User.findByPk(training.trainerId);
+      let projectName = 'General (Global)';
+      if (training.projectId) {
+        const proj = await Project.findByPk(training.projectId);
+        if (proj) projectName = proj.name;
+      }
+      if (trainer) {
+        sendTrainerAssignmentEmail(trainer, training.title, training.description, training.scheduledAt, training.url, projectName, 'cancelled');
+      }
+    }
+
     await training.destroy();
     res.json({ message: 'Training material deleted successfully' });
   } catch (error) {
@@ -891,10 +1182,10 @@ router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program
   }
 });
 
-// POST /api/trainings/schedule-meeting - Schedule a training meeting & send simulated emails
+// POST /api/trainings/schedule-meeting - Schedule a training meeting with trainer assignment & notifications
 router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
-    const { title, description, projectId, scheduledAt, url, inviteeIds } = req.body;
+    const { title, description, projectId, scheduledAt, url, inviteeIds, trainerId, trainerIds, platform } = req.body;
 
     if (!title || !url || !scheduledAt) {
       return res.status(400).json({ error: 'Title, URL, and Date/Time are required' });
@@ -923,20 +1214,87 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       return res.status(400).json({ error: 'Project is required to schedule a meeting.' });
     }
 
+    // Resolve primary trainer assignment
+    let assignedTrainerId = trainerId || (Array.isArray(trainerIds) && trainerIds[0]) || null;
+    if (req.user.role === 'Trainer' && !assignedTrainerId) {
+      assignedTrainerId = req.user.id;
+    }
+
+    // Auto-resolve project trainer if not explicitly specified and project has an active assigned trainer
+    if (!assignedTrainerId && projectId) {
+      const Role = require('../models/Role');
+      const User = require('../models/User');
+      const ProjectAssignment = require('../models/ProjectAssignment');
+      const trainerRole = await Role.findOne({ where: { role_name: 'Trainer' } });
+      if (trainerRole) {
+        const assignments = await ProjectAssignment.findAll({
+          where: { projectId, status: 'Active' },
+          include: [{
+            model: User,
+            where: { roleId: trainerRole.id, status: 'Active' },
+            attributes: ['id']
+          }]
+        });
+        if (assignments.length === 1 && assignments[0].User) {
+          assignedTrainerId = assignments[0].User.id;
+        } else if (assignments.length === 0) {
+          const directTrainers = await User.findAll({
+            where: { roleId: trainerRole.id, status: 'Active' },
+            attributes: ['id', 'projectId']
+          });
+          const matching = directTrainers.filter(u =>
+            u.projectId && String(u.projectId).split(',').map(s => s.trim()).includes(String(projectId))
+          );
+          if (matching.length === 1) {
+            assignedTrainerId = matching[0].id;
+          }
+        }
+      }
+    }
+
+    let trainerUser = null;
+    if (assignedTrainerId) {
+      const eligibility = await validateTrainerEligibility(assignedTrainerId, projectId);
+      if (!eligibility.valid) {
+        return res.status(400).json({ error: eligibility.error });
+      }
+      trainerUser = eligibility.trainer;
+    }
+
     let formattedUrl = url.trim();
     if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
       formattedUrl = 'https://' + formattedUrl;
     }
 
-    // 1. Create the Training meeting
+    // 60-second duplicate submission guard
+    const { Op } = require('sequelize');
+    const recentDuplicate = await Training.findOne({
+      where: {
+        title: title.trim(),
+        projectId: projectId || null,
+        trainerId: assignedTrainerId || null,
+        scheduledAt: normalizedScheduledAt,
+        createdAt: { [Op.gte]: new Date(Date.now() - 60000) }
+      }
+    });
+
+    if (recentDuplicate) {
+      return res.status(409).json({ error: 'A meeting with this topic, trainer, and date/time was just created. Please avoid duplicate submission.' });
+    }
+
+    // 1. Create the Training meeting with trainerId, createdBy, platform, status
     const newMeeting = await Training.create({
-      title,
+      title: title.trim(),
       description,
       type: 'Meeting',
       url: formattedUrl,
-      duration: '1 hour', // default duration
+      duration: '1 hour',
       projectId: projectId || null,
-      scheduledAt: normalizedScheduledAt
+      scheduledAt: normalizedScheduledAt,
+      trainerId: assignedTrainerId || null,
+      createdBy: req.user.id,
+      platform: platform || 'google_meet',
+      status: 'Scheduled'
     });
 
     // 2. Fetch invitees details
@@ -960,23 +1318,24 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       }
     }
 
-    // 4. Simulate sending emails by logging to backend console
+    // 4. Send assigned trainer notification
+    if (assignedTrainerId && trainerUser) {
+      sendTrainerAssignmentEmail(trainerUser, title, description, normalizedScheduledAt, formattedUrl, projectName, 'scheduled');
+    }
+
+    // 5. Send attendee notifications & create TrainingProgress
     console.log('\n================================================================================');
-    console.log(`✉️  SIMULATED EMAIL NOTIFICATIONS FOR MEETING: "${title}"`);
+    console.log(`✉️  ATTENDEE INVITATIONS FOR MEETING: "${title}"`);
     console.log(`Project: ${projectName}`);
+    console.log(`Trainer: ${trainerUser ? `${trainerUser.name} <${trainerUser.email}>` : 'Unassigned'}`);
     console.log(`Scheduled At: ${formatKolkataDateTime(normalizedScheduledAt)} (IST)`);
-    console.log(`Google Meet Link: ${url}`);
+    console.log(`Meeting Link: ${formattedUrl}`);
     console.log('================================================================================');
     
     for (const user of invitees) {
-      console.log(`\nTo: ${user.name} <${user.email}>`);
-      console.log(`Subject: Meeting Invitation: ${title} - ${projectName}`);
-      console.log(`Body:\nHi ${user.name},\n\nYou have been invited to a training meeting for project "${projectName}".\n\nDetails:\n- Topic: ${title}\n- Description: ${description || 'No description provided.'}\n- Date & Time: ${formatKolkataDateTime(normalizedScheduledAt)} (IST)\n- Join Link: ${url}\n\nPlease join the meeting on time.\n\nBest regards,\nLMS Training Team`);
-      console.log('--------------------------------------------------------------------------------');
-      
       const defaultZone = getZoneFromCoords(null, null, user.location);
 
-      // Auto-populate TrainingProgress for the invited users so they have it pending/incomplete in their training logs
+      // Auto-populate TrainingProgress for the invited users
       await TrainingProgress.findOrCreate({
         where: {
           userId: user.id,
@@ -1000,7 +1359,7 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
     }
 
     res.status(201).json({
-      message: 'Meeting scheduled successfully and invitation emails sent (simulated).',
+      message: 'Meeting scheduled successfully and invitation notifications dispatched.',
       meeting: newMeeting,
       inviteeCount: invitees.length
     });

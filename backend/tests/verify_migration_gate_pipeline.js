@@ -52,7 +52,7 @@ async function runTests() {
   // --- 1. Migration Ordering & Definition ---
   console.log('--- 1. Deterministic Migration Ordering ---');
   testAssert(Array.isArray(migrationGate.MIGRATION_PIPELINE), 'Pipeline is an array');
-  testAssert(migrationGate.MIGRATION_PIPELINE.length === 2, 'Pipeline contains exactly 2 migrations');
+  testAssert(migrationGate.MIGRATION_PIPELINE.length === 3, 'Pipeline contains exactly 3 migrations');
   testAssert(
     migrationGate.MIGRATION_PIPELINE[0].name === '20261021_add_zone_to_participants_and_project_assignments',
     'Migration 1 is 20261021 (Participants & ProjectAssignments)'
@@ -60,6 +60,10 @@ async function runTests() {
   testAssert(
     migrationGate.MIGRATION_PIPELINE[1].name === '20261026_add_zone_to_jitsi_attendance',
     'Migration 2 is 20261026 (JitsiAttendances)'
+  );
+  testAssert(
+    migrationGate.MIGRATION_PIPELINE[2].name === '20261027_add_trainer_and_scheduling_to_trainings',
+    'Migration 3 is 20261027 (Trainings trainerId & scheduling)'
   );
 
   // --- 2. Secret Masking ---
@@ -175,6 +179,69 @@ async function runTests() {
   testAssert(emptyRes20261026.allValid === false, 'Empty catalog correctly identified as not valid');
   testAssert(emptyRes20261026.incompatibleError === null, 'Missing objects do not trigger incompatibility conflict');
 
+  // --- 6B. Catalog Verification: 20261027 ---
+  console.log('\n--- 6B. Catalog Verification: 20261027 ---');
+  const valid20261027Client = {
+    query: async (sql) => {
+      if (sql.includes('information_schema.columns')) {
+        return {
+          rows: [
+            { table_name: 'Trainings', column_name: 'trainerId', data_type: 'uuid', character_maximum_length: null, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'createdBy', data_type: 'uuid', character_maximum_length: null, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'platform', data_type: 'character varying', character_maximum_length: 50, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'status', data_type: 'character varying', character_maximum_length: 50, is_nullable: 'YES' }
+          ]
+        };
+      }
+      if (sql.includes('pg_index')) {
+        return {
+          rows: [
+            {
+              table_name: 'Trainings',
+              index_name: 'idx_trainings_trainer_id',
+              is_valid: true,
+              is_ready: true,
+              index_definition: 'CREATE INDEX idx_trainings_trainer_id ON "Trainings" ("trainerId")'
+            },
+            {
+              table_name: 'Trainings',
+              index_name: 'idx_trainings_proj_trainer',
+              is_valid: true,
+              is_ready: true,
+              index_definition: 'CREATE INDEX idx_trainings_proj_trainer ON "Trainings" ("projectId", "trainerId")'
+            }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+
+  const res20261027 = await migrationGate.verifyCatalog20261027(valid20261027Client);
+  testAssert(res20261027.allValid === true, 'Valid 20261027 schema correctly identified as allValid');
+  testAssert(res20261027.trainerIdValid === true, 'Trainings.trainerId is valid');
+  testAssert(res20261027.createdByValid === true, 'Trainings.createdBy is valid');
+  testAssert(res20261027.platformValid === true, 'Trainings.platform is valid');
+  testAssert(res20261027.statusValid === true, 'Trainings.status is valid');
+  testAssert(res20261027.trainerIdxValid === true, 'idx_trainings_trainer_id is valid');
+  testAssert(res20261027.projTrainerIdxValid === true, 'idx_trainings_proj_trainer is valid');
+
+  const incomp20261027Client = {
+    query: async (sql) => {
+      if (sql.includes('information_schema.columns')) {
+        return {
+          rows: [
+            { table_name: 'Trainings', column_name: 'trainerId', data_type: 'integer', character_maximum_length: null, is_nullable: 'NO' }
+          ]
+        };
+      }
+      return { rows: [] };
+    }
+  };
+  const incompRes20261027 = await migrationGate.verifyCatalog20261027(incomp20261027Client);
+  testAssert(incompRes20261027.allValid === false, 'Incompatible 20261027 schema rejected');
+  testAssert(incompRes20261027.incompatibleError.includes('Incompatible column Trainings.trainerId'), 'Identifies Trainings.trainerId conflict');
+
   // --- 7. Backup Gate Failure (Fail-Closed) ---
   console.log('\n--- 7. Backup Gate Failure (Fail Closed) ---');
   const origVerified = process.env.RDS_BACKUP_VERIFIED;
@@ -209,7 +276,11 @@ async function runTests() {
           rows: [
             { table_name: 'Participants', column_name: 'zone', data_type: 'character varying', character_maximum_length: 255, is_nullable: 'YES' },
             { table_name: 'ProjectAssignments', column_name: 'zone', data_type: 'character varying', character_maximum_length: 255, is_nullable: 'YES' },
-            { table_name: 'JitsiAttendances', column_name: 'zone', data_type: 'character varying', character_maximum_length: 255, is_nullable: 'YES' }
+            { table_name: 'JitsiAttendances', column_name: 'zone', data_type: 'character varying', character_maximum_length: 255, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'trainerId', data_type: 'uuid', character_maximum_length: null, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'createdBy', data_type: 'uuid', character_maximum_length: null, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'platform', data_type: 'character varying', character_maximum_length: 50, is_nullable: 'YES' },
+            { table_name: 'Trainings', column_name: 'status', data_type: 'character varying', character_maximum_length: 50, is_nullable: 'YES' }
           ]
         };
       }
@@ -236,6 +307,20 @@ async function runTests() {
               is_valid: true,
               is_ready: true,
               index_definition: 'CREATE INDEX idx_jitsi_attendance_emp_zone ON "JitsiAttendances" ("employeeId", "zone")'
+            },
+            {
+              table_name: 'Trainings',
+              index_name: 'idx_trainings_trainer_id',
+              is_valid: true,
+              is_ready: true,
+              index_definition: 'CREATE INDEX idx_trainings_trainer_id ON "Trainings" ("trainerId")'
+            },
+            {
+              table_name: 'Trainings',
+              index_name: 'idx_trainings_proj_trainer',
+              is_valid: true,
+              is_ready: true,
+              index_definition: 'CREATE INDEX idx_trainings_proj_trainer ON "Trainings" ("projectId", "trainerId")'
             }
           ]
         };

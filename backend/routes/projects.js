@@ -196,6 +196,74 @@ router.get('/my-projects', requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/projects/:id/trainers - Returns active, eligible trainers assigned to the project
+router.get('/:id/trainers', requireAuth, async (req, res) => {
+  try {
+    const projectId = req.params.id;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!UUID_REGEX.test(projectId)) {
+      return res.status(400).json({ error: 'Invalid project ID format' });
+    }
+
+    const project = await Project.findByPk(projectId);
+    if (!project) {
+      return res.status(404).json({ error: 'Project not found' });
+    }
+
+    const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
+    const isAdmin = ['Admin', 'Super Admin', 'MD', 'COO', 'VP Operations'].includes(userRole);
+
+    // Scoping: verify caller has access to this project
+    if (!isAdmin) {
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view trainers for this project' });
+      }
+    }
+
+    const Role = require('../models/Role');
+    const ProjectAssignment = require('../models/ProjectAssignment');
+    const { Op } = require('sequelize');
+
+    // Canonical Trainer Role lookup
+    const trainerRole = await Role.findOne({ where: { role_name: 'Trainer' } });
+    if (!trainerRole) {
+      return res.json([]);
+    }
+
+    // 1. Find all active ProjectAssignments for this project
+    const assignedRows = await ProjectAssignment.findAll({
+      where: {
+        projectId,
+        status: 'Active'
+      },
+      attributes: ['userId', 'role']
+    });
+
+    const candidateUserIds = new Set(assignedRows.map(a => a.userId));
+
+    // 2. Query active users who have role Trainer and either an active assignment or primary User.projectId
+    const trainers = await User.findAll({
+      where: {
+        status: 'Active',
+        roleId: trainerRole.id,
+        [Op.or]: [
+          ...(candidateUserIds.size > 0 ? [{ id: { [Op.in]: Array.from(candidateUserIds) } }] : []),
+          { projectId: projectId },
+          { projectId: { [Op.like]: `%${projectId}%` } }
+        ]
+      },
+      attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location'],
+      order: [['name', 'ASC']]
+    });
+
+    res.json(trainers);
+  } catch (error) {
+    console.error('GET /api/projects/:id/trainers error:', error);
+    res.status(500).json({ error: 'Failed to fetch project trainers', details: error.message });
+  }
+});
+
 // GET /api/projects/intelligence - Unified scoped intelligence payload for PM Dashboard
 router.get('/intelligence', requireAuth, async (req, res) => {
   try {
