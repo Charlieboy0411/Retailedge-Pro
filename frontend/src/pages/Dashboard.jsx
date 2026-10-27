@@ -54,6 +54,7 @@ export default function Dashboard() {
 
   const [eligibleTrainers, setEligibleTrainers] = useState([]);
   const [trainersLoading, setTrainersLoading] = useState(false);
+  const [trainersError, setTrainersError] = useState(null);
   const [meetingForm, setMeetingForm] = useState({
     title: '',
     description: '',
@@ -183,6 +184,7 @@ export default function Dashboard() {
     if (projId) {
       try {
         setTrainersLoading(true);
+        setTrainersError(null);
         const res = await axios.get(`/api/projects/${projId}/trainers`, {
           headers: { Authorization: `Bearer ${token}` }
         });
@@ -195,12 +197,14 @@ export default function Dashboard() {
         }
       } catch (err) {
         console.error('Failed to fetch project trainers:', err);
+        setTrainersError(err.response?.data?.error || err.message || 'Failed to load authorized trainers');
         setEligibleTrainers([]);
       } finally {
         setTrainersLoading(false);
       }
     } else {
       setEligibleTrainers([]);
+      setTrainersError(null);
     }
   };
 
@@ -852,6 +856,8 @@ export default function Dashboard() {
                         )
                       ) : trainersLoading ? (
                         <option value="">Loading authorized trainers...</option>
+                      ) : trainersError ? (
+                        <option value="">⚠️ {trainersError}</option>
                       ) : eligibleTrainers.length === 0 ? (
                         <option value="">⚠️ No authorized trainers assigned to this project</option>
                       ) : (
@@ -865,7 +871,12 @@ export default function Dashboard() {
                         </>
                       )}
                     </select>
-                    {meetingForm.projectId && !trainersLoading && eligibleTrainers.length === 0 && (
+                    {meetingForm.projectId && !trainersLoading && trainersError && (
+                      <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
+                        ⚠️ Error loading trainers: {trainersError}
+                      </p>
+                    )}
+                    {meetingForm.projectId && !trainersLoading && !trainersError && eligibleTrainers.length === 0 && (
                       <p style={{ margin: '4px 0 0 0', fontSize: '0.75rem', color: '#ef4444' }}>
                         ⚠️ No eligible trainers found with active assignment to this project.
                       </p>

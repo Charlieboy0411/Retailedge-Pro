@@ -231,10 +231,20 @@ router.get('/:id/trainers', requireAuth, async (req, res) => {
       return res.json([]);
     }
 
-    // 1. Find all active ProjectAssignments for this project
+    // Effective project IDs: include the project and its parent(s) if this is a subproject
+    const effectiveProjectIds = [projectId];
+    const visited = new Set([projectId]);
+    let curr = project;
+    while (curr && curr.parentId && !visited.has(curr.parentId)) {
+      visited.add(curr.parentId);
+      effectiveProjectIds.push(curr.parentId);
+      curr = await Project.findByPk(curr.parentId, { attributes: ['id', 'parentId'] });
+    }
+
+    // 1. Find all active ProjectAssignments for this project or its parent hierarchy
     const assignedRows = await ProjectAssignment.findAll({
       where: {
-        projectId,
+        projectId: { [Op.in]: effectiveProjectIds },
         status: 'Active'
       },
       attributes: ['userId', 'role']
@@ -242,18 +252,25 @@ router.get('/:id/trainers', requireAuth, async (req, res) => {
 
     const candidateUserIds = new Set(assignedRows.map(a => a.userId));
 
-    // 2. Query active users who have role Trainer and either an active assignment or primary User.projectId
-    const trainers = await User.findAll({
+    // 2. Query active users who have canonical role Trainer
+    const allTrainers = await User.findAll({
       where: {
         status: 'Active',
-        roleId: trainerRole.id,
-        [Op.or]: [
-          ...(candidateUserIds.size > 0 ? [{ id: { [Op.in]: Array.from(candidateUserIds) } }] : []),
-          { projectId: projectId }
-        ]
+        roleId: trainerRole.id
       },
-      attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location'],
+      attributes: ['id', 'name', 'email', 'employee_id', 'designation', 'location', 'projectId'],
       order: [['name', 'ASC']]
+    });
+
+    const trainers = allTrainers.filter(t => {
+      if (candidateUserIds.has(t.id)) return true;
+      if (!t.projectId) return false;
+      const userProjects = String(t.projectId).split(',').map(s => s.trim());
+      return userProjects.some(pId => effectiveProjectIds.includes(pId));
+    }).map(t => {
+      const raw = t.toJSON ? t.toJSON() : t;
+      const { projectId: _, ...clean } = raw;
+      return clean;
     });
 
     res.json(trainers);

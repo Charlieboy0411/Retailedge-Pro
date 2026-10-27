@@ -140,17 +140,32 @@ async function validateTrainerEligibility(trainerId, projectId) {
     return { valid: false, error: `Selected trainer "${trainerUser.name}" is not Active (status: ${trainerUser.status}).` };
   }
 
-  // If projectId is provided, verify active trainer assignment to that project
+  // If projectId is provided, verify active trainer assignment to that project or its parent hierarchy
   if (projectId) {
+    const Project = require('../models/Project');
+    const { Op } = require('sequelize');
+    const project = await Project.findByPk(projectId, { attributes: ['id', 'parentId'] });
+    const effectiveProjectIds = [projectId];
+    const visited = new Set([projectId]);
+    let curr = project;
+    while (curr && curr.parentId && !visited.has(curr.parentId)) {
+      visited.add(curr.parentId);
+      effectiveProjectIds.push(curr.parentId);
+      curr = await Project.findByPk(curr.parentId, { attributes: ['id', 'parentId'] });
+    }
+
     const activeAssignment = await ProjectAssignment.findOne({
       where: {
         userId: trainerId,
-        projectId: projectId,
+        projectId: { [Op.in]: effectiveProjectIds },
         status: 'Active'
       }
     });
 
-    const isPrimaryProject = trainerUser.projectId && String(trainerUser.projectId).split(',').map(s => s.trim()).includes(String(projectId));
+    const userProjects = trainerUser.projectId
+      ? String(trainerUser.projectId).split(',').map(s => s.trim())
+      : [];
+    const isPrimaryProject = userProjects.some(pId => effectiveProjectIds.includes(pId));
 
     if (!activeAssignment && !isPrimaryProject) {
       return {
@@ -478,10 +493,22 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
         const Role = require('../models/Role');
         const User = require('../models/User');
         const ProjectAssignment = require('../models/ProjectAssignment');
+        const Project = require('../models/Project');
+        const { Op } = require('sequelize');
         const trainerRole = await Role.findOne({ where: { role_name: 'Trainer' } });
         if (trainerRole) {
+          const project = await Project.findByPk(projectId, { attributes: ['id', 'parentId'] });
+          const effectiveProjectIds = [projectId];
+          const visited = new Set([projectId]);
+          let curr = project;
+          while (curr && curr.parentId && !visited.has(curr.parentId)) {
+            visited.add(curr.parentId);
+            effectiveProjectIds.push(curr.parentId);
+            curr = await Project.findByPk(curr.parentId, { attributes: ['id', 'parentId'] });
+          }
+
           const assignments = await ProjectAssignment.findAll({
-            where: { projectId, status: 'Active' },
+            where: { projectId: { [Op.in]: effectiveProjectIds }, status: 'Active' },
             include: [{
               model: User,
               where: { roleId: trainerRole.id, status: 'Active' },
@@ -491,13 +518,18 @@ router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Mana
           if (assignments.length === 1 && assignments[0].User) {
             assignedTrainerId = assignments[0].User.id;
           } else if (assignments.length === 0) {
-            const directTrainers = await User.findAll({
-              where: { roleId: trainerRole.id, status: 'Active' },
+            const allActiveTrainers = await User.findAll({
+              where: {
+                roleId: trainerRole.id,
+                status: 'Active'
+              },
               attributes: ['id', 'projectId']
             });
-            const matching = directTrainers.filter(u =>
-              u.projectId && String(u.projectId).split(',').map(s => s.trim()).includes(String(projectId))
-            );
+            const matching = allActiveTrainers.filter(u => {
+              if (!u.projectId) return false;
+              const pIds = String(u.projectId).split(',').map(s => s.trim());
+              return pIds.some(pId => effectiveProjectIds.includes(pId));
+            });
             if (matching.length === 1) {
               assignedTrainerId = matching[0].id;
             }
@@ -1225,10 +1257,22 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
       const Role = require('../models/Role');
       const User = require('../models/User');
       const ProjectAssignment = require('../models/ProjectAssignment');
+      const Project = require('../models/Project');
+      const { Op } = require('sequelize');
       const trainerRole = await Role.findOne({ where: { role_name: 'Trainer' } });
       if (trainerRole) {
+        const project = await Project.findByPk(projectId, { attributes: ['id', 'parentId'] });
+        const effectiveProjectIds = [projectId];
+        const visited = new Set([projectId]);
+        let curr = project;
+        while (curr && curr.parentId && !visited.has(curr.parentId)) {
+          visited.add(curr.parentId);
+          effectiveProjectIds.push(curr.parentId);
+          curr = await Project.findByPk(curr.parentId, { attributes: ['id', 'parentId'] });
+        }
+
         const assignments = await ProjectAssignment.findAll({
-          where: { projectId, status: 'Active' },
+          where: { projectId: { [Op.in]: effectiveProjectIds }, status: 'Active' },
           include: [{
             model: User,
             where: { roleId: trainerRole.id, status: 'Active' },
@@ -1238,13 +1282,18 @@ router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin
         if (assignments.length === 1 && assignments[0].User) {
           assignedTrainerId = assignments[0].User.id;
         } else if (assignments.length === 0) {
-          const directTrainers = await User.findAll({
-            where: { roleId: trainerRole.id, status: 'Active' },
+          const allActiveTrainers = await User.findAll({
+            where: {
+              roleId: trainerRole.id,
+              status: 'Active'
+            },
             attributes: ['id', 'projectId']
           });
-          const matching = directTrainers.filter(u =>
-            u.projectId && String(u.projectId).split(',').map(s => s.trim()).includes(String(projectId))
-          );
+          const matching = allActiveTrainers.filter(u => {
+            if (!u.projectId) return false;
+            const pIds = String(u.projectId).split(',').map(s => s.trim());
+            return pIds.some(pId => effectiveProjectIds.includes(pId));
+          });
           if (matching.length === 1) {
             assignedTrainerId = matching[0].id;
           }

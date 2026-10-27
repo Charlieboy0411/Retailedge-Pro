@@ -173,6 +173,18 @@ async function runTestSuite() {
       }
     });
 
+    // Create an Inactive Trainer user
+    const [trainerInactive] = await User.findOrCreate({
+      where: { email: 'trainer_inactive@quizhive.com' },
+      defaults: {
+        name: 'Trainer Inactive',
+        password: hashedPassword,
+        roleId: trainerRole.id,
+        status: 'Inactive',
+        projectId: projectAlpha.id
+      }
+    });
+
     // Ensure explicit active ProjectAssignments
     await ProjectAssignment.findOrCreate({
       where: { userId: trainerA.id, projectId: projectAlpha.id },
@@ -256,6 +268,69 @@ async function runTestSuite() {
     });
     assert(nonExistentProjRes.status === 404, `Non-existent project ID rejected with 404 (got: ${nonExistentProjRes.status})`);
 
+    // 1e. Subproject hierarchy: Child subprojects inherit eligible trainers from parent project
+    const [projectAlphaSub] = await Project.findOrCreate({
+      where: { name: 'Project Alpha - Delhi North Subproject' },
+      defaults: { status: 'Active', parentId: projectAlpha.id }
+    });
+    const subTrainersRes = await fetch(`${BASE_URL}/api/projects/${projectAlphaSub.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(subTrainersRes.status === 200, `GET /api/projects/:id/trainers on child subproject returns 200 OK (got: ${subTrainersRes.status})`);
+    const subTrainers = await subTrainersRes.json();
+    assert(Array.isArray(subTrainers), 'Subproject returns an array of trainers');
+    assert(subTrainers.some(t => t.id === trainerA.id), 'Child subproject inherits Trainer Alpha from parent Project Alpha');
+    assert(!subTrainers.some(t => t.id === trainerB.id), 'Child subproject does NOT include Trainer Beta from unrelated Project Beta');
+    assert(!subTrainers.some(t => t.id === employeeUser.id), 'Child subproject does NOT include non-trainer employees');
+
+    // 1f. Multi-tier subproject hierarchy inheritance
+    const [projectAlphaSubSub] = await Project.findOrCreate({
+      where: { name: 'Project Alpha - Delhi North Store 101' },
+      defaults: { status: 'Active', parentId: projectAlphaSub.id }
+    });
+    const multiTierRes = await fetch(`${BASE_URL}/api/projects/${projectAlphaSubSub.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(multiTierRes.status === 200, `Multi-tier child project returns 200 OK (got: ${multiTierRes.status})`);
+    const multiTierTrainers = await multiTierRes.json();
+    assert(multiTierTrainers.some(t => t.id === trainerA.id), 'Multi-tier subproject inherits Trainer Alpha from top parent Project Alpha');
+    assert(!multiTierTrainers.some(t => t.id === trainerB.id), 'Multi-tier subproject does NOT include Trainer Beta');
+
+    // 1g. Missing parent handling: project with non-existent parentId does not crash or loop
+    const [projectMissingParent] = await Project.findOrCreate({
+      where: { name: 'Project With Ghost Parent' },
+      defaults: { status: 'Active' }
+    });
+    const sequelize = require('../config/database');
+    await sequelize.query('PRAGMA foreign_keys = OFF;');
+    await projectMissingParent.update({ parentId: '00000000-0000-0000-0000-000000000999' });
+    await sequelize.query('PRAGMA foreign_keys = ON;');
+
+    const missingParentRes = await fetch(`${BASE_URL}/api/projects/${projectMissingParent.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(missingParentRes.status === 200, `Project with missing parent returns 200 OK without crashing (got: ${missingParentRes.status})`);
+    const missingParentTrainers = await missingParentRes.json();
+    assert(Array.isArray(missingParentTrainers), 'Returns valid array for project with missing parent');
+
+    // 1h. Cyclic project hierarchy handling: project A -> B -> A terminates safely
+    const [cyclicProjA] = await Project.findOrCreate({
+      where: { name: 'Cyclic Project Alpha' },
+      defaults: { status: 'Active' }
+    });
+    const [cyclicProjB] = await Project.findOrCreate({
+      where: { name: 'Cyclic Project Beta' },
+      defaults: { status: 'Active', parentId: cyclicProjA.id }
+    });
+    await cyclicProjA.update({ parentId: cyclicProjB.id });
+
+    const cyclicRes = await fetch(`${BASE_URL}/api/projects/${cyclicProjA.id}/trainers`, {
+      headers: { Authorization: `Bearer ${adminToken}` }
+    });
+    assert(cyclicRes.status === 200, `Cyclic project hierarchy terminates safely and returns 200 OK (got: ${cyclicRes.status})`);
+    const cyclicTrainers = await cyclicRes.json();
+    assert(Array.isArray(cyclicTrainers), 'Returns valid array for cyclic hierarchy');
+
     // ─── TEST 2: Server-Side Trainer Eligibility Enforcement ───
     console.log('\n--- 2. Server-Side Trainer Eligibility Validation ---');
     const tomorrow = new Date(Date.now() + 86400000).toISOString();
@@ -322,6 +397,91 @@ async function runTestSuite() {
     assert(unassignedTrainerRes.status === 400, `Scheduling with unassigned trainer rejected with 400 (got: ${unassignedTrainerRes.status})`);
     const unassignedData = await unassignedTrainerRes.json();
     assert(unassignedData.error.includes('not assigned to this project'), `Returns descriptive error: "${unassignedData.error}"`);
+
+    // 2d. Subproject scheduling with inherited parent trainer -> 201 Created
+    const subProjScheduleRes = await fetch(`${BASE_URL}/api/trainings/schedule-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'Subproject Session with Inherited Trainer',
+        projectId: projectAlphaSub.id,
+        trainerId: trainerA.id,
+        scheduledAt: tomorrow,
+        url: 'https://meet.google.com/sub-proj-meet'
+      })
+    });
+    assert(subProjScheduleRes.status === 201, `Scheduling with inherited parent trainer on subproject returns 201 Created (got: ${subProjScheduleRes.status})`);
+    const subProjScheduleData = await subProjScheduleRes.json();
+    assert(subProjScheduleData.meeting && subProjScheduleData.meeting.trainerId === trainerA.id, 'Subproject meeting correctly persisted with inherited parent trainer');
+
+    // 2e. Subproject scheduling with unrelated trainer -> 400 Bad Request
+    const subProjUnassignedRes = await fetch(`${BASE_URL}/api/trainings/schedule-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'Subproject Session with Unrelated Trainer',
+        projectId: projectAlphaSub.id,
+        trainerId: trainerB.id,
+        scheduledAt: tomorrow,
+        url: 'https://meet.google.com/sub-proj-fail'
+      })
+    });
+    assert(subProjUnassignedRes.status === 400, `Subproject with unrelated trainer rejected with 400 (got: ${subProjUnassignedRes.status})`);
+    const subProjUnassignedData = await subProjUnassignedRes.json();
+    assert(subProjUnassignedData.error.includes('not assigned to this project'), `Returns expected assignment rejection error: "${subProjUnassignedData.error}"`);
+
+    // 2f. Multi-tier subproject scheduling with top parent trainer -> 201 Created
+    const multiTierScheduleRes = await fetch(`${BASE_URL}/api/trainings/schedule-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'Multi-tier Store Session with Top Parent Trainer',
+        projectId: projectAlphaSubSub.id,
+        trainerId: trainerA.id,
+        scheduledAt: tomorrow,
+        url: 'https://meet.google.com/sub-sub-meet'
+      })
+    });
+    assert(multiTierScheduleRes.status === 201, `Multi-tier subproject with top parent trainer returns 201 Created (got: ${multiTierScheduleRes.status})`);
+
+    // 2g. Inactive trainer user rejected -> 400 Bad Request
+    const inactiveTrainerRes = await fetch(`${BASE_URL}/api/trainings/schedule-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'Session With Inactive Trainer',
+        projectId: projectAlpha.id,
+        trainerId: trainerInactive.id,
+        scheduledAt: tomorrow,
+        url: 'https://meet.google.com/inactive-fail'
+      })
+    });
+    assert(inactiveTrainerRes.status === 400, `Scheduling with inactive trainer rejected with 400 (got: ${inactiveTrainerRes.status})`);
+    const inactiveTrainerData = await inactiveTrainerRes.json();
+    assert(inactiveTrainerData.error.includes('is not Active'), `Returns expected inactive rejection error: "${inactiveTrainerData.error}"`);
+
+    // 2h. User without Trainer role (Employee) rejected -> 400 Bad Request
+    const nonTrainerRes = await fetch(`${BASE_URL}/api/trainings/schedule-meeting`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify({
+        title: 'Session With Non-Trainer User',
+        projectId: projectAlpha.id,
+        trainerId: employeeUser.id,
+        scheduledAt: tomorrow,
+        url: 'https://meet.google.com/non-trainer-fail'
+      })
+    });
+    assert(nonTrainerRes.status === 400, `Scheduling with non-trainer user rejected with 400 (got: ${nonTrainerRes.status})`);
+    const nonTrainerData = await nonTrainerRes.json();
+    assert(nonTrainerData.error.includes('does not have the Trainer role'), `Returns expected non-trainer role rejection: "${nonTrainerData.error}"`);
+
+    // 2i. Exact database verification of persisted Training record
+    const TrainingModel = require('../models/Training');
+    const persistedTraining = await TrainingModel.findOne({ where: { projectId: projectAlphaSubSub.id } });
+    assert(persistedTraining !== null, 'Multi-tier subproject meeting exists in database');
+    assert(persistedTraining.projectId === projectAlphaSubSub.id, `Training record preserves subproject ID (${persistedTraining.projectId})`);
+    assert(persistedTraining.trainerId === trainerA.id, `Training record preserves parent trainer ID (${persistedTraining.trainerId})`);
 
     // ─── TEST 3: Successful Meeting Creation with Primary Trainer Assignment ───
     console.log('\n--- 3. Primary Trainer Persistence & Meeting Creation ---');
