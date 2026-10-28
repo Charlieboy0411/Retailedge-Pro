@@ -44,7 +44,7 @@ const upload = multer({
 });
 
 // GET /api/projects - List all projects (Administrative, Management & Training)
-router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager', 'Trainer', 'Supervisor', 'Client', 'MD', 'COO', 'VP Operations']), async (req, res) => {
+router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'T&D Manager', 'Trainer', 'Supervisor', 'Client', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     let whereClause = {};
 
@@ -57,7 +57,7 @@ router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manag
       const tdService = require('../utils/tdService');
       const accessibleIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       whereClause.id = { [require('sequelize').Op.in]: accessibleIds };
-    } else if (req.user.role === 'Program Manager' || req.user.role === 'Trainer') {
+    } else if (req.user.role === 'Program Manager' || req.user.role === 'Operation Manager' || req.user.role === 'Trainer') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       whereClause.id = { [require('sequelize').Op.in]: accessibleIds.length > 0 ? accessibleIds : ['00000000-0000-0000-0000-000000000000'] };
@@ -386,7 +386,7 @@ router.get('/participant-360', requireAuth, async (req, res) => {
 });
 
 // GET /api/projects/participants - Authoritative project-scoped participants list
-router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Trainer', 'Supervisor']), async (req, res) => {
+router.get('/participants', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'MD', 'COO', 'VP Operations', 'Trainer', 'Supervisor']), async (req, res) => {
   try {
     const { projectId = 'all', subProjectId = 'all', search, status, zone } = req.query;
     
@@ -831,7 +831,7 @@ router.get('/:id', requireAuth, async (req, res) => {
       if (!accessibleIds.includes(id)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });
       }
-    } else if (req.user.role === 'Program Manager' || req.user.role === 'T&D Manager') {
+    } else if (req.user.role === 'Program Manager' || req.user.role === 'Operation Manager' || req.user.role === 'T&D Manager') {
       const accessibleIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!accessibleIds.includes(id)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission for this project.' });

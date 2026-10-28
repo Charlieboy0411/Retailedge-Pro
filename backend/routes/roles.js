@@ -4,7 +4,7 @@ const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const Role = require('../models/Role');
 const User = require('../models/User');
 
-const SYSTEM_ROLES = ['Super Admin', 'Admin', 'Program Manager', 'Client', 'Trainer', 'Supervisor', 'Learner', 'Marketing Manager', 'MD', 'COO', 'VP Operations'];
+const SYSTEM_ROLES = ['Super Admin', 'Admin', 'Program Manager', 'Operation Manager', 'T&D Manager', 'Client', 'Trainer', 'Supervisor', 'Learner', 'Marketing Manager', 'MD', 'COO', 'VP Operations'];
 
 // GET /api/roles
 router.get('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {

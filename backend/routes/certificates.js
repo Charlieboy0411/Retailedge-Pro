@@ -21,9 +21,11 @@ const TrainingProgress = require('../models/TrainingProgress');
 const Response = require('../models/Response');
 const Session = require('../models/Session');
 const Participant = require('../models/Participant');
+const ProjectAssignment = require('../models/ProjectAssignment');
 
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
-const { generatePDFBuffer, generateQRCodeDataUrl } = require('../utils/pdfGenerator');
+const pdfGenerator = require('../utils/pdfGenerator');
+const { generateQRCodeDataUrl } = pdfGenerator;
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 
@@ -286,11 +288,12 @@ router.get('/', requireAuth, async (req, res) => {
         return res.status(403).json({ error: 'Forbidden: You have no assigned capability projects.' });
       }
       whereClause.projectId = { [Op.in]: tdProjectIds };
-    } else if (['Program Manager', 'Manager'].includes(userRole)) {
-      if (!userProjectId) {
+    } else if (['Program Manager', 'Manager', 'Operation Manager'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, projectId || 'all', 'all');
+      if (!projectIds || projectIds.length === 0) {
         return res.status(403).json({ error: 'You are not assigned to a project.' });
       }
-      const projectIds = await getAccessibleProjectIds(userProjectId);
       whereClause.projectId = { [Op.in]: projectIds };
     } else if (['Trainer'].includes(userRole)) {
       // Trainer sees certificates they trained or in their assigned projects
@@ -359,14 +362,18 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // GET /api/certificates/analytics - Certification Analytics KPIs & Trends (Certificate Authority Only)
-router.get('/analytics', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+router.get('/analytics', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const userRole = req.user.role;
     const userProjectId = req.user.projectId;
     let whereClause = {};
 
-    if (!['Admin', 'Super Admin'].includes(userRole) && userProjectId) {
-      const projectIds = await getAccessibleProjectIds(userProjectId);
+    if (!['Admin', 'Super Admin'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (projectIds.length === 0) {
+        return res.status(403).json({ error: 'You are not assigned to a project.' });
+      }
       whereClause.projectId = { [Op.in]: projectIds };
     }
 
@@ -449,7 +456,7 @@ router.get('/analytics', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
 });
 
 // POST /api/certificates/eligibility - Evaluate participants against criteria
-router.post('/eligibility', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post('/eligibility', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const { 
       projectId, 
@@ -461,7 +468,7 @@ router.post('/eligibility', requireAuth, requireRole(['Admin', 'Super Admin', 'P
     } = req.body;
 
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
-    if (userRole === 'Trainer' && projectId && projectId !== 'all') {
+    if (!['Admin', 'Super Admin'].includes(userRole) && projectId && projectId !== 'all') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!accessibleProjectIds.includes(projectId)) {
@@ -674,7 +681,7 @@ router.put('/signatures-and-seals/:id/status', requireAuth, async (req, res) => 
 });
 
 // POST /api/certificates/generate - Issue an individual certificate with immutable snapshot
-router.post(['/generate', '/'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post(['/generate', '/'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const {
       userId,
@@ -709,13 +716,33 @@ router.post(['/generate', '/'], requireAuth, requireRole(['Admin', 'Super Admin'
       return res.status(404).json({ error: 'Participant User not found.' });
     }
 
+    const targetProjId = projectId || user.projectId;
+    if (!targetProjId) {
+      return res.status(400).json({ error: 'Project ID is required to issue a certificate.' });
+    }
+
     if (req.user.role === 'T&D Manager') {
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
-      const targetProjId = projectId || user.projectId;
-      if (!targetProjId || !tdProjectIds.includes(targetProjId)) {
+      if (!tdProjectIds.includes(targetProjId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
       }
+    } else if (['Program Manager', 'Operation Manager', 'Trainer'].includes(req.user.role)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!accessibleProjectIds.includes(targetProjId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
+      }
+    }
+
+    // Validate participant assignment against the target project
+    const userAssignments = await ProjectAssignment.findAll({
+      where: { userId: user.id, status: 'Active' },
+      attributes: ['projectId']
+    });
+    const userActiveProjects = Array.from(new Set([user.projectId, ...userAssignments.map(a => a.projectId)].filter(Boolean)));
+    if (!userActiveProjects.includes(targetProjId)) {
+      return res.status(400).json({ error: `Participant "${user.name}" (${user.id}) is not assigned to project "${targetProjId}".` });
     }
 
     const project = projectId ? await Project.findByPk(projectId) : null;
@@ -814,7 +841,7 @@ router.post(['/generate', '/'], requireAuth, requireRole(['Admin', 'Super Admin'
 });
 
 // POST /api/certificates/bulk-generate - Issue certificates in bulk with immutable snapshots
-router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const {
       participantIds,
@@ -836,19 +863,48 @@ router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Sup
       return res.status(400).json({ error: 'At least one participant ID is required for bulk generation.' });
     }
 
+    if (!projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
+      return res.status(400).json({ error: 'Project ID is required for bulk certificate generation.' });
+    }
+
     if (req.user.role === 'T&D Manager') {
       const tdService = require('../utils/tdService');
       const tdProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (!projectId || !tdProjectIds.includes(projectId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
       }
+    } else if (['Trainer', 'Program Manager', 'Operation Manager'].includes(req.user.role)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!projectId || !accessibleProjectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
+      }
     }
 
-    if (req.user.role === 'Trainer') {
-      const intelligenceService = require('../utils/projectIntelligenceService');
-      const trainerProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
-      if (!projectId || !trainerProjectIds.includes(projectId)) {
-        return res.status(403).json({ error: 'Forbidden: You do not have permission to issue certificates for this project.' });
+    // Upfront validation: verify every participant belongs to the target project before creating any certificate
+    const participants = await User.findAll({
+      where: { id: { [Op.in]: participantIds } },
+      include: [{
+        model: ProjectAssignment,
+        where: { status: 'Active' },
+        required: false
+      }]
+    });
+
+    if (participants.length !== participantIds.length) {
+      const foundIds = new Set(participants.map(p => p.id));
+      const missingIds = participantIds.filter(id => !foundIds.has(id));
+      return res.status(400).json({ error: `Participant user(s) not found: ${missingIds.join(', ')}` });
+    }
+
+    if (projectId) {
+      for (const p of participants) {
+        const assignedProjects = Array.from(new Set([p.projectId, ...(p.ProjectAssignments || []).map(a => a.projectId)].filter(Boolean)));
+        if (!assignedProjects.includes(projectId)) {
+          return res.status(400).json({
+            error: `Participant "${p.name}" (${p.id}) is not assigned to project "${projectId}". Bulk certificate generation cancelled.`
+          });
+        }
       }
     }
 
@@ -857,7 +913,7 @@ router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Sup
     const generated = [];
 
     for (const userId of participantIds) {
-      const user = await User.findByPk(userId);
+      const user = participants.find(p => p.id === userId);
       if (!user) continue;
 
       const certId = await generateUniqueCertificateId(project?.name);
@@ -953,7 +1009,7 @@ router.post(['/bulk-generate', '/bulk'], requireAuth, requireRole(['Admin', 'Sup
 });
 
 // GET /api/certificates/templates - List certificate templates
-router.get('/templates', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.get('/templates', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const templates = [
       {
@@ -1237,7 +1293,7 @@ router.get('/:id/download', async (req, res) => {
     }
 
     // 4. Generate high-resolution PDF buffer
-    const pdfBuffer = await generatePDFBuffer(cert);
+    const pdfBuffer = await pdfGenerator.generatePDFBuffer(cert);
 
     const actorName = (user && (user.name || user.email)) || (cert.User?.name) || 'User';
     await recordAudit(cert.certificate_id, 'DOWNLOADED', actorName, 'Direct PDF Download', req);
@@ -1254,7 +1310,7 @@ router.get('/:id/download', async (req, res) => {
 });
 
 // POST /api/certificates/:id/revoke - Revoke a certificate with reason
-router.post('/:id/revoke', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+router.post('/:id/revoke', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager']), async (req, res) => {
   try {
     const { id } = req.params;
     const { reason } = req.body;
@@ -1271,7 +1327,7 @@ router.post('/:id/revoke', requireAuth, requireRole(['Admin', 'Super Admin', 'Pr
       return res.status(404).json({ error: 'Certificate not found' });
     }
 
-    if (req.user.role === 'Program Manager') {
+    if (['Program Manager', 'Operation Manager'].includes(req.user.role)) {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!cert.projectId || !accessibleProjectIds.includes(cert.projectId)) {
@@ -1295,7 +1351,7 @@ router.post('/:id/revoke', requireAuth, requireRole(['Admin', 'Super Admin', 'Pr
 });
 
 // POST /api/certificates/:id/reissue - Reissue a certificate
-router.post('/:id/reissue', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']), async (req, res) => {
+router.post('/:id/reissue', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'T&D Manager']), async (req, res) => {
   try {
     const { id } = req.params;
     const { reason = 'Certificate reissued with updated details' } = req.body;
@@ -1306,6 +1362,14 @@ router.post('/:id/reissue', requireAuth, requireRole(['Admin', 'Super Admin', 'P
 
     if (!oldCert) {
       return res.status(404).json({ error: 'Original certificate not found' });
+    }
+
+    if (['Program Manager', 'Operation Manager'].includes(req.user.role)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!oldCert.projectId || !accessibleProjectIds.includes(oldCert.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to reissue certificates outside your assigned projects.' });
+      }
     }
 
     if (req.user.role === 'T&D Manager') {
@@ -1421,7 +1485,7 @@ router.post('/:id/email', requireAuth, async (req, res) => {
       return res.status(400).json({ error: 'Participant does not have a valid email address.' });
     }
 
-    const pdfBuffer = await generatePDFBuffer(cert);
+    const pdfBuffer = await pdfGenerator.generatePDFBuffer(cert);
 
     // Email delivery via nodemailer (fallback to ethereal test if not in prod)
     let transporter;
@@ -1481,7 +1545,7 @@ router.post('/:id/email', requireAuth, async (req, res) => {
 });
 
 // POST /api/certificates/bulk-zip - Download ZIP of certificates
-router.post('/bulk-zip', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
+router.post('/bulk-zip', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager']), async (req, res) => {
   try {
     const { certificateIds } = req.body;
     if (!certificateIds || !Array.isArray(certificateIds) || certificateIds.length === 0) {
@@ -1490,7 +1554,10 @@ router.post('/bulk-zip', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
 
     const certificates = await Certificate.findAll({
       where: {
-        certificate_id: { [Op.in]: certificateIds }
+        [Op.or]: [
+          { certificate_id: { [Op.in]: certificateIds } },
+          { id: { [Op.in]: certificateIds } }
+        ]
       },
       include: [
         { model: User, as: 'User' },
@@ -1498,15 +1565,41 @@ router.post('/bulk-zip', requireAuth, requireRole(['Admin', 'Super Admin', 'Prog
       ]
     });
 
+    if (certificates.length === 0) {
+      return res.status(404).json({ error: 'No certificates found matching the provided IDs.' });
+    }
+
+    // Role-specific project authorization: verify EVERY requested certificate belongs to an authorized project
+    if (!['Admin', 'Super Admin'].includes(req.user.role)) {
+      let accessibleProjectIds = [];
+      if (req.user.role === 'T&D Manager') {
+        const tdService = require('../utils/tdService');
+        accessibleProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
+      } else {
+        const intelligenceService = require('../utils/projectIntelligenceService');
+        accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      }
+
+      // If any requested certificate is unauthorized, reject the entire request with HTTP 403
+      const unauthorizedCert = certificates.find(cert => !cert.projectId || !accessibleProjectIds.includes(cert.projectId));
+      if (unauthorizedCert) {
+        return res.status(403).json({
+          error: 'Forbidden: You do not have permission to download certificates outside your authorized projects.'
+        });
+      }
+    }
+
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename=Certificates_Batch_${Date.now()}.zip`);
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    const archive = typeof archiver === 'function'
+      ? archiver('zip', { zlib: { level: 9 } })
+      : new archiver.ZipArchive({ zlib: { level: 9 } });
     archive.pipe(res);
 
     for (const cert of certificates) {
       try {
-        const buffer = await generatePDFBuffer(cert);
+        const buffer = await pdfGenerator.generatePDFBuffer(cert);
         const filename = `Certificate_${(cert.User?.name || 'Learner').replace(/\s+/g, '_')}_${cert.certificate_id}.pdf`;
         archive.append(buffer, { name: filename });
       } catch (err) {

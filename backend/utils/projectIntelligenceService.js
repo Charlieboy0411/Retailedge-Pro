@@ -230,7 +230,7 @@ async function getProjectKPIs(projectIds, dateRange = {}) {
       {
         model: Participant,
         attributes: ['id', 'userId', 'name', 'score', 'connectionStatus', 'createdAt'],
-        include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
+        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       }
     ]
   });
@@ -666,7 +666,7 @@ async function getProjectQuizIntelligence(projectIds, dateRangeOrType = 'ALL', t
       {
         model: Participant,
         attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'connectionStatus', 'createdAt'],
-        include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
+        include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
       }
     ],
     order: [['createdAt', 'DESC']]
@@ -1311,7 +1311,7 @@ async function getMasterTrainingOutcomeData(projectIds, options = {}) {
         {
           model: Participant,
           attributes: ['id', 'userId', 'name', 'employeeId', 'score', 'createdAt'],
-          include: [{ model: Response, attributes: ['id', 'points_awarded', 'is_correct'] }]
+          include: [{ model: Response, attributes: ['id', 'points_awarded'] }]
         },
         { model: User, as: 'host', attributes: ['id', 'name'] }
       ]

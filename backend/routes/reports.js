@@ -321,8 +321,19 @@ router.get('/attendance', requireAuth, async (req, res) => {
     } else if (userRole === 'T&D Manager') {
       const tdService = require('../utils/tdService');
       allAuthorizedProjectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
-    } else if (['Program Manager', 'Manager'].includes(userRole) && userProjectId) {
-      allAuthorizedProjectIds = await getAccessibleProjectIds(userProjectId);
+    } else if (['Program Manager', 'Manager', 'Operation Manager'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      allAuthorizedProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (allAuthorizedProjectIds.length === 0) {
+        return res.json({
+          summary: { quizCount: 0, avgScore: '0%', datesCount: 0 },
+          logs: [],
+          trainingLogs: [],
+          quizAttendance: [],
+          trainingAttendance: [],
+          projects: []
+        });
+      }
     } else if (userRole === 'Trainer') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       allAuthorizedProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');

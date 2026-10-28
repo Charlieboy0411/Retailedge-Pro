@@ -297,7 +297,7 @@ router.get('/', requireAuth, async (req, res) => {
       const clientService = require('../utils/clientService');
       const projectIds = await clientService.getAccessibleClientProjectIds(req.user, req.query.projectId || 'all', 'all');
       whereClause.projectId = { [Op.in]: projectIds };
-    } else if (!['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations'].includes(userRole)) {
+    } else if (!['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations'].includes(userRole)) {
       const orConditions = [];
 
       if (userProjectId) {
@@ -372,7 +372,7 @@ router.get('/', requireAuth, async (req, res) => {
           }
         ]
       };
-    } else if (userRole === 'Program Manager') {
+    } else if (userRole === 'Program Manager' || userRole === 'Operation Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       const { projectId } = req.query;
@@ -428,7 +428,7 @@ router.get('/', requireAuth, async (req, res) => {
 });
 
 // POST /api/trainings - Create new training material (Admin/Trainer/PM/Leadership)
-router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
+router.post('/', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
   try {
     const { title, description, type, url, duration, projectId, scheduledAt } = req.body;
     let finalUrl = url;
@@ -1031,7 +1031,7 @@ router.post('/:id/progress', requireAuth, async (req, res) => {
 });
 
 // PUT /api/trainings/:id - Update training material
-router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
+router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), upload.single('file'), async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) {
@@ -1048,11 +1048,17 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
       if (req.body.projectId && !accessibleProjectIds.includes(req.body.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You cannot assign training materials to a foreign project.' });
       }
-    } else if (userRole === 'Trainer' && training.projectId) {
+    } else if (['Program Manager', 'Operation Manager', 'Trainer'].includes(userRole)) {
+      if (!training.projectId) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to edit global training materials.' });
+      }
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!accessibleProjectIds.includes(training.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to edit training materials for this project.' });
+      }
+      if (req.body.projectId && !accessibleProjectIds.includes(req.body.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You cannot assign training materials to an unauthorized project.' });
       }
     }
 
@@ -1172,7 +1178,7 @@ router.put('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Ma
 });
 
 // DELETE /api/trainings/:id - Delete a training material
-router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const training = await Training.findByPk(req.params.id);
     if (!training) {
@@ -1185,7 +1191,10 @@ router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program
       if (!training.projectId || !accessibleProjectIds.includes(training.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to delete training materials outside your capability portfolio.' });
       }
-    } else if (req.user.role === 'Trainer' && training.projectId) {
+    } else if (['Program Manager', 'Operation Manager', 'Trainer'].includes(req.user.role)) {
+      if (!training.projectId) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete global training materials.' });
+      }
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
       if (!accessibleProjectIds.includes(training.projectId)) {
@@ -1215,7 +1224,7 @@ router.delete('/:id', requireAuth, requireRole(['Admin', 'Super Admin', 'Program
 });
 
 // POST /api/trainings/schedule-meeting - Schedule a training meeting with trainer assignment & notifications
-router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
+router.post('/schedule-meeting', requireAuth, requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'T&D Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const { title, description, projectId, scheduledAt, url, inviteeIds, trainerId, trainerIds, platform } = req.body;
 
@@ -1742,7 +1751,7 @@ router.get('/:id/live-attendance', requireAuth, async (req, res) => {
 });
 
 // POST /api/trainings/:id/end-meeting - Trainer ends meeting, closing all open intervals
-router.post('/:id/end-meeting', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
+router.post('/:id/end-meeting', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'MD', 'COO', 'VP Operations']), async (req, res) => {
   try {
     const trainingId = req.params.id;
     const training = await Training.findByPk(trainingId);

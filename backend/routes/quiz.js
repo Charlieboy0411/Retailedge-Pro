@@ -67,6 +67,15 @@ router.get('/', requireAuth, async (req, res) => {
       whereClause = {
         projectId: { [Op.in]: projectIds }
       };
+    } else if (['Program Manager', 'Operation Manager'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      whereClause = {
+        [Op.or]: [
+          { creatorId: req.user.id },
+          ...(projectIds.length > 0 ? [{ projectId: { [Op.in]: projectIds } }] : [])
+        ]
+      };
     }
 
     const quizzes = await Quiz.findAll({
@@ -88,7 +97,7 @@ router.get('/', requireAuth, async (req, res) => {
 
 // POST /api/quizzes
 // Expects body: { title, description, config, projectId, questions: [{ type, text, options, correct_answer }] }
-router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
+router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager', 'Operation Manager']), async (req, res) => {
   const { title, description, config, projectId, questions } = req.body;
   try {
     if (projectId && !['Admin', 'Super Admin'].includes(req.user.role)) {
@@ -111,8 +120,8 @@ router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T
           return res.status(403).json({ error: 'Forbidden: You are not authorized to create quizzes for this project.' });
         }
       }
-    } else if (!projectId && req.user.role === 'T&D Manager') {
-      return res.status(400).json({ error: 'Project is required for T&D Manager quiz creation.' });
+    } else if (!projectId && ['T&D Manager', 'Operation Manager', 'Program Manager'].includes(req.user.role)) {
+      return res.status(400).json({ error: 'Project is required for quiz creation.' });
     }
 
     // Create the Quiz
@@ -147,7 +156,7 @@ router.post('/', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T
 
 // POST /api/quizzes/generate
 // Expects multipart form data: prompt (string), file (optional file)
-router.post('/generate', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), upload.single('file'), async (req, res) => {
+router.post('/generate', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager', 'Operation Manager']), upload.single('file'), async (req, res) => {
   try {
     const { prompt } = req.body;
     let fileContentText = '';
@@ -818,7 +827,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 // PUT /api/quizzes/:id
-router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
+router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager', 'Operation Manager']), async (req, res) => {
   const { title, description, config, projectId, questions } = req.body;
   try {
     const quiz = await Quiz.findByPk(req.params.id);
@@ -840,6 +849,21 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 
       }
       if (projectId && !projectIds.includes(projectId)) {
         return res.status(403).json({ error: 'Forbidden: You cannot assign quizzes to a foreign project.' });
+      }
+    } else if (['Operation Manager', 'Program Manager'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to edit quizzes outside your authorized projects.' });
+      }
+      if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
+        return res.status(403).json({ error: 'Unauthorized to edit this quiz' });
+      }
+      if (projectId === null || projectId === '') {
+        return res.status(403).json({ error: 'Forbidden: You cannot convert a project quiz into a global quiz.' });
+      }
+      if (projectId && !projectIds.includes(projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You cannot assign quizzes to an unauthorized project.' });
       }
     } else if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
       return res.status(403).json({ error: 'Unauthorized to edit this quiz' });
@@ -897,7 +921,7 @@ router.put('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 
 });
 
 // DELETE /api/quizzes/:id
-router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager']), async (req, res) => {
+router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin', 'T&D Manager', 'Operation Manager']), async (req, res) => {
   console.log('Delete attempt for quiz ID:', req.params.id);
   console.log('User ID from token:', req.user.id);
   console.log('User role from token:', req.user.role);
@@ -921,6 +945,15 @@ router.delete('/:id', requireAuth, requireRole(['Trainer', 'Admin', 'Super Admin
       const projectIds = await tdService.getAccessibleTDProjectIds(req.user, 'all', 'all');
       if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to delete quizzes outside your assigned capability portfolio.' });
+      }
+    } else if (['Operation Manager', 'Program Manager'].includes(userRole)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const projectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      if (!quiz.projectId || !projectIds.includes(quiz.projectId)) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to delete quizzes outside your authorized projects.' });
+      }
+      if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
+        return res.status(403).json({ error: 'Unauthorized to delete this quiz' });
       }
     } else if (quiz.creatorId !== req.user.id && !['Admin', 'Super Admin'].includes(userRole)) {
       console.log('Block unauthorized delete: creatorId mismatch and not privileged role');

@@ -80,8 +80,8 @@ router.get('/my-team', async (req, res) => {
   }
 });
 
-// GET /api/users - List users (Strictly project-scoped for Program Manager)
-router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+// GET /api/users - List users (Strictly project-scoped for Program Manager and Operation Manager)
+router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const { search, role, project, projectId, status, designation, location, skills } = req.query;
     const userRole = req.user.role || (req.user.Role ? req.user.Role.role_name : '');
@@ -89,8 +89,8 @@ router.get('/', requireRole(['Admin', 'Super Admin', 'Program Manager', 'MD', 'C
     const where = {};
     const andConditions = [];
 
-    // Server-side project scoping for Program Manager
-    if (userRole === 'Program Manager') {
+    // Server-side project scoping for Program Manager and Operation Manager
+    if (userRole === 'Program Manager' || userRole === 'Operation Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const targetProj = projectId || project || 'all';
 
@@ -270,7 +270,7 @@ router.patch('/queries/:id/resolve', requireRole(['Admin', 'Super Admin']), asyn
 });
 
 // GET /api/users/:id - Get specific user
-router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trainer', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
+router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'Trainer', 'MD', 'COO', 'VP Operations', 'Marketing Manager']), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id, {
       include: [
@@ -281,6 +281,21 @@ router.get('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Trai
       ]
     });
     if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (['Program Manager', 'Operation Manager'].includes(req.user.role)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const targetAssignments = await ProjectAssignment.findAll({
+        where: { userId: user.id, status: 'Active' },
+        attributes: ['projectId']
+      });
+      const targetExistingProjects = Array.from(new Set([user.projectId, ...targetAssignments.map(a => a.projectId)].filter(Boolean)));
+      const hasAccess = targetExistingProjects.some(pid => accessibleProjectIds.includes(pid));
+      if (!hasAccess && req.user.id !== user.id) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view users outside your assigned projects.' });
+      }
+    }
+
     res.json(formatUserResponse(user));
   } catch (error) {
     res.status(500).json({ error: 'Server error' });
@@ -367,7 +382,7 @@ router.post('/', requireRole(['Admin', 'Super Admin']), async (req, res) => {
 });
 
 // PUT /api/users/:id - Update user
-router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), async (req, res) => {
+router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager']), async (req, res) => {
   try {
     const user = await User.findByPk(req.params.id);
     if (!user) return res.status(404).json({ error: 'User not found' });
@@ -376,20 +391,31 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
     const rawProjectInput = req.body.projectIds !== undefined ? req.body.projectIds : req.body.projectId;
     const selectedProjectIds = await validateAndExtractProjectIds(rawProjectInput);
 
-    // Enforce project authorization for Program Manager
-    if (req.user.role === 'Program Manager') {
+    // Enforce project authorization for Program Manager and Operation Manager
+    if (req.user.role === 'Program Manager' || req.user.role === 'Operation Manager') {
       const intelligenceService = require('../utils/projectIntelligenceService');
       const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
 
-      // 1. Check if PM has permission to modify this user
+      // 1. Check if PM/OM has permission to modify this user
       const targetAssignments = await ProjectAssignment.findAll({
         where: { userId: user.id, status: 'Active' },
         attributes: ['projectId']
       });
       const targetExistingProjects = Array.from(new Set([user.projectId, ...targetAssignments.map(a => a.projectId)].filter(Boolean)));
-      const hasAccessToTarget = targetExistingProjects.length === 0 || targetExistingProjects.some(pid => accessibleProjectIds.includes(pid));
+      
+      // Finding 2 fix: target must overlap with accessible projects (or be legitimate self-access)
+      const hasAccessToTarget = (user.id === req.user.id) || targetExistingProjects.some(pid => accessibleProjectIds.includes(pid));
       if (!hasAccessToTarget) {
         return res.status(403).json({ error: 'Forbidden: You do not have permission to modify users outside your assigned project.' });
+      }
+
+      // Finding 1 fix: Reject role/status/password/credentials tampering for non-admin roles
+      const forbiddenFields = ['roleName', 'role', 'roleId', 'status', 'password', 'permissions', 'is_active', 'isActive'];
+      const attemptedForbidden = forbiddenFields.filter(f => req.body[f] !== undefined);
+      if (attemptedForbidden.length > 0) {
+        return res.status(403).json({
+          error: `Forbidden: You do not have permission to modify restricted fields (${attemptedForbidden.join(', ')}).`
+        });
       }
 
       // 2. If assigning projects, verify PM cannot assign projects outside their authorized scope
@@ -401,36 +427,71 @@ router.put('/:id', requireRole(['Admin', 'Super Admin', 'Program Manager']), asy
       }
     }
 
-    const updateData = { ...req.body };
-    delete updateData.projectIds;
-    delete updateData.ProjectAssignments;
-    delete updateData.Role;
-    delete updateData.Project;
-    delete updateData.manager;
-
-    // Determine target role name
-    let targetRoleName = updateData.roleName;
-    if (updateData.roleName) {
-      let role = await Role.findOne({ where: { role_name: updateData.roleName } });
-      if (!role) {
-        role = await Role.create({
-          role_name: updateData.roleName,
-          permissions: { can_create_projects: false, can_manage_users: false, can_create_quizzes: false }
-        });
+    // For non-admin roles: use explicit writable allowlist
+    let updateData;
+    if (['Program Manager', 'Operation Manager'].includes(req.user.role)) {
+      const ALLOWED_WRITABLE_FIELDS = [
+        'name',
+        'email',
+        'phone',
+        'designation',
+        'location',
+        'employee_id',
+        'skills',
+        'managerId',
+        'profile_photo',
+        'department',
+        'zone'
+      ];
+      updateData = {};
+      for (const field of ALLOWED_WRITABLE_FIELDS) {
+        if (req.body[field] !== undefined) {
+          updateData[field] = req.body[field];
+        }
       }
-      updateData.roleId = role.id;
-      delete updateData.roleName;
     } else {
-      const currentRole = await Role.findByPk(user.roleId);
-      targetRoleName = currentRole ? currentRole.role_name : 'Employee';
+      updateData = { ...req.body };
+      delete updateData.projectIds;
+      delete updateData.ProjectAssignments;
+      delete updateData.Role;
+      delete updateData.Project;
+      delete updateData.manager;
     }
 
-    // Password handling: preserve existing password if blank/whitespace
-    if (updateData.password && updateData.password.trim() !== '') {
-      const bcrypt = require('bcrypt');
-      updateData.password = await bcrypt.hash(updateData.password, 10);
+    // Determine target role name
+    let targetRoleName;
+    if (['Admin', 'Super Admin'].includes(req.user.role)) {
+      targetRoleName = updateData.roleName;
+      if (updateData.roleName) {
+        let role = await Role.findOne({ where: { role_name: updateData.roleName } });
+        if (!role) {
+          role = await Role.create({
+            role_name: updateData.roleName,
+            permissions: { can_create_projects: false, can_manage_users: false, can_create_quizzes: false }
+          });
+        }
+        updateData.roleId = role.id;
+        delete updateData.roleName;
+      } else {
+        const currentRole = await Role.findByPk(user.roleId);
+        targetRoleName = currentRole ? currentRole.role_name : 'Employee';
+      }
+
+      // Password handling for Admin / Super Admin
+      if (updateData.password && updateData.password.trim() !== '') {
+        const bcrypt = require('bcrypt');
+        updateData.password = await bcrypt.hash(updateData.password, 10);
+      } else {
+        delete updateData.password;
+      }
     } else {
+      // Non-admin roles cannot change roles or passwords
+      const currentRole = await Role.findByPk(user.roleId);
+      targetRoleName = currentRole ? currentRole.role_name : 'Employee';
+      delete updateData.roleId;
+      delete updateData.roleName;
       delete updateData.password;
+      delete updateData.status;
     }
 
     if (typeof updateData.skills === 'string') {
@@ -536,7 +597,7 @@ router.delete('/:id', requireRole(['Admin', 'Super Admin']), async (req, res) =>
 });
 
 // GET /api/users/hierarchy/:id - Fetch organizational hierarchy for a user
-router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'T&D Manager']), async (req, res) => {
+router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manager', 'Operation Manager', 'T&D Manager']), async (req, res) => {
   try {
     const rootUser = await User.findByPk(req.params.id, {
       attributes: ['id', 'name', 'profile_photo'],
@@ -560,6 +621,21 @@ router.get('/hierarchy/:id', requireRole(['Admin', 'Super Admin', 'Program Manag
     });
     
     if (!rootUser) return res.status(404).json({ error: 'User not found' });
+
+    if (['Program Manager', 'Operation Manager'].includes(req.user.role)) {
+      const intelligenceService = require('../utils/projectIntelligenceService');
+      const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(req.user, 'all', 'all');
+      const targetAssignments = await ProjectAssignment.findAll({
+        where: { userId: rootUser.id, status: 'Active' },
+        attributes: ['projectId']
+      });
+      const targetExistingProjects = Array.from(new Set([rootUser.projectId, ...targetAssignments.map(a => a.projectId)].filter(Boolean)));
+      const hasAccess = targetExistingProjects.some(pid => accessibleProjectIds.includes(pid));
+      if (!hasAccess && req.user.id !== rootUser.id) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to view hierarchy outside your assigned projects.' });
+      }
+    }
+
     res.json(rootUser);
   } catch (error) {
     res.status(500).json({ error: 'Server error fetching hierarchy', details: error.message });
