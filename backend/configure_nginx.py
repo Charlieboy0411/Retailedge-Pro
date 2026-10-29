@@ -1,16 +1,81 @@
 import os
 import subprocess
 import sys
+import argparse
 
-def find_ssl_certificates():
-    print("🔍 Searching for SSL certificates...")
+def validate_certificate_pair(cert_path, key_path):
+    """
+    Cryptographically and structurally validate that cert and key exist,
+    are readable, non-empty, and contain expected PEM headers.
+    """
+    if not (cert_path and key_path):
+        return False
+    if not (os.path.isfile(cert_path) and os.path.isfile(key_path)):
+        return False
+    if not (os.access(cert_path, os.R_OK) and os.access(key_path, os.R_OK)):
+        return False
+    if os.path.getsize(cert_path) == 0 or os.path.getsize(key_path) == 0:
+        return False
+    try:
+        with open(cert_path, "r", encoding="utf-8", errors="ignore") as f:
+            cert_data = f.read()
+        with open(key_path, "r", encoding="utf-8", errors="ignore") as f:
+            key_data = f.read()
+        has_cert_header = "BEGIN CERTIFICATE" in cert_data
+        has_key_header = "BEGIN" in key_data and "PRIVATE KEY" in key_data
+        return has_cert_header and has_key_header
+    except Exception as e:
+        print(f"⚠️ Error validating certificate pair: {e}", file=sys.stderr)
+        return False
+
+def check_existing_ssl_configured(nginx_dirs=None):
+    """
+    Inspect existing Nginx configuration directories for active TLS listeners or SSL directives.
+    Returns True if any active configuration terminates TLS.
+    """
+    if nginx_dirs is None:
+        nginx_dirs = ["/etc/nginx/conf.d", "/etc/nginx/sites-enabled"]
+
+    for d in nginx_dirs:
+        if not os.path.isdir(d):
+            continue
+        try:
+            for entry in os.listdir(d):
+                filepath = os.path.join(d, entry)
+                if os.path.isfile(filepath) and not entry.endswith(".bak") and not entry.endswith(".candidate"):
+                    try:
+                        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                            content = f.read()
+                            if ("listen 443" in content or "listen [::]:443" in content or "ssl_certificate" in content):
+                                print(f"🔒 Existing active SSL listener detected in: {filepath}")
+                                return True
+                    except Exception as e:
+                        print(f"⚠️ Warning reading configuration {filepath}: {e}", file=sys.stderr)
+        except Exception as e:
+            print(f"⚠️ Warning scanning directory {d}: {e}", file=sys.stderr)
+
+    return False
+
+def find_ssl_certificates(custom_cert_dir=None):
+    """
+    Searches for existing valid SSL certificate pairs on disk.
+    Does NOT attempt blind generation or unverified self-signed creation.
+    """
+    print("🔍 Searching for existing verified SSL certificates...")
     
-    # 1. Check Let's Encrypt live directory
+    # 1. Check custom cert dir if provided
+    if custom_cert_dir and os.path.isdir(custom_cert_dir):
+        cert = os.path.join(custom_cert_dir, "fullchain.pem")
+        key = os.path.join(custom_cert_dir, "privkey.pem")
+        if validate_certificate_pair(cert, key):
+            print(f"🔒 Found valid certificate at custom path: {custom_cert_dir}")
+            return cert, key
+
+    # 2. Check Let's Encrypt live directory
     letsencrypt_live = "/etc/letsencrypt/live"
     if os.path.exists(letsencrypt_live):
         try:
             entries = os.listdir(letsencrypt_live)
-            # Prioritize retailedgepro.in, then anything containing retailedge, then any other directory
             def priority(name):
                 if name == "retailedgepro.in":
                     return 0
@@ -26,47 +91,23 @@ def find_ssl_certificates():
                 if os.path.isdir(cand_dir):
                     cert = os.path.join(cand_dir, "fullchain.pem")
                     key = os.path.join(cand_dir, "privkey.pem")
-                    if os.path.exists(cert) and os.path.exists(key):
-                        print(f"🔒 Found Let's Encrypt certificate at: {cand_dir}")
+                    if validate_certificate_pair(cert, key):
+                        print(f"🔒 Found valid Let's Encrypt certificate at: {cand_dir}")
                         return cert, key
         except Exception as e:
-            print(f"⚠️ Error checking /etc/letsencrypt/live: {e}")
+            print(f"⚠️ Error checking /etc/letsencrypt/live: {e}", file=sys.stderr)
 
-    # 2. Check other common certificate locations
+    # 3. Check other standard certificate locations
     common_certs = [
         ("/etc/ssl/certs/retailedgepro.in.crt", "/etc/ssl/private/retailedgepro.in.key"),
         ("/etc/ssl/certs/retailedge.crt", "/etc/ssl/private/retailedge.key"),
     ]
     for cert, key in common_certs:
-        if os.path.exists(cert) and os.path.exists(key):
-            print(f"🔒 Found custom SSL certificate at: {cert}")
+        if validate_certificate_pair(cert, key):
+            print(f"🔒 Found valid custom SSL certificate at: {cert}")
             return cert, key
 
-    # 3. Check if certbot is installed and can generate a certificate
-    certbot_check = os.system("which certbot > /dev/null 2>&1")
-    if certbot_check == 0:
-        print("🌐 Certbot detected. Attempting certificate issuance for retailedgepro.in...")
-        os.makedirs("/var/www/retailedge", exist_ok=True)
-        os.system("sudo certbot certonly --webroot -w /var/www/retailedge -d retailedgepro.in -d www.retailedgepro.in --non-interactive --agree-tos --register-unsafely-without-email > /dev/null 2>&1")
-        cert = "/etc/letsencrypt/live/retailedgepro.in/fullchain.pem"
-        key = "/etc/letsencrypt/live/retailedgepro.in/privkey.pem"
-        if os.path.exists(cert) and os.path.exists(key):
-            print("✅ Successfully generated Let's Encrypt certificate via Certbot!")
-            return cert, key
-
-    # 4. Generate fallback self-signed certificate so port 443 can always bind safely
-    fallback_dir = "/etc/ssl/retailedge"
-    os.makedirs(fallback_dir, exist_ok=True)
-    fallback_cert = os.path.join(fallback_dir, "selfsigned.crt")
-    fallback_key = os.path.join(fallback_dir, "selfsigned.key")
-    if not (os.path.exists(fallback_cert) and os.path.exists(fallback_key)):
-        print("⚠️ Generating fallback self-signed SSL certificate...")
-        os.system(f"sudo openssl req -x509 -nodes -days 365 -newkey rsa:2048 -keyout {fallback_key} -out {fallback_cert} -subj '/CN=retailedgepro.in' > /dev/null 2>&1")
-
-    if os.path.exists(fallback_cert) and os.path.exists(fallback_key):
-        print(f"🔒 Using fallback certificate at: {fallback_cert}")
-        return fallback_cert, fallback_key
-
+    print("ℹ️ No valid, verified SSL certificate pair found on disk.")
     return None, None
 
 def generate_nginx_config(cert_path=None, key_path=None):
@@ -212,44 +253,75 @@ server {{
 """
     return http_block + https_block
 
-def configure_nginx():
-    print("🧹 Cleaning up conflicting Nginx configurations...")
-    os.system("sudo rm -f /etc/nginx/sites-enabled/default")
-    os.system("sudo rm -f /etc/nginx/sites-available/default")
-    os.system("sudo rm -f /etc/nginx/sites-enabled/quizhive")
-    os.system("sudo rm -f /etc/nginx/sites-available/quizhive")
-    os.system("sudo rm -f /etc/nginx/sites-enabled/retailedge")
-    os.system("sudo rm -f /etc/nginx/sites-available/retailedge")
-    os.system("sudo rm -f /etc/nginx/conf.d/default.conf")
-
-    cert_path, key_path = find_ssl_certificates()
-    config_content = generate_nginx_config(cert_path, key_path)
-
-    tmp_path = "/tmp/quizhive.conf"
-    target_path = "/etc/nginx/conf.d/quizhive.conf"
+def configure_nginx(output_path="/tmp/quizhive.conf.candidate",
+                    require_ssl=True,
+                    allow_http_only=False,
+                    existing_conf_dirs=None,
+                    custom_cert_dir=None):
     try:
-        with open(tmp_path, "w", encoding='utf-8') as f:
+        existing_has_ssl = check_existing_ssl_configured(existing_conf_dirs)
+        cert_path, key_path = find_ssl_certificates(custom_cert_dir)
+        has_valid_certs = validate_certificate_pair(cert_path, key_path)
+
+        ssl_mandatory = require_ssl or existing_has_ssl
+
+        # Strict fail-closed HTTPS downgrade gate:
+        if ssl_mandatory and not has_valid_certs:
+            print("❌ CRITICAL: SSL/TLS is mandatory (require_ssl=True or active SSL listeners exist), but valid certificates were not found or unreadable!", file=sys.stderr)
+            print("   Refusing to generate or activate HTTP-only configuration to prevent silent HTTPS downgrade.", file=sys.stderr)
+            print("   Failing closed with exit code 1. Deployment halted.", file=sys.stderr)
+            return 1
+
+        if not ssl_mandatory and not has_valid_certs:
+            if not allow_http_only:
+                print("❌ CRITICAL: No valid SSL certificates found and allow_http_only is False.", file=sys.stderr)
+                print("   Failing closed with exit code 1. Refusing to downgrade.", file=sys.stderr)
+                return 1
+            print("⚠️ Notice: Operating in explicitly permitted HTTP-only mode (allow_http_only=True).")
+
+        config_content = generate_nginx_config(cert_path if has_valid_certs else None,
+                                               key_path if has_valid_certs else None)
+
+        out_dir = os.path.dirname(output_path)
+        if out_dir:
+            os.makedirs(out_dir, exist_ok=True)
+
+        with open(output_path, "w", encoding='utf-8') as f:
             f.write(config_content)
         
-        # Move into place
-        os.system(f"sudo mv {tmp_path} {target_path}")
-        print(f"📝 Wrote Nginx configuration to {target_path}")
-
-        # Test syntax
-        test_res = os.system("sudo nginx -t")
-        if test_res != 0 and cert_path:
-            print("⚠️ Nginx test failed with SSL config. Falling back to HTTP-only configuration...")
-            fallback_content = generate_nginx_config(None, None)
-            with open(tmp_path, "w", encoding='utf-8') as f:
-                f.write(fallback_content)
-            os.system(f"sudo mv {tmp_path} {target_path}")
-            os.system("sudo nginx -t")
-
-        # Reload or restart Nginx
-        os.system("sudo systemctl reload nginx || sudo systemctl restart nginx")
-        print("✅ Successfully configured and reloaded Nginx (HTTP & HTTPS enabled)!")
+        mode_str = "HTTP & HTTPS" if has_valid_certs else "HTTP-only (explicitly authorized)"
+        print(f"✅ Generated candidate Nginx configuration ({mode_str}) at {output_path}")
+        return 0
     except Exception as e:
-        print(f"❌ Failed to configure Nginx: {e}")
+        print(f"❌ Failed to generate candidate Nginx configuration: {e}", file=sys.stderr)
+        return 1
 
 if __name__ == "__main__":
-    configure_nginx()
+    parser = argparse.ArgumentParser(description="Generate RetailEdge PRO Nginx candidate configuration.")
+    parser.add_argument("--out", "-o", dest="output_path", default="/tmp/quizhive.conf.candidate",
+                        help="Path where candidate configuration will be generated")
+    parser.add_argument("--require-ssl", dest="require_ssl", action="store_true", default=None,
+                        help="Require valid SSL certificates (fails closed if missing)")
+    parser.add_argument("--no-require-ssl", dest="require_ssl", action="store_false",
+                        help="Do not strictly require SSL (unless existing config has SSL)")
+    parser.add_argument("--allow-http-only", dest="allow_http_only", action="store_true", default=False,
+                        help="Explicitly permit generating HTTP-only configuration if SSL is not active")
+    parser.add_argument("--cert-dir", dest="custom_cert_dir", default=None,
+                        help="Custom directory containing fullchain.pem and privkey.pem")
+    parser.add_argument("--existing-conf-dir", dest="existing_conf_dirs", action="append", default=None,
+                        help="Directory to inspect for active SSL directives")
+    args = parser.parse_args()
+
+    # Environment variable fallbacks:
+    env_req_ssl = os.environ.get("REQUIRE_SSL", "true").lower() in ("true", "1", "yes")
+    require_ssl = args.require_ssl if args.require_ssl is not None else env_req_ssl
+    allow_http_only = args.allow_http_only or (os.environ.get("ALLOW_HTTP_ONLY", "false").lower() in ("true", "1", "yes"))
+
+    exit_code = configure_nginx(
+        output_path=args.output_path,
+        require_ssl=require_ssl,
+        allow_http_only=allow_http_only,
+        existing_conf_dirs=args.existing_conf_dirs,
+        custom_cert_dir=args.custom_cert_dir
+    )
+    sys.exit(exit_code)
