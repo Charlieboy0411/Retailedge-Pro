@@ -80,12 +80,16 @@ function runFullSuite() {
     process.exit(1);
   }
 
-  // CI gating
+  // CI gating & automatic deployment deactivation
   const ciDeployJob = ciDoc.jobs && ciDoc.jobs.deploy;
   testAssert(ciDeployJob && ciDeployJob.needs && ciDeployJob.needs.includes('build-and-test'),
     'ci.yml deploy job strictly depends on build-and-test job');
-  testAssert(ciDeployJob && ciDeployJob.if && ciDeployJob.if.includes("refs/heads/main"),
-    'ci.yml deploy job requires push to main branch');
+  const isDeployConditionDisabled = typeof ciDeployJob?.if === 'string' &&
+    (/^\s*false(\s+&&|\s*$)/.test(ciDeployJob.if.trim()) || ciDeployJob.if.trim() === 'false');
+  testAssert(ciDeployJob && isDeployConditionDisabled,
+    'ci.yml deploy job condition is explicitly disabled and cannot run for any event');
+  testAssert(ciDeployJob && ciDeployJob.if && ciDeployJob.if.includes("refs/heads/main") && isDeployConditionDisabled,
+    'ci.yml deploy job condition is disabled for pushes to main branch');
   testAssert(ciDeployJob && !ciDeployJob.if.includes('always()') && !ciDeployJob.if.includes('failure()'),
     'ci.yml deploy job skips on CI test failure (no always() or failure() bypass)');
 

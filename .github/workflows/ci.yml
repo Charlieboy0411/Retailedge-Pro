@@ -142,7 +142,8 @@ jobs:
   deploy:
     name: Deploy to Production EC2
     needs: [build-and-test]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Disabled: automatic production deployment disabled; deployment is strictly manual via deploy.yml
+    if: false && github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     concurrency:
       group: production-deployment
