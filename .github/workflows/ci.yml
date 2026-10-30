@@ -128,7 +128,7 @@ jobs:
         echo "--- 3. Starting Background Server for Server-Dependent Suites ---"
         node server.js &
         SERVER_PID=$!
-        npx wait-on http://localhost:5000/api/projects --timeout 20000
+        npx wait-on http://localhost:5000/api/health --timeout 30000
 
         echo "--- 4. Running Server-Dependent Regression Suites ---"
         node tests/verify_reports_analytics_engine.js
