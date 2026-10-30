@@ -10,6 +10,7 @@ const { kolkataToUtcIso, formatKolkataDateTime } = require('../utils/dateTimeUti
 const nodemailer = require('nodemailer');
 const multer = require('multer');
 const path = require('path');
+const { URL } = require('url');
 
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
@@ -91,7 +92,7 @@ function getCanonicalJoinUrl(trainingId) {
       parsed = new URL(baseUrl);
     }
   } catch (e) {
-    throw new Error(`[Configuration Error] Malformed FRONTEND_URL: "${baseUrl}"`);
+    throw new Error(`[Configuration Error] Malformed FRONTEND_URL: "${baseUrl}"`, { cause: e });
   }
 
   if (!['http:', 'https:'].includes(parsed.protocol)) {
