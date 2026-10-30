@@ -1,17 +1,105 @@
-name: Deploy to EC2
+name: Manual EC2 Deployment (Hardened)
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: 'Target 40-character Git commit SHA to deploy (must have passed CI)'
+        required: true
+        type: string
+      allow_rollback:
+        description: 'Set to "true" to authorize deploying an ancestor commit older than origin/main HEAD'
+        required: false
+        default: 'false'
+        type: string
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  checks: read
 
 jobs:
   deploy:
+    name: Manual Deploy to Production EC2
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+
+      - name: Validate Target Commit SHA and CI Status
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          SHA="${{ github.event.inputs.target_sha }}"
+          if [[ ! "$SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "CRITICAL: target_sha must be a full 40-character hex commit SHA. Received: '$SHA'" >&2
+            exit 1
+          fi
+
+          echo "Verifying commit $SHA reachability on origin/main..."
+          git fetch origin main --unshallow 2>/dev/null || git fetch origin main --depth=1000 2>/dev/null || git fetch origin main
+          if ! git cat-file -e "${SHA}^{commit}" 2>/dev/null; then
+            echo "CRITICAL: Commit $SHA does not exist on origin/main in repository ${{ github.repository }}!" >&2
+            exit 1
+          fi
+
+          if ! git merge-base --is-ancestor "$SHA" origin/main; then
+            echo "CRITICAL: Commit $SHA is not reachable from origin/main! Only commits merged into main may be deployed." >&2
+            exit 1
+          fi
+
+          # Prevent accidental deployment of older commits without explicit rollback authorization
+          MAIN_HEAD=$(git rev-parse origin/main)
+          ALLOW_ROLLBACK="${{ github.event.inputs.allow_rollback }}"
+          if [ "$SHA" != "$MAIN_HEAD" ]; then
+            if [ "$ALLOW_ROLLBACK" != "true" ]; then
+              echo "CRITICAL: Commit $SHA is an older commit than origin/main HEAD ($MAIN_HEAD)." >&2
+              echo "Accidental rollback prevented. To deploy an older commit, explicitly set allow_rollback to 'true'." >&2
+              exit 1
+            fi
+            echo "Explicit rollback authorized: deploying older commit $SHA (origin/main HEAD is $MAIN_HEAD)."
+          fi
+
+          echo "Verifying CI check-runs for commit $SHA..."
+          CHECK_RUNS=$(gh api "repos/${{ github.repository }}/commits/${SHA}/check-runs?per_page=100" 2>/dev/null || echo "")
+
+          node -e '
+            const raw = process.argv[1];
+            if (!raw || !raw.trim()) {
+              console.error("CRITICAL: Failed to retrieve check-runs from GitHub API!");
+              process.exit(1);
+            }
+            let data;
+            try {
+              data = JSON.parse(raw);
+            } catch (e) {
+              console.error("CRITICAL: Malformed JSON response for check-runs: " + e.message);
+              process.exit(1);
+            }
+            const runs = data.check_runs || [];
+            const ciRuns = runs.filter(r => r.name === "Build, Lint & Test Pipeline" || r.name === "build-and-test");
+            if (ciRuns.length === 0) {
+              console.error("CRITICAL: No CI check-run (\"Build, Lint & Test Pipeline\") found for commit!");
+              process.exit(1);
+            }
+            for (const r of ciRuns) {
+              if (r.status !== "completed") {
+                console.error(`CRITICAL: CI check-run ${r.name} (#${r.id}) is not completed (status: ${r.status})!`);
+                process.exit(1);
+              }
+              if (r.conclusion !== "success") {
+                console.error(`CRITICAL: CI check-run ${r.name} (#${r.id}) did not succeed (conclusion: ${r.conclusion})!`);
+                process.exit(1);
+              }
+            }
+            console.log(`Verified ${ciRuns.length} CI check-run(s) completed with success.`);
+          ' "$CHECK_RUNS"
+
+          echo "Commit $SHA successfully verified with passing CI status."
 
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
@@ -23,36 +111,28 @@ jobs:
           script: |
             set -e
 
+            TARGET_SHA="${{ github.event.inputs.target_sha }}"
+            echo "Starting manual production deployment for exact commit: $TARGET_SHA"
+
             cd ~/apps/Retailedge-Pro
 
+            # Preserve state and checkout exact commit SHA
+            sudo mkdir -p /var/www/retailedge_state /var/www/retailedge_releases
+            sudo chmod 755 /var/www/retailedge_state /var/www/retailedge_releases
+
+            PREV_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+            echo "$PREV_SHA" | sudo tee /var/www/retailedge_state/previous_backend_sha > /dev/null
+            echo "Previous backend SHA recorded: $PREV_SHA"
+
             git checkout -- .
-            git pull origin main
+            git fetch origin main
+            git checkout "$TARGET_SHA"
+            CURRENT_CHECKOUT=$(git rev-parse HEAD)
+            if [ "$CURRENT_CHECKOUT" != "$TARGET_SHA" ]; then
+              echo "CRITICAL: Git checkout failed to match target SHA $TARGET_SHA (current: $CURRENT_CHECKOUT)" >&2
+              exit 1
+            fi
+            echo "Target commit $TARGET_SHA successfully checked out."
 
-            echo "Installing backend dependencies..."
-            cd backend
-            npm ci
-
-            echo "Executing database migration gate & schema verification..."
-            node scripts/deploy_migration_gate.js
-
-            echo "Restarting backend service..."
-            NODE_ENV=production pm2 restart quizhive-api --update-env || NODE_ENV=production pm2 start server.js --name quizhive-api
-            sudo python3 configure_nginx.py
-
-            echo "Building frontend..."
-            cd ../frontend
-            npm ci
-            npm run build
-
-            echo "Deploying frontend..."
-            sudo rm -rf /var/www/retailedge/*
-            sudo cp -r dist/* /var/www/retailedge/
-            sudo chown -R www-data:www-data /var/www/retailedge
-
-            sudo nginx -t
-            sudo systemctl reload nginx || sudo systemctl restart nginx
-
-            echo "Validating local application health..."
-            curl -f -s http://localhost:5000/api/health || (echo "Health check failed!" && exit 1)
-
-            echo "Deployment completed successfully!"
+            # Execute canonical version-controlled production deployment runner
+            bash scripts/deploy_production.sh "$TARGET_SHA" "${{ github.event.inputs.allow_rollback || 'false' }}"

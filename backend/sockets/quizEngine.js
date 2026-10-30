@@ -263,41 +263,36 @@ function quizEngine(io) {
         }
 
         // Project Isolation validation:
-        // Trainer can host quizzes created by themselves or assigned to valid projects
+        // Trainer can host quizzes for projects they are assigned to, or global quizzes they created
         if (callerUser && callerUser.role === 'Trainer') {
-          const isCreator = quiz.creatorId && quiz.creatorId === callerUser.id;
-          if (!isCreator && quiz.projectId) {
-            let isAuthorized = false;
+          if (quiz.projectId) {
+            let accessibleProjectIds = [];
             try {
               const intelligenceService = require('../utils/projectIntelligenceService');
-              const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(callerUser, 'all', 'all');
-              isAuthorized = accessibleProjectIds.length === 0 || accessibleProjectIds.includes(quiz.projectId);
+              accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(callerUser, 'all', 'all');
             } catch (err) {
-              console.warn('[QuizEngine] Error checking accessible project IDs:', err.message);
+              logger.error('QuizEngine', null, null, 'Error checking accessible project IDs in host_start_quiz', err);
+              return socket.emit('error', 'Forbidden: Trainer not authorized for this project');
             }
 
-            // Demo environment fallback: allow Demo Trainer to host any quiz
-            if (!isAuthorized) {
-              const dbUser = await User.findByPk(callerUser.id, { attributes: ['id', 'email'] });
-              if (dbUser && dbUser.email && (dbUser.email.toLowerCase() === 'trainer@quizhive.com' || dbUser.email.toLowerCase().includes('idonneous'))) {
-                isAuthorized = true;
-              }
-            }
-
-            // If project exists in DB, authorized trainers can host the training session
-            if (!isAuthorized) {
-              const Project = require('../models/Project');
-              const projExists = await Project.findByPk(quiz.projectId);
-              if (projExists) isAuthorized = true;
-            }
-
-            if (!isAuthorized) {
+            if (!Array.isArray(accessibleProjectIds) || !accessibleProjectIds.includes(quiz.projectId)) {
               logger.warn('QuizEngine', null, null, 'Trainer unauthorized for project', {
                 trainerId: callerUser.id,
                 quizId,
                 quizProjectId: quiz.projectId
               });
               return socket.emit('error', 'Forbidden: Trainer not authorized for this project');
+            }
+          } else {
+            // Global quiz (quiz.projectId is null/undefined):
+            // Trainer can only host if they created the quiz
+            const isCreator = quiz.creatorId && quiz.creatorId === callerUser.id;
+            if (!isCreator) {
+              logger.warn('QuizEngine', null, null, 'Trainer unauthorized to host unassigned global quiz', {
+                trainerId: callerUser.id,
+                quizId
+              });
+              return socket.emit('error', 'Forbidden: Trainer not authorized to host this global quiz');
             }
           }
         }
@@ -500,8 +495,12 @@ function quizEngine(io) {
           if (session.hostId && session.hostId !== callerUser.id && !['Admin', 'Super Admin'].includes(callerUser.role)) {
             return socket.emit('error', 'Unauthorized: Not the host of this session');
           }
-          if (callerUser.role === 'Trainer' && callerUser.projectId && session.projectId && session.projectId !== callerUser.projectId) {
-            return socket.emit('error', 'Forbidden: Project isolation violation');
+          if (callerUser.role === 'Trainer' && session.projectId) {
+            const intelligenceService = require('../utils/projectIntelligenceService');
+            const accessibleProjectIds = await intelligenceService.getAccessibleProjectIds(callerUser, 'all', 'all');
+            if (!Array.isArray(accessibleProjectIds) || !accessibleProjectIds.includes(session.projectId)) {
+              return socket.emit('error', 'Forbidden: Project isolation violation');
+            }
           }
         }
 

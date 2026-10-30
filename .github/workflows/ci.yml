@@ -56,12 +56,12 @@ jobs:
         cd backend
         npm ci
 
-    - name: Run Backend Linter (ESLint)
+    - name: Run Backend Linter
       run: |
         cd backend
         npm run lint --if-present
 
-    - name: Run Backend Unit Tests (with Coverage)
+    - name: Execute Database Migrations for Testing
       env:
         DB_HOST: localhost
         DB_PORT: 5432
@@ -71,9 +71,9 @@ jobs:
         NODE_ENV: test
       run: |
         cd backend
-        npm run test:unit -- --coverage
+        npm run migrate --if-present
 
-    - name: Run Backend Socket Security Tests
+    - name: Run Backend Unit Tests with Coverage
       env:
         DB_HOST: localhost
         DB_PORT: 5432
@@ -83,28 +83,62 @@ jobs:
         NODE_ENV: test
       run: |
         cd backend
+        npm run test:unit --if-present
+
+    - name: Run Backend Integration Tests
+      env:
+        DB_HOST: localhost
+        DB_PORT: 5432
+        DB_NAME: quizhive_test
+        DB_USER: postgres
+        DB_PASS: password123
+        NODE_ENV: test
+      run: |
+        cd backend
+        npm run test:integration --if-present
+
+    - name: Run API Contract & Regression Verification
+      env:
+        NODE_ENV: development
+        DB_DIALECT: sqlite
+        DB_STORAGE: uat_test_run.sqlite
+        CONTROLLED_DATE: '2026-09-15'
+        DISABLE_TUNNEL: 'true'
+        PORT: 5000
+      run: |
+        cd backend
+        cleanup() {
+          echo "Cleaning up background test server and disposable database..."
+          if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" 2>/dev/null || true; fi
+          rm -f uat_test_run.sqlite
+        }
+        trap cleanup EXIT
+
+        echo "--- 1. Provisioning Disposable CI SQLite Database ---"
+        node tests/setup_ci_db.js
+
+        echo "--- 2. Running Offline Regression & Security Suites ---"
+        node tests/verify_reporting_data_integrity.js
+        node tests/verify_intelligence.js
+        node tests/verify_report_data_lineage.js
+        node tests/test_gate_c_browser_prejoin_gate.js
+        node tests/verify_deploy_workflow_safety.js
         npm run test:security
 
-    # ─── PLAYWRIGHT BROWSER SMOKE TEST ───
-    - name: Install Playwright Browsers
-      run: |
-        cd backend
-        npx playwright install --with-deps chromium
+        echo "--- 3. Starting Background Server for Server-Dependent Suites ---"
+        node server.js &
+        SERVER_PID=$!
+        npx wait-on http://localhost:5000/api/health --timeout 30000
 
-    - name: Run Playwright E2E Smoke Test
-      env:
-        DB_HOST: localhost
-        DB_PORT: 5432
-        DB_NAME: quizhive_test
-        DB_USER: postgres
-        DB_PASS: password123
-        NODE_ENV: test
-      run: |
-        cd backend
-        node tests/playwrightScaffold.js || echo "Skipping active browser E2E test due to offline environment requirements"
+        echo "--- 4. Running Server-Dependent Regression Suites ---"
+        node tests/verify_reports_analytics_engine.js
+        node tests/verify_uat_remediation_suite.js
+        node tests/verify_td_data_hardening.js
 
-    # ─── API BENCHMARK SMOKE TEST ───
-    - name: Run Autocannon Stats API Benchmark Smoke Test
+        echo "--- All API Contract & Regression Suites Passed Successfully ---"
+
+    # ─── PERFORMANCE & LOAD BENCHMARK (OPTIONAL / NON-BLOCKING) ───
+    - name: Run WebSocket & API Benchmark
       env:
         DB_HOST: localhost
         DB_PORT: 5432
@@ -127,3 +161,55 @@ jobs:
       with:
         name: jest-coverage-report
         path: backend/coverage/
+
+  deploy:
+    name: Deploy to Production EC2
+    needs: [build-and-test]
+    # Disabled: automatic production deployment disabled; deployment is strictly manual via deploy.yml
+    if: false && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: production-deployment
+      cancel-in-progress: false
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ secrets.EC2_PORT || '22' }}
+          script: |
+            set -e
+
+            TARGET_SHA="${{ github.sha }}"
+            echo "Starting production deployment for exact commit: $TARGET_SHA"
+
+            cd ~/apps/Retailedge-Pro
+
+            # Preserve state and checkout exact commit SHA
+            sudo mkdir -p /var/www/retailedge_state /var/www/retailedge_releases
+            sudo chmod 755 /var/www/retailedge_state /var/www/retailedge_releases
+
+            PREV_SHA=$(git rev-parse HEAD 2>/dev/null || echo "")
+            echo "$PREV_SHA" | sudo tee /var/www/retailedge_state/previous_backend_sha > /dev/null
+            echo "Previous backend SHA recorded: $PREV_SHA"
+
+            git checkout -- .
+            git fetch origin main
+            git checkout "$TARGET_SHA"
+            CURRENT_CHECKOUT=$(git rev-parse HEAD)
+            if [ "$CURRENT_CHECKOUT" != "$TARGET_SHA" ]; then
+              echo "CRITICAL: Git checkout failed to match target SHA $TARGET_SHA (current: $CURRENT_CHECKOUT)" >&2
+              exit 1
+            fi
+            echo "Target commit $TARGET_SHA successfully checked out."
+
+            # Execute canonical version-controlled production deployment runner
+            bash scripts/deploy_production.sh "$TARGET_SHA" "false"

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
-import { Navigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Navigate, useSearchParams, useLocation, useNavigate } from 'react-router-dom';
 import { Play, FileText, Presentation, Image as ImageIcon, Music, CheckCircle2, Circle, Plus, Trash2, ShieldAlert, Video, ExternalLink } from 'lucide-react';
 import CalendarWidget from '../components/CalendarWidget';
 import { copyTextToClipboard } from '../utils/clipboard';
@@ -13,6 +13,7 @@ export default function Trainings() {
   const { token, user } = useContext(AuthContext);
 
   const location = useLocation();
+  const navigate = useNavigate();
 
   const backendUrl = '';
   const [trainings, setTrainings] = useState([]);
@@ -86,15 +87,13 @@ export default function Trainings() {
   }, [newTraining.type, newTraining.projectId, projects]);
 
   useEffect(() => {
-    // Check if we need to auto-join a meeting
-    if (autoJoinParam === 'true' && selectedTraining && selectedTraining.type === 'Meeting' && !isAttendingMeeting) {
-      handleStartMeeting(selectedTraining.id, selectedTraining.url);
-      
-      // Clean up the URL so it doesn't auto-join again on refresh
+    // Invariant: autoJoin flow must not bypass the mandatory pre-join gate
+    if (autoJoinParam === 'true' && selectedTraining && selectedTraining.type === 'Meeting') {
       searchParams.delete('autoJoin');
       setSearchParams(searchParams, { replace: true });
+      navigate(`/guest-join?id=${selectedTraining.id}`);
     }
-  }, [autoJoinParam, selectedTraining, isAttendingMeeting]);
+  }, [autoJoinParam, selectedTraining]);
 
   const fetchTrainings = async () => {
     try {
@@ -238,36 +237,15 @@ export default function Trainings() {
     const meetingInfo = parseMeetingUrl(url);
 
     if (!meetingInfo.isJitsi) {
-      // Non-Jitsi external link: open tab, but do NOT fabricate Jitsi attendance telemetry
+      // Non-Jitsi external link: open tab
       if (url) {
         window.open(url, '_blank', 'noopener,noreferrer');
       }
       return;
     }
 
-    // For Jitsi: mount in-app meeting player; DO NOT emit join event yet.
-    // Genuine join event will only emit when Jitsi fires videoConferenceJoined.
-    setIsAttendingMeeting(true);
-    setJitsiConnected(false);
-
-    if (telemetrySessionRef.current) {
-      telemetrySessionRef.current.cleanup();
-    }
-
-    telemetrySessionRef.current = createJitsiTelemetrySession({
-      trainingId,
-      scheduledDurationMinutes: selectedTraining?.duration || 60,
-      token,
-      userId: user?.id,
-      participantName: user?.name || 'Learner',
-      employeeId: user?.employee_id || 'EMP',
-      backendUrl,
-      onStatusChange: ({ isJoined }) => {
-        if (isJoined) {
-          setJitsiConnected(true);
-        }
-      }
-    });
+    // Invariant: Mandatory pre-join gate must be traversed before Jitsi entry
+    navigate(`/guest-join?id=${trainingId}`);
   };
 
   const handleEndMeeting = async (trainingId) => {
@@ -333,18 +311,6 @@ export default function Trainings() {
     setSelectedTraining(t);
     setActiveSlide(0);
   };
-
-  // Recover from page refresh: check localStorage for any active meeting
-  useEffect(() => {
-    if (selectedTraining?.type === 'Meeting') {
-      const stored = localStorage.getItem(`meeting_start_${selectedTraining.id}`);
-      if (stored && !isAttendingMeeting) {
-        setMeetingStartTime(parseInt(stored));
-        lastSyncTimeRef.current = Date.now(); // start syncing from the refresh point onwards
-        setIsAttendingMeeting(true);
-      }
-    }
-  }, [selectedTraining]);
 
   // Combined meeting elapsed timer and periodic auto-save (every 10s)
   useEffect(() => {
@@ -696,6 +662,7 @@ export default function Trainings() {
                           </button>
                           <button
                             type="button"
+                            id="btn-join-live-meeting"
                             onClick={() => handleStartMeeting(selectedTraining.id, selectedTraining.url)}
                             style={{
                               background: '#10B981',
@@ -712,7 +679,7 @@ export default function Trainings() {
                               transition: 'all 0.2s'
                             }}
                           >
-                            {parseMeetingUrl(selectedTraining.url).isJitsi ? '📹 Launch Meeting Room & Track' : '↗ Open External Link'}
+                            {parseMeetingUrl(selectedTraining.url).isJitsi ? '📹 Join Live Meeting' : '↗ Open External Link'}
                           </button>
                         </div>
                       </div>

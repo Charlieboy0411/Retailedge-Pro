@@ -55,39 +55,75 @@ async function runTDDataHardeningVerification() {
     // ---------------------------------------------------------
     console.log('\n--- SECTION 1: PERIOD RESOLUTION & DATE BOUNDARIES ---');
 
+    const activeClock = process.env.CONTROLLED_DATE ? new Date(process.env.CONTROLLED_DATE) : new Date();
+    const curYear = activeClock.getFullYear();
+    const curMonth = activeClock.getMonth();
+    const pad = (n) => String(n).padStart(2, '0');
+
+    // Dynamically calculated date boundaries matching active clock
+    const expectedCurMonthStart = `${curYear}-${pad(curMonth + 1)}-01`;
+    const lastDayCurMonth = new Date(curYear, curMonth + 1, 0).getDate();
+    const expectedCurMonthEnd = `${curYear}-${pad(curMonth + 1)}-${pad(lastDayCurMonth)}`;
+
+    const prevMonthDate = new Date(curYear, curMonth - 1, 1);
+    const prevYear = prevMonthDate.getFullYear();
+    const prevMonth = prevMonthDate.getMonth();
+    const lastDayPrevMonth = new Date(prevYear, prevMonth + 1, 0).getDate();
+    const expectedPrevMonthStart = `${prevYear}-${pad(prevMonth + 1)}-01`;
+    const expectedPrevMonthEnd = `${prevYear}-${pad(prevMonth + 1)}-${pad(lastDayPrevMonth)}`;
+
+    const qIndex = Math.floor(curMonth / 3);
+    const qStartMonth = qIndex * 3;
+    const qEndMonth = qStartMonth + 2;
+    const lastDayQ = new Date(curYear, qEndMonth + 1, 0).getDate();
+    const expectedCurQuarterStart = `${curYear}-${pad(qStartMonth + 1)}-01`;
+    const expectedCurQuarterEnd = `${curYear}-${pad(qEndMonth + 1)}-${pad(lastDayQ)}`;
+
+    const prevQIndex = qIndex === 0 ? 3 : qIndex - 1;
+    const prevQYear = qIndex === 0 ? curYear - 1 : curYear;
+    const prevQStartMonth = prevQIndex * 3;
+    const prevQEndMonth = prevQStartMonth + 2;
+    const lastDayPrevQ = new Date(prevQYear, prevQEndMonth + 1, 0).getDate();
+    const expectedPrevQuarterStart = `${prevQYear}-${pad(prevQStartMonth + 1)}-01`;
+    const expectedPrevQuarterEnd = `${prevQYear}-${pad(prevQEndMonth + 1)}-${pad(lastDayPrevQ)}`;
+
+    const fyStartYear = curMonth >= 3 ? curYear : curYear - 1;
+    const expectedFYStart = `${fyStartYear}-04-01`;
+    const expectedFYEnd = `${fyStartYear + 1}-03-31`;
+
     // Test: Current Month (Default)
     const currentMonthRange = tdService.resolvePeriodDateRange('current_month');
     assert(
-      currentMonthRange && currentMonthRange.startDateStr.startsWith('2026-09-01'),
-      `Test 3: current_month resolves to September 1, 2026 (Resolved: ${currentMonthRange?.startDateStr} to ${currentMonthRange?.endDateStr})`
+      currentMonthRange && currentMonthRange.startDateStr === expectedCurMonthStart && currentMonthRange.endDateStr === expectedCurMonthEnd,
+      `Test 3: current_month resolves to ${expectedCurMonthStart} to ${expectedCurMonthEnd} (Resolved: ${currentMonthRange?.startDateStr} to ${currentMonthRange?.endDateStr})`
     );
 
     // Test: Previous Month
     const prevMonthRange = tdService.resolvePeriodDateRange('previous_month');
     assert(
-      prevMonthRange && prevMonthRange.startDateStr === '2026-08-01' && prevMonthRange.endDateStr === '2026-08-31',
-      `Test 4: previous_month resolves to August 1 to August 31, 2026 (Resolved: ${prevMonthRange?.startDateStr} to ${prevMonthRange?.endDateStr})`
+      prevMonthRange && prevMonthRange.startDateStr === expectedPrevMonthStart && prevMonthRange.endDateStr === expectedPrevMonthEnd,
+      `Test 4: previous_month resolves to ${expectedPrevMonthStart} to ${expectedPrevMonthEnd} (Resolved: ${prevMonthRange?.startDateStr} to ${prevMonthRange?.endDateStr})`
     );
 
     // Test: Current Quarter
     const currentQuarterRange = tdService.resolvePeriodDateRange('current_quarter');
     assert(
-      currentQuarterRange && currentQuarterRange.startDateStr === '2026-07-01' && currentQuarterRange.endDateStr === '2026-09-30',
-      `Test 5: current_quarter resolves to Q3 (2026-07-01 to 2026-09-30) (Resolved: ${currentQuarterRange?.startDateStr} to ${currentQuarterRange?.endDateStr})`
+      currentQuarterRange && currentQuarterRange.startDateStr === expectedCurQuarterStart && currentQuarterRange.endDateStr === expectedCurQuarterEnd,
+      `Test 5: current_quarter resolves to Q${qIndex + 1} (${expectedCurQuarterStart} to ${expectedCurQuarterEnd}) (Resolved: ${currentQuarterRange?.startDateStr} to ${currentQuarterRange?.endDateStr})`
     );
 
     // Test: Previous Quarter
     const prevQuarterRange = tdService.resolvePeriodDateRange('previous_quarter');
     assert(
-      prevQuarterRange && prevQuarterRange.startDateStr === '2026-04-01' && prevQuarterRange.endDateStr === '2026-06-30',
-      `Test 6: previous_quarter resolves to Q2 (2026-04-01 to 2026-06-30) (Resolved: ${prevQuarterRange?.startDateStr} to ${prevQuarterRange?.endDateStr})`
+      prevQuarterRange && prevQuarterRange.startDateStr === expectedPrevQuarterStart && prevQuarterRange.endDateStr === expectedPrevQuarterEnd,
+      `Test 6: previous_quarter resolves to Q${prevQIndex + 1} (${expectedPrevQuarterStart} to ${expectedPrevQuarterEnd}) (Resolved: ${prevQuarterRange?.startDateStr} to ${prevQuarterRange?.endDateStr})`
     );
 
     // Test: Current FY
     const currentFYRange = tdService.resolvePeriodDateRange('current_fy');
     assert(
-      currentFYRange && currentFYRange.startDateStr === '2026-04-01' && currentFYRange.endDateStr === '2027-03-31',
-      `Test 7: current_fy resolves to April 1, 2026 to March 31, 2027 (Resolved: ${currentFYRange?.startDateStr} to ${currentFYRange?.endDateStr})`
+      currentFYRange && currentFYRange.startDateStr === expectedFYStart && currentFYRange.endDateStr === expectedFYEnd,
+      `Test 7: current_fy resolves to April 1, ${fyStartYear} to March 31, ${fyStartYear + 1} (Resolved: ${currentFYRange?.startDateStr} to ${currentFYRange?.endDateStr})`
     );
 
     // Test: All Time
@@ -114,8 +150,8 @@ async function runTDDataHardeningVerification() {
     );
 
     assert(
-      defaultCockpitRes.data.periodRange && defaultCockpitRes.data.periodRange.start === '2026-09-01',
-      `Test 11: Cockpit API applies current month start boundary (2026-09-01)`
+      defaultCockpitRes.data.periodRange && defaultCockpitRes.data.periodRange.start === expectedCurMonthStart,
+      `Test 11: Cockpit API applies current month start boundary (${expectedCurMonthStart})`
     );
 
     // September Certificates = 0

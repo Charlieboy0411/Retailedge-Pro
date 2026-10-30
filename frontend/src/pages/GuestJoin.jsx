@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useContext, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { AuthContext } from '../context/AuthContext';
 import {
@@ -17,14 +17,16 @@ import {
   Clock,
   LogOut,
   RotateCcw,
-  Check
+  Check,
+  ArrowLeft
 } from 'lucide-react';
 import { createJitsiTelemetrySession } from '../utils/jitsiTelemetry';
 import { formatKolkataDateTime } from '../utils/dateTimeUtils';
 
 export default function GuestJoin() {
   const [searchParams] = useSearchParams();
-  const { login } = useContext(AuthContext);
+  const navigate = useNavigate();
+  const { user: authUser, token: authToken, login } = useContext(AuthContext);
 
   const trainingId = searchParams.get('id');
 
@@ -57,7 +59,7 @@ export default function GuestJoin() {
   const meetingWindowRef = useRef(null);
   const elapsedIntervalRef = useRef(null);
 
-  // 1. Initial Load: Retrieve Join Context
+  // 1. Initial Load: Retrieve Join Context and verify session with backend
   useEffect(() => {
     if (!trainingId) {
       setLoadingContext(false);
@@ -65,23 +67,16 @@ export default function GuestJoin() {
       return;
     }
     fetchJoinContext();
-
-    // Check for cached active session in localStorage for seamless reconnection
-    try {
-      const cached = localStorage.getItem(`jitsi_guest_auth_${trainingId}`);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (parsed.user && parsed.token && parsed.meeting) {
-          setRegisteredAttendee(parsed);
-          setName(parsed.user.name || '');
-          setEmployeeId(parsed.user.employee_id || '');
-          setZone(parsed.user.zone || '');
-        }
-      }
-    } catch (e) {
-      console.warn('Failed to parse cached session:', e);
-    }
   }, [trainingId]);
+
+  // Pre-fill form fields for authenticated user if available
+  useEffect(() => {
+    if (authUser) {
+      if (!name && authUser.name) setName(authUser.name);
+      if (!employeeId && authUser.employee_id) setEmployeeId(authUser.employee_id);
+      if (!zone && authUser.location) setZone(authUser.location);
+    }
+  }, [authUser]);
 
   // Clean up telemetry and timer on unmount
   useEffect(() => {
@@ -101,19 +96,90 @@ export default function GuestJoin() {
     try {
       if (!empIdQuery) setLoadingContext(true);
       setContextError('');
-      const url = empIdQuery
+
+      // Read candidate token from localStorage
+      let cachedToken = null;
+      try {
+        const cached = localStorage.getItem(`jitsi_guest_auth_${trainingId}`);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          cachedToken = parsed?.token || null;
+        }
+      } catch (e) {
+        localStorage.removeItem(`jitsi_guest_auth_${trainingId}`);
+      }
+
+      // Priority list of tokens to authoritatively verify with the backend:
+      // 1. Cached token (from previous session of this training)
+      // 2. AuthContext token (current logged-in user fallback)
+      const tokensToTry = [cachedToken, authToken].filter((t, idx, arr) => t && arr.indexOf(t) === idx);
+
+      let resData = null;
+      let verifiedToken = null;
+
+      const baseUrl = empIdQuery
         ? `/api/trainings/${trainingId}/join-context?employeeId=${encodeURIComponent(empIdQuery)}`
         : `/api/trainings/${trainingId}/join-context`;
-      const res = await axios.get(url);
-      setMeetingContext(res.data);
 
-      if (res.data.matchedEmployee) {
-        setMatchedRecord(res.data.matchedEmployee);
-        if (res.data.matchedEmployee.authoritativeZone) {
-          setZone(res.data.matchedEmployee.authoritativeZone);
+      for (const tokenCandidate of tokensToTry) {
+        try {
+          const res = await axios.get(baseUrl, {
+            headers: { Authorization: `Bearer ${tokenCandidate}` }
+          });
+          resData = res.data;
+          if (res.data.verifiedSession && res.data.verifiedSession.valid && res.data.verifiedSession.user) {
+            verifiedToken = tokenCandidate;
+            break;
+          }
+        } catch (tokErr) {
+          // Token candidate rejected, continue to next
         }
-        if (res.data.matchedEmployee.name && !name.trim()) {
-          setName(res.data.matchedEmployee.name);
+      }
+
+      // If no candidate token was verified, make a clean unauthenticated call to get public context
+      if (!resData) {
+        const res = await axios.get(baseUrl);
+        resData = res.data;
+      }
+
+      setMeetingContext(resData);
+
+      // Requirement 4 & 7: Authoritative backend token/session verification
+      if (verifiedToken && resData.verifiedSession && resData.verifiedSession.valid && resData.verifiedSession.user) {
+        const vUser = resData.verifiedSession.user;
+        const verifiedAttendee = {
+          token: verifiedToken,
+          user: vUser,
+          meeting: {
+            id: trainingId,
+            title: resData.title,
+            description: resData.description,
+            url: resData.url,
+            scheduledAt: resData.scheduledAt,
+            duration: resData.duration || 60,
+            projectName: resData.projectName
+          }
+        };
+        setRegisteredAttendee(verifiedAttendee);
+        setName(vUser.name || '');
+        setEmployeeId(vUser.employee_id || '');
+        setZone(vUser.zone || '');
+        try {
+          localStorage.setItem(`jitsi_guest_auth_${trainingId}`, JSON.stringify(verifiedAttendee));
+        } catch (err) {}
+      } else {
+        // If backend verification fails or returns null, clear any stale client flag
+        localStorage.removeItem(`jitsi_guest_auth_${trainingId}`);
+        setRegisteredAttendee(null);
+      }
+
+      if (resData.matchedEmployee) {
+        setMatchedRecord(resData.matchedEmployee);
+        if (resData.matchedEmployee.authoritativeZone) {
+          setZone(resData.matchedEmployee.authoritativeZone);
+        }
+        if (resData.matchedEmployee.name && !name.trim()) {
+          setName(resData.matchedEmployee.name);
         }
       }
     } catch (err) {
@@ -367,6 +433,32 @@ export default function GuestJoin() {
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.6)',
         boxSizing: 'border-box'
       }}>
+
+        {/* Navigation link back to LMS if authenticated */}
+        {authUser && (
+          <div style={{ marginBottom: '14px' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/trainings')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#94A3B8',
+                fontSize: '0.82rem',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '4px 0',
+                transition: 'color 0.2s'
+              }}
+              onMouseEnter={e => e.currentTarget.style.color = '#F8FAFC'}
+              onMouseLeave={e => e.currentTarget.style.color = '#94A3B8'}
+            >
+              <ArrowLeft size={14} /> Back to LMS Workspace
+            </button>
+          </div>
+        )}
 
         {/* ─── STAGE 1: REGISTRATION FORM (When not yet registered) ─── */}
         {!registeredAttendee && (
