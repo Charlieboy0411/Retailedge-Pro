@@ -128,7 +128,13 @@ function resolvePeriodDateRange(period = 'current_month', customStartDate = null
     return null;
   }
 
-  const now = new Date();
+  let now = new Date();
+  if (process.env.NODE_ENV !== 'production' && process.env.CONTROLLED_DATE) {
+    const parsed = new Date(process.env.CONTROLLED_DATE);
+    if (!isNaN(parsed.getTime())) {
+      now = parsed;
+    }
+  }
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth(); // 0 = Jan, 8 = Sep
 

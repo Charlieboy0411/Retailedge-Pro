@@ -99,20 +99,43 @@ jobs:
 
     - name: Run API Contract & Regression Verification
       env:
-        DB_HOST: localhost
-        DB_PORT: 5432
-        DB_NAME: quizhive_test
-        DB_USER: postgres
-        DB_PASS: password123
-        NODE_ENV: test
+        NODE_ENV: development
+        DB_DIALECT: sqlite
+        DB_STORAGE: uat_test_run.sqlite
+        CONTROLLED_DATE: '2026-09-15'
+        DISABLE_TUNNEL: 'true'
+        PORT: 5000
       run: |
         cd backend
+        cleanup() {
+          echo "Cleaning up background test server and disposable database..."
+          if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" 2>/dev/null || true; fi
+          rm -f uat_test_run.sqlite
+        }
+        trap cleanup EXIT
+
+        echo "--- 1. Provisioning Disposable CI SQLite Database ---"
+        node tests/setup_ci_db.js
+
+        echo "--- 2. Running Offline Regression & Security Suites ---"
+        node tests/verify_reporting_data_integrity.js
         node tests/verify_intelligence.js
         node tests/verify_report_data_lineage.js
+        node tests/test_gate_c_browser_prejoin_gate.js
+        node tests/verify_deploy_workflow_safety.js
+        npm run test:security
+
+        echo "--- 3. Starting Background Server for Server-Dependent Suites ---"
+        node server.js &
+        SERVER_PID=$!
+        npx wait-on http://localhost:5000/api/projects --timeout 20000
+
+        echo "--- 4. Running Server-Dependent Regression Suites ---"
         node tests/verify_reports_analytics_engine.js
         node tests/verify_uat_remediation_suite.js
         node tests/verify_td_data_hardening.js
-        node tests/verify_reporting_data_integrity.js
+
+        echo "--- All API Contract & Regression Suites Passed Successfully ---"
 
     # ─── PERFORMANCE & LOAD BENCHMARK (OPTIONAL / NON-BLOCKING) ───
     - name: Run WebSocket & API Benchmark

@@ -603,9 +603,13 @@ bash scripts/deploy_production.sh "target_sha_12345678901234567890123456789012" 
       for (let i = 1; i <= 8; i++) {
         const r = path.join(releasesDir, `rel${i}`);
         fs.mkdirSync(r, { recursive: true });
+        fs.writeFileSync(path.join(r, 'index.html'), `<h1>rel${i}</h1>`);
       }
       fs.mkdirSync(path.join(releasesDir, 'legacy_baseline'), { recursive: true });
+      fs.writeFileSync(path.join(releasesDir, 'legacy_baseline', 'index.html'), '<h1>legacy</h1>');
       fs.writeFileSync(path.join(stateDir, 'previous_frontend_target'), path.join(releasesDir, 'rel1'));
+      fs.writeFileSync(liveFePath, path.join(releasesDir, 'rel1'));
+      fs.writeFileSync(`${liveFePath}.__symlink`, '');
     });
     testAssert(res.status === 0,
       'Release retention pruning completes successfully');

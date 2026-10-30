@@ -44,7 +44,7 @@ net.Socket.prototype.connect = function (...args) {
 
 // Enforce Isolated SQLite Environment
 process.env.DB_DIALECT = 'sqlite';
-process.env.DB_STORAGE = path.join(__dirname, '..', 'uat_database.sqlite');
+process.env.DB_STORAGE = process.env.DB_STORAGE || path.join(__dirname, '..', 'uat_database.sqlite');
 process.env.NODE_ENV = 'development';
 process.env.DISABLE_TUNNEL = 'true';
 delete process.env.DATABASE_URL;

@@ -24,7 +24,7 @@ const { spawnSync } = require('child_process');
 // ─── Network Circuit Breaker & SQLite UAT Database Isolation ───
 process.env.NODE_ENV = 'test';
 process.env.DB_DIALECT = 'sqlite';
-process.env.DB_STORAGE = path.resolve(__dirname, '../uat_database.sqlite');
+process.env.DB_STORAGE = process.env.DB_STORAGE || path.resolve(__dirname, '../uat_database.sqlite');
 process.env.DB_HOST = '127.0.0.1';
 process.env.JWT_SECRET = 'test_secret_retailedge_pro_2026';
 process.env.PORT = '5067';
