@@ -52,6 +52,38 @@ describe('scoringEngine.js Answer Validation', () => {
     expect(isCorrectAnswer(questionBadJson, 'Option A')).toBe(true);
   });
 
+  test('validates multi_select when single option is numeric string or contains commas', () => {
+    // Regression for Q1: numeric string "2017" where JSON.parse("2017") returns number 2017
+    const numericMultiSelect = {
+      type: 'multi_select',
+      options: ['2010', '2014', '2017', '2021'],
+      correct_answer: '["2017"]'
+    };
+    expect(isCorrectAnswer(numericMultiSelect, '2017')).toBe(true);
+    expect(isCorrectAnswer(numericMultiSelect, 2017)).toBe(true);
+    expect(isCorrectAnswer(numericMultiSelect, '["2017"]')).toBe(true);
+    expect(isCorrectAnswer(numericMultiSelect, '2014')).toBe(false);
+
+    // Regression for Q4/Q6/Q8/Q9: single option containing commas
+    const commaOptionMultiSelect = {
+      type: 'multi_select',
+      options: [
+        'All Night Comfort Pads (320mm, 400mm)',
+        'Daily Panty Liners (150mm, 180mm)'
+      ],
+      correct_answer: '["All Night Comfort Pads (320mm, 400mm)"]'
+    };
+    expect(isCorrectAnswer(commaOptionMultiSelect, 'All Night Comfort Pads (320mm, 400mm)')).toBe(true);
+    expect(isCorrectAnswer(commaOptionMultiSelect, 'Daily Panty Liners (150mm, 180mm)')).toBe(false);
+
+    // Comma-containing option even when options array is omitted
+    const commaNoOptions = {
+      type: 'multi_select',
+      correct_answer: '["Fragrances, dyes, and phthalates "]'
+    };
+    expect(isCorrectAnswer(commaNoOptions, 'Fragrances, dyes, and phthalates ')).toBe(true);
+  });
+
   test('validates single choice when correct_answer or submittedAnswer is an option index', () => {
     const questionWithIndex = {
       type: 'mcq',

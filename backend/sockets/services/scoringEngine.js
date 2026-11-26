@@ -36,21 +36,43 @@ const isCorrectAnswer = (question, submittedAnswer) => {
   }
 
   if (question.type === 'multi_select') {
-    let correctArr = [];
-    if (Array.isArray(correct)) correctArr = correct;
-    else if (typeof correct === 'string') {
-      try { correctArr = JSON.parse(correct); }
-      catch (e) { correctArr = correct.split(',').map(s => s.trim()); }
-    }
+    const parseMultiSelect = (raw, allowSingleExactFallback = false, singleExpected = null) => {
+      if (Array.isArray(raw)) return raw;
+      if (typeof raw === 'number' || typeof raw === 'boolean') return [String(raw)];
+      if (typeof raw !== 'string') return null;
 
-    let submittedArr = [];
-    if (Array.isArray(submittedAnswer)) submittedArr = submittedAnswer;
-    else if (typeof submittedAnswer === 'string') {
-      try { submittedArr = JSON.parse(submittedAnswer); }
-      catch (e) { submittedArr = submittedAnswer.split(',').map(s => s.trim()); }
-    }
+      const trimmed = raw.trim();
+      if (!trimmed) return [];
 
-    if (!Array.isArray(correctArr) || !Array.isArray(submittedArr)) return false;
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) return parsed;
+        // JSON.parse("2017") returns a number, not an array — treat scalar JSON as a single selection
+      } catch (e) {
+        // Not valid JSON; proceed to option/comma resolution
+      }
+
+      // If the raw string matches a configured option verbatim, do NOT split on internal commas
+      if (options.length > 0) {
+        const lowerTrimmed = trimmed.toLowerCase();
+        const matchesOption = options.some(opt => String(opt).trim().toLowerCase() === lowerTrimmed);
+        if (matchesOption) return [trimmed];
+      }
+
+      if (allowSingleExactFallback && singleExpected !== null) {
+        if (trimmed.toLowerCase() === singleExpected) return [trimmed];
+      }
+
+      return trimmed.split(',').map(s => s.trim());
+    };
+
+    const correctArr = parseMultiSelect(correct);
+    if (!Array.isArray(correctArr)) return false;
+
+    const singleExpected = correctArr.length === 1 ? String(correctArr[0]).trim().toLowerCase() : null;
+    const submittedArr = parseMultiSelect(submittedAnswer, correctArr.length === 1, singleExpected);
+
+    if (!Array.isArray(submittedArr)) return false;
     if (correctArr.length !== submittedArr.length) return false;
 
     // Normalize elements (resolving indices to text if needed)
