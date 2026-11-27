@@ -225,7 +225,7 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
 
   const completionRate = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
   const attemptRate = assigned > 0 ? Math.round((attempted / assigned) * 100) : 0;
-  const passRate = completed > 0 ? Math.round((passedCount / completed) * 100) : 0;
+  const passRate = attempted > 0 ? Math.min(100, Math.round((passedCount / attempted) * 100)) : 0;
 
   const passingScore = compiled.passingScore || ((quiz?.config?.passing_score !== undefined && quiz?.config?.passing_score !== null)
     ? Number(quiz.config.passing_score)
@@ -373,7 +373,7 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
       completed,
       pending,
       passed: passedCount,
-      failed: Math.max(0, completed - passedCount)
+      failed: Math.max(0, attempted - passedCount)
     },
     executiveSummary: {
       sessionsConducted: 1,
@@ -401,7 +401,7 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
       completed,
       pending,
       passed: passedCount,
-      failed: Math.max(0, completed - passedCount),
+      failed: Math.max(0, attempted - passedCount),
       completionRate,
       attemptRate,
       passRate,
