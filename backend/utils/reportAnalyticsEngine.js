@@ -62,6 +62,7 @@ function compileSessionParticipantResults(participants = [], totalQuestions = 1,
     ? Number(quiz.config.passing_score)
     : 70;
   const OPERATIONAL_INTERVENTION_THRESHOLD = 60;
+  const orderedQuestions = (quiz?.questions || []).slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
   const results = participants.map(p => {
     const rawScore = p.score || 0;
@@ -89,6 +90,42 @@ function compileSessionParticipantResults(participants = [], totalQuestions = 1,
       });
     }
 
+    const questionResponses = orderedQuestions.map((q, idx) => {
+      const resp = responses.find(r => r.questionId === q.id);
+      if (!resp) {
+        return {
+          questionId: q.id,
+          questionNumber: idx + 1,
+          questionText: q.text || `Question ${idx + 1}`,
+          answer: 'Unanswered',
+          result: 'Unanswered',
+          points: 0
+        };
+      }
+      let formattedAnswer = resp.answer;
+      if (Array.isArray(formattedAnswer)) {
+        formattedAnswer = formattedAnswer.join(', ');
+      } else if (typeof formattedAnswer === 'string' && formattedAnswer.trim().startsWith('[')) {
+        try {
+          const parsed = JSON.parse(formattedAnswer);
+          if (Array.isArray(parsed)) formattedAnswer = parsed.join(', ');
+        } catch (_err) {
+          // keep raw string
+        }
+      }
+      const isCorrect = (Number(resp.points_awarded) || 0) > 0 || Boolean(resp.is_correct);
+      return {
+        questionId: q.id,
+        questionNumber: idx + 1,
+        questionText: q.text || `Question ${idx + 1}`,
+        answer: (formattedAnswer !== undefined && formattedAnswer !== null && String(formattedAnswer).trim() !== '')
+          ? String(formattedAnswer)
+          : 'Unanswered',
+        result: isCorrect ? 'Correct' : 'Incorrect',
+        points: Number(resp.points_awarded) || 0
+      };
+    });
+
     return {
       id: p.id,
       name: p.name,
@@ -110,7 +147,8 @@ function compileSessionParticipantResults(participants = [], totalQuestions = 1,
       needsOperationalIntervention,
       timeSpent: '12m',
       attendancePercentage: null,
-      certificationImpact: passed ? 'Eligible for Credential' : 'Re-test Required'
+      certificationImpact: passed ? 'Eligible for Credential' : 'Re-test Required',
+      questionResponses
     };
   });
 

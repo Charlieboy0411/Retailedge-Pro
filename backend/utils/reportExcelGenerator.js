@@ -258,15 +258,29 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
   // -------------------------------------------------------------
   const ws5 = wb.addWorksheet('5. Participant Performance');
   ws5.views = [{ showGridLines: true }];
+  const participants = reportData.participantResults || [];
+  const sampleWithAnswers = participants.find(p => Array.isArray(p.questionResponses) && p.questionResponses.length > 0);
+  const questionDefs = sampleWithAnswers ? sampleWithAnswers.questionResponses : [];
+
   const s5Headers = ['Participant Name', 'Employee ID', 'Project', 'Zone', 'Territory', 'Quiz Name', 'Mode', 'Score', 'Pass/Fail', 'Attendance %', 'Certification Impact'];
+  questionDefs.forEach((q, idx) => {
+    const qNum = q.questionNumber || idx + 1;
+    s5Headers.push(`Q${qNum} Answer: ${q.questionText || `Question ${qNum}`}`, `Q${qNum} Result`, `Q${qNum} Points`);
+  });
+
   s5Headers.forEach((h, i) => {
-    ws5.getColumn(i + 1).width = i === 0 || i === 5 ? 24 : (i >= 2 && i <= 4 ? 18 : 15);
+    let width = 15;
+    if (i === 0 || i === 5) width = 24;
+    else if (i >= 2 && i <= 4) width = 18;
+    else if (i >= 11) {
+      const qOffset = (i - 11) % 3;
+      width = qOffset === 0 ? 36 : 14;
+    }
+    ws5.getColumn(i + 1).width = width;
     const c = ws5.getCell(1, i + 1);
     c.value = h;
     styleHeaderCell(c);
   });
-
-  const participants = reportData.participantResults || [];
 
   participants.forEach((p, rIdx) => {
     const scorePct = cleanPctString(p.score);
@@ -285,10 +299,25 @@ async function generate10SheetExcelWorkbook(reportData, masterOutcomeRows = []) 
       p.attendance ? cleanPctString(p.attendance) : 'N/A',
       p.cert || p.certificationImpact || '—'
     ];
+    if (questionDefs.length > 0) {
+      const pResps = Array.isArray(p.questionResponses) ? p.questionResponses : [];
+      questionDefs.forEach((qDef, idx) => {
+        const match = pResps.find(r => (qDef.questionId && r.questionId === qDef.questionId) || r.questionNumber === (qDef.questionNumber || idx + 1));
+        row.push(
+          match ? (match.answer || 'Unanswered') : 'Unanswered',
+          match ? (match.result || 'Unanswered') : 'Unanswered',
+          match ? cleanNum(match.points, 0) : 0
+        );
+      });
+    }
     row.forEach((val, cIdx) => {
       const c = ws5.getCell(rIdx + 2, cIdx + 1);
       c.value = val;
-      styleDataCell(c, rIdx % 2 === 1, cIdx === 0 ? 'left' : 'center');
+      const isAnswerCol = cIdx >= 11 && ((cIdx - 11) % 3 === 0);
+      styleDataCell(c, rIdx % 2 === 1, (cIdx === 0 || isAnswerCol) ? 'left' : 'center');
+      if (isAnswerCol) {
+        c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+      }
     });
   });
 
