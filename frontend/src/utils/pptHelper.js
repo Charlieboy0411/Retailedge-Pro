@@ -322,7 +322,7 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
         { label: 'Average Score', val: `${avgPercent}%`, color: theme.secondary },
         { label: 'Certification %', val: `${certRate}%`, color: theme.primary },
         { label: 'Attendance %', val: `${attendanceRate}%`, color: theme.secondary },
-        { label: 'Engagement', val: `${engagementIndex}/5`, color: theme.yellow }
+        { label: 'Passed', val: `${passedCount}/${totalCount}`, color: theme.yellow }
       ];
 
       kpis.forEach((kpi, idx) => {
@@ -953,54 +953,58 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
     // SLIDE 14: Action Plan
     else if (slideId === 'slide14') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Action Plan & Timeline', 'Concrete operational next steps mapping');
+      addSlideHeader(slide, 'Action Plan & Timeline', 'Concrete operational next steps from session outcomes');
+
+      const sortedQs = [...questionStats].sort((a, b) => a.correctVal - b.correctVal);
+      const weakestQ = sortedQs[0];
+      const failedCount = Math.max(0, totalCount - passedCount);
+      const partialCount = participants.filter(p => (parseFloat(String(p.completion || 100).replace(/%/g, '')) || 0) < 100).length;
 
       const planRows = [
         [
           { text: 'Key Issue / Gap', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Corrective Action', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Owner', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Timeline', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Target', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Status', options: { bold: true, color: theme.text, fill: theme.primary } }
         ],
         [
-          { text: 'Technical Spacing Gap (31%)', options: { fill: theme.card } },
-          { text: 'Deploy 5-min microlearning spacing cards', options: { fill: theme.card } },
-          { text: 'L&D Team', options: { fill: theme.card } },
-          { text: 'June 10, 2026', options: { fill: theme.card } },
-          { text: 'Pending', options: { color: theme.yellow, bold: true, fill: theme.card } }
+          { text: weakestQ ? `Lowest Accuracy: Q${weakestQ.qNum} (${weakestQ.correctVal}%)` : 'Concept Reinforcement', options: { fill: theme.card } },
+          { text: 'Conduct targeted refresher huddle on lowest-scoring items', options: { fill: theme.card } },
+          { text: presenterName, options: { fill: theme.card } },
+          { text: 'Within 5 Days', options: { fill: theme.card } },
+          { text: weakestQ && weakestQ.correctVal < 80 ? 'Action Needed' : 'On Track', options: { color: weakestQ && weakestQ.correctVal < 80 ? theme.yellow : theme.green, bold: true, fill: theme.card } }
         ],
         [
-          { text: 'Hex Code Confusions (48%)', options: { fill: '151E2E' } },
-          { text: 'Provide editor validation reference cheat-sheet', options: { fill: '151E2E' } },
-          { text: 'Project PM', options: { fill: '151E2E' } },
-          { text: 'June 12, 2026', options: { fill: '151E2E' } },
-          { text: 'Scheduled', options: { color: theme.primary, bold: true, fill: '151E2E' } }
+          { text: `Below Pass Mark (${failedCount} learner${failedCount === 1 ? '' : 's'})`, options: { fill: '151E2E' } },
+          { text: `1-on-1 coaching & re-assessment (Pass ≥ ${passMarkPercent}%)`, options: { fill: '151E2E' } },
+          { text: presenterName, options: { fill: '151E2E' } },
+          { text: 'Within 7 Days', options: { fill: '151E2E' } },
+          { text: failedCount > 0 ? 'Scheduled' : 'Completed', options: { color: failedCount > 0 ? theme.primary : theme.green, bold: true, fill: '151E2E' } }
         ],
         [
-          { text: 'Evaluation No-Shows (12%)', options: { fill: theme.card } },
-          { text: 'Schedule mandatory 15-minute makeup quiz', options: { fill: theme.card } },
-          { text: 'Demo Trainer', options: { fill: theme.card } },
-          { text: 'June 15, 2026', options: { fill: theme.card } },
-          { text: 'Planning', options: { color: theme.subtext, bold: true, fill: theme.card } }
+          { text: `Partial Submissions (${partialCount} learner${partialCount === 1 ? '' : 's'})`, options: { fill: theme.card } },
+          { text: 'Verify connectivity & ensure full quiz completion in next run', options: { fill: theme.card } },
+          { text: 'Operations / PM', options: { fill: theme.card } },
+          { text: 'Next Session', options: { fill: theme.card } },
+          { text: partialCount > 0 ? 'Pending' : 'Completed', options: { color: partialCount > 0 ? theme.subtext : theme.green, bold: true, fill: theme.card } }
         ]
       ];
 
       slide.addTable(planRows, {
-        x: 0.5, y: 1.8, w: 12.3, colW: [3.0, 3.8, 1.8, 1.8, 1.9],
+        x: 0.5, y: 1.8, w: 12.3, colW: [3.2, 3.8, 1.9, 1.6, 1.8],
         fontSize: 10, color: theme.text,
         border: { type: 'solid', color: '334155', pt: 0.5 }
       });
 
-      // Extra note box
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 4.8, w: 12.3, h: 1.7, fill: { color: theme.card } });
-      slide.addText('📌 Action Plan Guidelines:\n• Correction timelines are calculated in compliance with standard L&D client agreement standards.\n• Execution progress will be reviewed during the next Monthly Business Review (MBR).\n• Contact the allocated project coordinators if modifications are required.', {
+      slide.addText(`📌 Action Plan Summary:\n• Primary focus: ${weakestQ ? `Q${weakestQ.qNum} (${weakestQ.correctVal}% accuracy)` : 'Maintain cohort readiness'}.\n• ${failedCount} participant(s) below the ${passMarkPercent}% benchmark require coaching and re-test.\n• ${partialCount} participant(s) had partial question completion.`, {
         x: 0.8, y: 4.95, w: 11.7, h: 1.4,
         fontSize: 11, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Action plan checklist: Spacing cards by Jun 10, Hex sheet by Jun 12, makeup quiz by Jun 15.`;
+      const note = notesText || `Action plan: ${failedCount} coaching, ${partialCount} partial completions.`;
       slide.addNotes(note);
     }
 
