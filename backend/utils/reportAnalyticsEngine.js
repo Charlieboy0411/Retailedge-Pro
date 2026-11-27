@@ -479,7 +479,7 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
     questionAnalytics
   };
 
-  // Persist Audit Record
+  // Persist or refresh Audit Record
   let auditRecord = await ReportAudit.findOne({ where: { reportCode } });
   if (!auditRecord) {
     auditRecord = await ReportAudit.create({
@@ -495,6 +495,17 @@ async function generateLevel1QuizReport(quizId, sessionId, user = null) {
       generatedBy: user ? user.id : null,
       generatorName: user ? user.name : 'System Automation',
       status: 'GENERATED',
+      summaryKPIs: reportPayload.kpis,
+      snapshotData: reportPayload
+    });
+  } else {
+    await auditRecord.update({
+      title,
+      period: sessionDate,
+      format: quizMode,
+      projectId: project ? project.id : null,
+      quizId: quiz ? quiz.id : null,
+      sessionId: session.id,
       summaryKPIs: reportPayload.kpis,
       snapshotData: reportPayload
     });

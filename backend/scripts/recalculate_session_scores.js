@@ -15,7 +15,9 @@ const Session = require('../models/Session');
 const Participant = require('../models/Participant');
 const Response = require('../models/Response');
 const Question = require('../models/Question');
+const ReportAudit = require('../models/ReportAudit');
 const scoringEngine = require('../sockets/services/scoringEngine');
+const { generateLevel1QuizReport } = require('../utils/reportAnalyticsEngine');
 
 async function main() {
   const args = process.argv.slice(2);
@@ -100,34 +102,44 @@ async function main() {
     console.log(`  - ${u.name} (${u.employeeId}) : ${u.oldScore} -> ${u.newScore}`);
   }
 
+  const existingAudit = await ReportAudit.findOne({
+    where: { sessionId, level: 'LEVEL_1_QUIZ' }
+  });
+
   if (!apply) {
+    if (existingAudit) {
+      console.log(`\nExisting ReportAudit snapshot found (${existingAudit.reportCode}); will refresh on --apply.`);
+    }
     console.log('\nDry run complete. Re-run with --apply to persist these changes.');
     await sequelize.close();
     return;
   }
 
   if (responseUpdates.length === 0 && participantUpdates.length === 0) {
-    console.log('\nNo changes needed.');
-    await sequelize.close();
-    return;
+    console.log('\nNo score changes needed.');
+  } else {
+    await sequelize.transaction(async (t) => {
+      for (const u of responseUpdates) {
+        await Response.update(
+          { points_awarded: u.newPoints },
+          { where: { id: u.responseId }, transaction: t }
+        );
+      }
+      for (const u of participantUpdates) {
+        await Participant.update(
+          { score: u.newScore },
+          { where: { id: u.participantId }, transaction: t }
+        );
+      }
+    });
+    console.log(`\nApplied ${responseUpdates.length} response updates and ${participantUpdates.length} participant score updates.`);
   }
 
-  await sequelize.transaction(async (t) => {
-    for (const u of responseUpdates) {
-      await Response.update(
-        { points_awarded: u.newPoints },
-        { where: { id: u.responseId }, transaction: t }
-      );
-    }
-    for (const u of participantUpdates) {
-      await Participant.update(
-        { score: u.newScore },
-        { where: { id: u.participantId }, transaction: t }
-      );
-    }
-  });
+  if (existingAudit) {
+    await generateLevel1QuizReport(sessionId);
+    console.log(`Refreshed ReportAudit snapshot ${existingAudit.reportCode} (${existingAudit.id}).`);
+  }
 
-  console.log(`\nApplied ${responseUpdates.length} response updates and ${participantUpdates.length} participant score updates.`);
   await sequelize.close();
 }
 
