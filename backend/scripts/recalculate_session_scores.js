@@ -136,7 +136,7 @@ async function main() {
   }
 
   if (existingAudit) {
-    await generateLevel1QuizReport(sessionId);
+    await generateLevel1QuizReport(session.quizId, sessionId);
     console.log(`Refreshed ReportAudit snapshot ${existingAudit.reportCode} (${existingAudit.id}).`);
   }
 
