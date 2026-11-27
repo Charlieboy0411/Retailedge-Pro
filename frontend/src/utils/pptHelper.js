@@ -131,48 +131,94 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
   const totalCount = participants.length;
 
   let avgPercent = 0;
+  let medianPercent = 0;
   let highestScorePercent = 0;
   let lowestScorePercent = 100;
   let passedCount = 0;
   const passMarkPercent = passingScore; // Dynamic Benchmark
 
+  const parseDurationSec = (val) => {
+    if (typeof val === 'number' && !isNaN(val)) return val;
+    const m = String(val || '').match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : Number.MAX_SAFE_INTEGER;
+  };
+
   if (totalCount > 0) {
-    const percentages = participants.map(p => {
-      const pval = parseInt(p.percentage) || 0;
-      return pval;
-    });
+    const percentages = participants.map(p => parseFloat(String(p.percentage || 0).replace(/%/g, '')) || 0);
     const sumPercent = percentages.reduce((a, b) => a + b, 0);
     avgPercent = Math.round(sumPercent / totalCount);
-    highestScorePercent = Math.max(...percentages);
-    lowestScorePercent = Math.min(...percentages);
+    const sortedPct = [...percentages].sort((a, b) => a - b);
+    const mid = Math.floor(sortedPct.length / 2);
+    medianPercent = Math.round(sortedPct.length % 2 !== 0 ? sortedPct[mid] : (sortedPct[mid - 1] + sortedPct[mid]) / 2);
+    highestScorePercent = Math.round(Math.max(...percentages));
+    lowestScorePercent = Math.round(Math.min(...percentages));
     passedCount = percentages.filter(val => val >= passMarkPercent).length;
   } else {
     avgPercent = 0;
+    medianPercent = 0;
     highestScorePercent = 0;
     lowestScorePercent = 0;
     passedCount = 0;
   }
 
   const passRate = totalCount > 0 ? Math.round((passedCount / totalCount) * 100) : 0;
-  const certRate = passRate; // Assume certified if passed for assessment summary
-  const attendanceRate = totalCount > 0 ? 100 : 0;
-  const engagementIndex = totalCount > 0 ? 5.0 : 0;
+  const certRate = passRate;
+  const avgCompletionPct = totalCount > 0
+    ? Math.round(participants.reduce((s, p) => s + (parseFloat(String(p.completion || 100).replace(/%/g, '')) || 0), 0) / totalCount)
+    : 0;
+  const attendanceRate = avgCompletionPct;
   const registeredCount = totalCount;
   const dropCount = 0;
   const attendedCount = totalCount;
   const noShowCount = registeredCount - attendedCount - dropCount;
 
-  // Sorted participants for Leaderboard
+  // Sorted participants for Leaderboard (Accuracy % desc -> Points desc -> Fastest time asc -> Name asc)
   const sortedParticipants = [...participants].sort((a, b) => {
-    return (parseInt(b.percentage) || 0) - (parseInt(a.percentage) || 0);
+    const pctDiff = (parseFloat(String(b.percentage || 0).replace(/%/g, '')) || 0) - (parseFloat(String(a.percentage || 0).replace(/%/g, '')) || 0);
+    if (pctDiff !== 0) return pctDiff;
+    const ptsA = Number(a.pointsEarned ?? a.arenaPoints ?? 0);
+    const ptsB = Number(b.pointsEarned ?? b.arenaPoints ?? 0);
+    if (ptsB !== ptsA) return ptsB - ptsA;
+    const timeDiff = parseDurationSec(a.timeSpent) - parseDurationSec(b.timeSpent);
+    if (timeDiff !== 0) return timeDiff;
+    return String(a.name || '').localeCompare(String(b.name || ''));
   });
 
-  // Questions and responses mapping
-  const questionsList = sessionData.questions || [
-    { id: 'q1', text: 'Core Concept & Product Knowledge Introduction', correct_answer: 'Option A' },
-    { id: 'q2', text: 'Standard Operating Procedure (SOP) Compliance', correct_answer: 'Option B' },
-    { id: 'q3', text: 'Technical Parameters & Brand Compliance', correct_answer: 'Option C' }
-  ];
+  // Questions and real response accuracy mapping
+  const questionsList = sessionData.questions || [];
+  const questionStats = questionsList.map((q, idx) => {
+    let correct = 0;
+    let incorrect = 0;
+    let skipped = 0;
+    participants.forEach(p => {
+      const resp = (p.responses || []).find(r => r.questionId === q.id);
+      if (!resp || resp.answer === null || resp.answer === undefined || String(resp.answer).trim() === '') {
+        skipped++;
+      } else if ((Number(resp.points_awarded) || 0) > 0 || resp.is_correct) {
+        correct++;
+      } else {
+        incorrect++;
+      }
+    });
+    const denom = totalCount || 1;
+    const correctVal = Math.round((correct / denom) * 100);
+    const skippedVal = Math.round((skipped / denom) * 100);
+    const incorrectVal = Math.max(0, 100 - correctVal - skippedVal);
+    const diffText = correctVal >= 75 ? 'Easy' : correctVal >= 45 ? 'Medium' : 'Hard';
+    const diffColor = correctVal >= 75 ? theme.green : correctVal >= 45 ? theme.yellow : theme.red;
+    return {
+      qNum: idx + 1,
+      text: q.text || `Question ${idx + 1}`,
+      correct,
+      incorrect,
+      skipped,
+      correctVal,
+      incorrectVal,
+      skippedVal,
+      diffText,
+      diffColor
+    };
+  });
 
   // Map slide sequence
   const defaultSlideOrder = [
@@ -270,7 +316,7 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
 
       // 7 Executive KPI Cards
       const kpis = [
-        { label: 'Participants', val: String(totalCount || 25), color: theme.primary },
+        { label: 'Participants', val: String(totalCount), color: theme.primary },
         { label: 'Completion %', val: `${attendanceRate}%`, color: theme.green },
         { label: 'Pass %', val: `${passRate}%`, color: theme.green },
         { label: 'Average Score', val: `${avgPercent}%`, color: theme.secondary },
@@ -390,7 +436,7 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
         { label: 'Average Accuracy', val: `${avgPercent}%`, desc: 'Overall assessment benchmark', color: theme.primary },
         { label: 'Highest Score', val: `${highestScorePercent}%`, desc: 'Top master milestone', color: theme.green },
         { label: 'Lowest Score', val: `${lowestScorePercent}%`, desc: 'Lowest recorded assessment score', color: theme.red },
-        { label: 'Median Score', val: `${avgPercent + 2 > 100 ? 100 : avgPercent + 2}%`, desc: 'Midpoint user distribution', color: theme.yellow },
+        { label: 'Median Score', val: `${medianPercent}%`, desc: 'Midpoint user distribution', color: theme.yellow },
         { label: 'Passing Benchmark', val: `${passMarkPercent}%`, desc: 'Required competency threshold', color: theme.secondary }
       ];
 
@@ -476,7 +522,7 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
           fontFace: 'Arial'
         });
 
-        slide.addText(`Score: ${p.score}`, {
+        slide.addText(`Score: ${p.score} (${p.pointsEarned ?? p.arenaPoints ?? 0} pts)`, {
           x: xPos + 0.2, y: 2.9, w: 3.5, h: 0.3,
           fontSize: 10, color: theme.primary,
           fontFace: 'Arial'
@@ -526,6 +572,11 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
       const slide = pptx.addSlide();
       addSlideHeader(slide, 'Question Analysis & Matrix', 'Detailed response correctness metrics per evaluation item');
 
+      const sortedByAcc = [...questionStats].sort((a, b) => a.correctVal - b.correctVal);
+      const hardestQ = sortedByAcc[0];
+      const easiestQ = sortedByAcc[sortedByAcc.length - 1];
+      const displayQuestions = questionStats.slice(0, 10);
+
       const qRows = [
         [
           { text: 'Q#', options: { bold: true, color: theme.text, fill: theme.primary } },
@@ -535,96 +586,104 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
           { text: 'Skipped %', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Difficulty', options: { bold: true, color: theme.text, fill: theme.primary } }
         ],
-        ...questionsList.map((q, idx) => {
-          // Dynamic difficulty tagging based on mock accuracy bounds
-          const correctVal = idx === 0 ? 92 : idx === 1 ? 48 : 31;
-          const incorrectVal = 100 - correctVal - (idx === 2 ? 5 : 0);
-          const skippedVal = idx === 2 ? 5 : 0;
-          const diffText = correctVal >= 75 ? 'Easy' : correctVal >= 45 ? 'Medium' : 'Hard';
-          const diffColor = correctVal >= 75 ? theme.green : correctVal >= 45 ? theme.yellow : theme.red;
-
-          return [
-            { text: `Q${idx + 1}`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
-            { text: q.text, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
-            { text: `${correctVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E', bold: true, color: theme.green } },
-            { text: `${incorrectVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
-            { text: `${skippedVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
-            { text: diffText, options: { fill: idx % 2 === 0 ? theme.card : '151E2E', bold: true, color: diffColor } }
-          ];
-        })
+        ...(displayQuestions.length > 0 ? displayQuestions.map((qs, idx) => [
+          { text: `Q${qs.qNum}`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
+          { text: qs.text.length > 68 ? `${qs.text.slice(0, 65)}...` : qs.text, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
+          { text: `${qs.correctVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E', bold: true, color: theme.green } },
+          { text: `${qs.incorrectVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
+          { text: `${qs.skippedVal}%`, options: { fill: idx % 2 === 0 ? theme.card : '151E2E' } },
+          { text: qs.diffText, options: { fill: idx % 2 === 0 ? theme.card : '151E2E', bold: true, color: qs.diffColor } }
+        ]) : [[
+          { text: '-', options: { fill: theme.card } },
+          { text: 'No question records available for this session', options: { fill: theme.card } },
+          { text: '-', options: { fill: theme.card } },
+          { text: '-', options: { fill: theme.card } },
+          { text: '-', options: { fill: theme.card } },
+          { text: '-', options: { fill: theme.card } }
+        ]])
       ];
 
       slide.addTable(qRows, {
-        x: 0.5, y: 1.8, w: 12.3, colW: [1.0, 5.3, 1.5, 1.5, 1.5, 1.5],
-        fontSize: 10, color: theme.text,
+        x: 0.5, y: 1.6, w: 12.3, colW: [0.8, 5.9, 1.4, 1.4, 1.4, 1.4],
+        fontSize: 9, color: theme.text,
         border: { type: 'solid', color: '334155', pt: 0.5 }
       });
 
-      // Difficulty mapping heatmap notes
-      slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 5.6, w: 12.3, h: 0.9, fill: { color: theme.card } });
-      slide.addText('💡 Performance Matrix Insights:\n• Q1 is categorised as "Easy" indicating highly successful core learning alignment.\n• Q3 has an accuracy level of 31% ("Hard"), indicating a major configuration learning gap that requires intervention.', {
-        x: 0.8, y: 5.7, w: 11.7, h: 0.7,
-        fontSize: 11, color: theme.text,
+      const insightText = easiestQ && hardestQ
+        ? `💡 Performance Matrix Insights:\n• Highest Accuracy: Q${easiestQ.qNum} (${easiestQ.correctVal}% correct) — strong concept alignment.\n• Lowest Accuracy: Q${hardestQ.qNum} (${hardestQ.correctVal}% correct) — focus area for refresher coaching.`
+        : '💡 Performance Matrix Insights: No question response data recorded.';
+
+      slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 5.75, w: 12.3, h: 0.9, fill: { color: theme.card } });
+      slide.addText(insightText, {
+        x: 0.8, y: 5.82, w: 11.7, h: 0.75,
+        fontSize: 10.5, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Question Difficulty Summary: Easiest question was Q1 (${qRows[1][2].text} accuracy). Most difficult question was Q3 (${qRows[3][2].text} accuracy).`;
+      const note = notesText || (easiestQ && hardestQ
+        ? `Question Difficulty Summary: Strongest was Q${easiestQ.qNum} (${easiestQ.correctVal}%). Lowest was Q${hardestQ.qNum} (${hardestQ.correctVal}%).`
+        : 'Question Difficulty Summary: No question data.');
       slide.addNotes(note);
     }
 
     // SLIDE 7: Knowledge Gap Analysis
     else if (slideId === 'slide7') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Knowledge Gap Analysis', 'Identify concepts requiring refresher instruction modules');
+      addSlideHeader(slide, 'Knowledge Gap Analysis', 'Lowest-scoring questions requiring refresher coaching');
 
-      // Left panel - Weak Topics Card
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.8, w: 5.8, h: 4.6, fill: { color: theme.card }, line: { color: '334155' } });
-      slide.addText('WEAK TOPICS & ACCURACY AREAS', { x: 0.8, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.primary });
-      
-      const weakTopics = [
-        { topic: 'Technical Spacing SOP Compliance', acc: '31% Accuracy', level: 'Critical Risk', color: theme.red },
-        { topic: 'Operational Editor Hex Values', acc: '48% Accuracy', level: 'Moderate Gap', color: theme.yellow },
-        { topic: 'Brand Alignment Consistency', acc: '72% Accuracy', level: 'Minor Review', color: theme.green }
-      ];
+      slide.addText('FOCUS AREAS BY QUESTION ACCURACY', { x: 0.8, y: 2.0, w: 5.2, h: 0.4, fontSize: 13, bold: true, color: theme.primary });
+
+      const lowestThree = [...questionStats].sort((a, b) => a.correctVal - b.correctVal).slice(0, 3);
+      const weakTopics = lowestThree.length > 0
+        ? lowestThree.map(q => ({
+            topic: `Q${q.qNum}: ${q.text.length > 48 ? `${q.text.slice(0, 45)}...` : q.text}`,
+            acc: `${q.correctVal}% Accuracy (${q.correct}/${totalCount})`,
+            level: q.correctVal < 60 ? 'Critical Focus' : q.correctVal < 80 ? 'Moderate Gap' : 'Proficient',
+            color: q.correctVal < 60 ? theme.red : q.correctVal < 80 ? theme.yellow : theme.green
+          }))
+        : [{ topic: 'No question gap data available', acc: 'N/A', level: 'N/A', color: theme.subtext }];
 
       weakTopics.forEach((item, idx) => {
-        const yOffset = 2.6 + (idx * 1.1);
-        slide.addShape(pptx.ShapeType.rect, { x: 0.8, y: yOffset, w: 5.2, h: 0.9, fill: { color: theme.bg } });
-        slide.addShape(pptx.ShapeType.rect, { x: 0.8, y: yOffset, w: 0.1, h: 0.9, fill: { color: item.color } });
-        slide.addText(item.topic, { x: 1.0, y: yOffset + 0.1, w: 4.8, h: 0.3, fontSize: 11, bold: true, color: theme.text });
-        slide.addText(`Performance: ${item.acc}  ·  Classification: ${item.level}`, { x: 1.0, y: yOffset + 0.45, w: 4.8, h: 0.3, fontSize: 9, color: theme.subtext });
+        const yOffset = 2.6 + (idx * 1.15);
+        slide.addShape(pptx.ShapeType.rect, { x: 0.8, y: yOffset, w: 5.2, h: 0.95, fill: { color: theme.bg } });
+        slide.addShape(pptx.ShapeType.rect, { x: 0.8, y: yOffset, w: 0.1, h: 0.95, fill: { color: item.color } });
+        slide.addText(item.topic, { x: 1.0, y: yOffset + 0.08, w: 4.8, h: 0.42, fontSize: 10, bold: true, color: theme.text });
+        slide.addText(`${item.acc}  ·  ${item.level}`, { x: 1.0, y: yOffset + 0.55, w: 4.8, h: 0.3, fontSize: 9, color: theme.subtext });
       });
 
-      // Right panel - Recommendations Card
       slide.addShape(pptx.ShapeType.rect, { x: 7.0, y: 1.8, w: 5.8, h: 4.6, fill: { color: theme.card }, line: { color: '334155' } });
-      slide.addText('L&D REMEDIAL RECOMMENDATIONS', { x: 7.3, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.secondary });
-      
+      slide.addText('TRAINER REMEDIAL RECOMMENDATIONS', { x: 7.3, y: 2.0, w: 5.2, h: 0.4, fontSize: 13, bold: true, color: theme.secondary });
+
+      const failedCount = Math.max(0, totalCount - passedCount);
+      const topWeak = lowestThree[0];
       const recommendations = [
-        'Deploy targeted 5-minute microlearning cards on Spacing Guidelines.',
-        'Schedule a 30-minute peer review led by Perfect-Scoring team members.',
-        'Execute validation re-quiz specifically mapping weak SOP guidelines.',
-        'Upload secondary reference files and guidelines onto the learning portal.'
+        topWeak
+          ? `Review Q${topWeak.qNum} (${topWeak.correctVal}% accuracy) with the cohort during the next huddle.`
+          : 'Review lowest-scoring assessment items with the cohort.',
+        `Schedule targeted coaching for the ${failedCount} participant(s) below the ${passMarkPercent}% pass benchmark.`,
+        `Pair learners needing support with the ${passedCount} participant(s) who met the ${passMarkPercent}% benchmark.`,
+        'Re-test participants with partial or below-threshold scores after concept reinforcement.'
       ];
 
       recommendations.forEach((rec, idx) => {
         const yOffset = 2.6 + (idx * 0.9);
         slide.addText(`📌`, { x: 7.3, y: yOffset, w: 0.4, h: 0.6, fontSize: 14 });
-        slide.addText(rec, { x: 7.8, y: yOffset, w: 4.7, h: 0.7, fontSize: 12, color: theme.text, fontFace: 'Arial' });
+        slide.addText(rec, { x: 7.8, y: yOffset, w: 4.7, h: 0.75, fontSize: 11, color: theme.text, fontFace: 'Arial' });
       });
 
-      const note = notesText || `Skill Analysis details: Weakest areas include Technical Spacing SOPs. Immediate recommendations involve microlearning modules.`;
+      const note = notesText || `Knowledge Gap Analysis: ${lowestThree.map(q => `Q${q.qNum} (${q.correctVal}%)`).join(', ')}.`;
       slide.addNotes(note);
     }
 
-    // SLIDE 8: Learning Effectiveness
+    // SLIDE 8: Benchmark vs Cohort Performance
     else if (slideId === 'slide8') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Learning Effectiveness Index', 'Pre-Assessment vs Post-Assessment retention outcomes');
+      addSlideHeader(slide, 'Assessment Benchmark Comparison', 'Cohort average score against passing threshold');
 
-      // Metric panels side by side
       const stages = [
-        { title: 'PRE-ASSESSMENT BENCHMARK', avg: '54%', badge: 'Baseline standard', fill: theme.card, accent: theme.secondary },
-        { title: 'POST-ASSESSMENT RESULT', avg: `${avgPercent}%`, badge: 'Post-instruction score', fill: theme.card, accent: theme.green }
+        { title: 'REQUIRED PASS BENCHMARK', avg: `${passMarkPercent}%`, badge: 'Configured passing score', fill: theme.card, accent: theme.secondary },
+        { title: 'COHORT AVERAGE SCORE', avg: `${avgPercent}%`, badge: `${passedCount} of ${totalCount} passed`, fill: theme.card, accent: avgPercent >= passMarkPercent ? theme.green : theme.red }
       ];
 
       stages.forEach((s, idx) => {
@@ -637,108 +696,147 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
         slide.addText(s.badge, { x: xPos + 0.3, y: 3.9, w: 5.2, h: 0.3, fontSize: 10, italic: true, color: s.accent, align: 'center' });
       });
 
-      // Knowledge gain calculator widget
-      const gainValue = avgPercent - 54;
+      const deltaVal = avgPercent - passMarkPercent;
+      const deltaPrefix = deltaVal >= 0 ? '+' : '';
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 4.9, w: 12.3, h: 1.5, fill: { color: theme.card } });
-      slide.addText('📚 MEASURED KNOWLEDGE GAIN SCORE', { x: 0.8, y: 5.1, w: 6.0, h: 0.3, fontSize: 13, bold: true, color: theme.primary });
-      
-      slide.addText(`+${gainValue}%`, { x: 0.8, y: 5.4, w: 2.0, h: 0.8, fontSize: 36, bold: true, color: theme.green });
-      slide.addText(`A positive net knowledge increase of ${gainValue}% indicates standard classroom instruction was highly effective in transferring core operational parameters. Further continuous checks are suggested.`, {
-        x: 3.0, y: 5.4, w: 9.3, h: 0.8,
+      slide.addText('📚 BENCHMARK VARIANCE', { x: 0.8, y: 5.1, w: 6.0, h: 0.3, fontSize: 13, bold: true, color: theme.primary });
+
+      slide.addText(`${deltaPrefix}${deltaVal}%`, { x: 0.8, y: 5.4, w: 2.2, h: 0.8, fontSize: 36, bold: true, color: deltaVal >= 0 ? theme.green : theme.red });
+      slide.addText(`The cohort average of ${avgPercent}% is ${Math.abs(deltaVal)}% ${deltaVal >= 0 ? 'above' : 'below'} the ${passMarkPercent}% passing benchmark, with a ${passRate}% overall pass rate (${passedCount}/${totalCount} participants).`, {
+        x: 3.1, y: 5.4, w: 9.2, h: 0.8,
         fontSize: 12, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Retention report: Knowledge gain calculation shows +${gainValue}% improvement from a 54% baseline.`;
+      const note = notesText || `Benchmark comparison: Cohort average ${avgPercent}% vs ${passMarkPercent}% passing mark (${deltaPrefix}${deltaVal}%).`;
       slide.addNotes(note);
     }
 
     // SLIDE 9: Regional Performance
     else if (slideId === 'slide9') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Regional Performance & Territory Index', 'Completion rates and pass standing across India territories');
+      addSlideHeader(slide, 'Zone & Territory Performance', 'Breakdown across zones recorded in this session');
 
-      // Region matrix rows
+      const zoneMap = {};
+      participants.forEach(p => {
+        const z = (p.zone && String(p.zone).trim()) || 'Unmapped';
+        if (!zoneMap[z]) zoneMap[z] = { zone: z, count: 0, pctSum: 0, passed: 0, compSum: 0 };
+        const pct = parseFloat(String(p.percentage || 0).replace(/%/g, '')) || 0;
+        const comp = parseFloat(String(p.completion || 100).replace(/%/g, '')) || 0;
+        zoneMap[z].count++;
+        zoneMap[z].pctSum += pct;
+        zoneMap[z].compSum += comp;
+        if (pct >= passMarkPercent) zoneMap[z].passed++;
+      });
+
+      const zoneEntries = Object.values(zoneMap).sort((a, b) => (b.pctSum / b.count) - (a.pctSum / a.count));
       const regionRows = [
         [
-          { text: 'India Territory / Zone', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Invited Learners', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Joined Count', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Completion %', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Passing Rate %', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Zone / Territory', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Participants', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Passed', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Avg Completion %', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Pass Rate %', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Average Score', options: { bold: true, color: theme.text, fill: theme.primary } }
         ],
-        [ { text: 'North Zone (Delhi NCR)', options: { fill: theme.card } }, { text: '85', options: { fill: theme.card } }, { text: '80', options: { fill: theme.card } }, { text: '94%', options: { fill: theme.card } }, { text: '91%', options: { fill: theme.card } }, { text: '86%', options: { fill: theme.card, bold: true, color: theme.green } } ],
-        [ { text: 'East Zone (Kolkata)', options: { fill: '151E2E' } }, { text: '62', options: { fill: '151E2E' } }, { text: '55', options: { fill: '151E2E' } }, { text: '88%', options: { fill: '151E2E' } }, { text: '80%', options: { fill: '151E2E' } }, { text: '79%', options: { fill: '151E2E' } } ],
-        [ { text: 'West Zone (Mumbai)', options: { fill: theme.card } }, { text: '78', options: { fill: theme.card } }, { text: '71', options: { fill: theme.card } }, { text: '91%', options: { fill: theme.card } }, { text: '88%', options: { fill: theme.card } }, { text: '84%', options: { fill: theme.card } } ],
-        [ { text: 'South Zone (Bangalore)', options: { fill: '151E2E' } }, { text: '90', options: { fill: '151E2E' } }, { text: '81', options: { fill: '151E2E' } }, { text: '90%', options: { fill: '151E2E' } }, { text: '85%', options: { fill: '151E2E' } }, { text: '82%', options: { fill: '151E2E' } } ]
+        ...(zoneEntries.length > 0 ? zoneEntries.map((z, idx) => {
+          const avgZ = Math.round(z.pctSum / z.count);
+          const passZ = Math.round((z.passed / z.count) * 100);
+          const compZ = Math.round(z.compSum / z.count);
+          const bg = idx % 2 === 0 ? theme.card : '151E2E';
+          return [
+            { text: z.zone, options: { fill: bg } },
+            { text: String(z.count), options: { fill: bg } },
+            { text: `${z.passed}/${z.count}`, options: { fill: bg } },
+            { text: `${compZ}%`, options: { fill: bg } },
+            { text: `${passZ}%`, options: { fill: bg } },
+            { text: `${avgZ}%`, options: { fill: bg, bold: true, color: avgZ >= passMarkPercent ? theme.green : theme.yellow } }
+          ];
+        }) : [[
+          { text: 'No zone data', options: { fill: theme.card } },
+          { text: '0', options: { fill: theme.card } },
+          { text: '0/0', options: { fill: theme.card } },
+          { text: '0%', options: { fill: theme.card } },
+          { text: '0%', options: { fill: theme.card } },
+          { text: '0%', options: { fill: theme.card } }
+        ]])
       ];
 
       slide.addTable(regionRows, {
-        x: 0.5, y: 1.8, w: 12.3, colW: [3.3, 1.8, 1.8, 1.8, 1.8, 2.0],
+        x: 0.5, y: 1.8, w: 12.3, colW: [3.3, 1.8, 1.8, 1.8, 1.8, 1.8],
         fontSize: 10, color: theme.text,
         border: { type: 'solid', color: '334155', pt: 0.5 }
       });
 
-      // Performance highlights
+      const topZone = zoneEntries[0];
+      const lowZone = zoneEntries[zoneEntries.length - 1];
+      const zoneSummaryText = topZone
+        ? `🌟 Zone Highlights:\n• Leading Zone: ${topZone.zone} with ${Math.round(topZone.pctSum / topZone.count)}% average score (${topZone.passed}/${topZone.count} passed).\n• ${lowZone && lowZone !== topZone ? `Focus Zone: ${lowZone.zone} at ${Math.round(lowZone.pctSum / lowZone.count)}% average score (${Math.round((lowZone.passed / lowZone.count) * 100)}% pass rate).` : 'All active participants are represented in the zone breakdown above.'}`
+        : '🌟 Zone Highlights: No participant zone data available.';
+
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 5.2, w: 12.3, h: 1.3, fill: { color: theme.card } });
-      slide.addText('🌟 Territorial Highlights:\n• North Zone (Delhi NCR) achieved the highest Average Score at 86%.\n• East Zone represents a key support area with the lowest passing rate of 80%. Additional coordinator focus is recommended.', {
+      slide.addText(zoneSummaryText, {
         x: 0.8, y: 5.35, w: 11.7, h: 1.0,
         fontSize: 11, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Territorial details: North leads with 86% average score, East requires check (80% pass rate).`;
+      const note = notesText || `Zone breakdown: ${zoneEntries.map(z => `${z.zone} (${Math.round(z.pctSum / z.count)}%)`).join(', ')}.`;
       slide.addNotes(note);
     }
 
-    // SLIDE 10: Trainer Performance
+    // SLIDE 10: Session Delivery Summary
     else if (slideId === 'slide10') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Trainer Performance & Effectiveness Ranks', 'Instructors leading training sessions');
+      addSlideHeader(slide, 'Trainer & Session Delivery Summary', 'Actual session ownership and cohort outcomes');
 
       const trainerRows = [
         [
-          { text: 'Trainer Name', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Sessions Allocated', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Trainer / Host', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Assessment', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Participants', options: { bold: true, color: theme.text, fill: theme.primary } },
           { text: 'Average Score', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Learner Completion %', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Feedback Rating', options: { bold: true, color: theme.text, fill: theme.primary } },
-          { text: 'Effectiveness Index', options: { bold: true, color: theme.text, fill: theme.primary } }
+          { text: 'Pass Rate', options: { bold: true, color: theme.text, fill: theme.primary } },
+          { text: 'Avg Completion', options: { bold: true, color: theme.text, fill: theme.primary } }
         ],
-        [ { text: 'Ananya Sen', options: { fill: theme.card } }, { text: '8 Sessions', options: { fill: theme.card } }, { text: '85%', options: { fill: theme.card } }, { text: '95%', options: { fill: theme.card } }, { text: '4.9 / 5', options: { fill: theme.card } }, { text: 'Outstanding', options: { color: theme.green, bold: true, fill: theme.card } } ],
-        [ { text: 'Demo Trainer', options: { fill: '151E2E' } }, { text: '12 Sessions', options: { fill: '151E2E' } }, { text: `${avgPercent}%`, options: { fill: '151E2E' } }, { text: `${attendanceRate}%`, options: { fill: '151E2E' } }, { text: '4.7 / 5', options: { fill: '151E2E' } }, { text: 'Excellent', options: { color: theme.green, bold: true, fill: '151E2E' } } ],
-        [ { text: 'Rajesh Kumar', options: { fill: theme.card } }, { text: '6 Sessions', options: { fill: theme.card } }, { text: '79%', options: { fill: theme.card } }, { text: '88%', options: { fill: theme.card } }, { text: '4.5 / 5', options: { fill: theme.card } }, { text: 'Satisfactory', options: { color: theme.yellow, bold: true, fill: theme.card } } ]
+        [
+          { text: presenterName, options: { fill: theme.card, bold: true } },
+          { text: sessionData.quizTitle || 'Quiz Assessment', options: { fill: theme.card } },
+          { text: String(totalCount), options: { fill: theme.card } },
+          { text: `${avgPercent}%`, options: { fill: theme.card, bold: true, color: avgPercent >= passMarkPercent ? theme.green : theme.yellow } },
+          { text: `${passRate}%`, options: { fill: theme.card } },
+          { text: `${avgCompletionPct}%`, options: { fill: theme.card } }
+        ]
       ];
 
       slide.addTable(trainerRows, {
-        x: 0.5, y: 1.8, w: 12.3, colW: [3.3, 1.8, 1.8, 1.8, 1.8, 2.0],
+        x: 0.5, y: 1.8, w: 12.3, colW: [2.4, 3.5, 1.5, 1.6, 1.6, 1.7],
         fontSize: 10, color: theme.text,
         border: { type: 'solid', color: '334155', pt: 0.5 }
       });
 
-      // Ranks commentary
-      slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 4.8, w: 12.3, h: 1.7, fill: { color: theme.card } });
-      slide.addText('📋 Trainer Effectiveness Notes:\n• Ranks are calculated based on a weighted index of learner average score (40%), completion rate (30%), and feedback rating (30%).\n• Trainer Ananya Sen ranked #1 this review period due to outstanding engagement metrics.\n• Standard program templates are recommended to align instruction parameters.', {
-        x: 0.8, y: 4.95, w: 11.7, h: 1.4,
+      slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 4.5, w: 12.3, h: 1.8, fill: { color: theme.card } });
+      slide.addText(`📋 Session Delivery Notes:\n• Conducted by ${presenterName} for project ${sessionData.projectName || 'General'}.\n• ${passedCount} of ${totalCount} participants (${passRate}%) met the ${passMarkPercent}% passing threshold.\n• Cohort average score stands at ${avgPercent}% with ${avgCompletionPct}% average question completion.`, {
+        x: 0.8, y: 4.65, w: 11.7, h: 1.5,
         fontSize: 11, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Trainer standings: Sen ranked highest at 4.9 feedback rating, Demo Trainer following at 4.7.`;
+      const note = notesText || `Session delivery by ${presenterName}: ${totalCount} participants, ${avgPercent}% avg score, ${passRate}% pass rate.`;
       slide.addNotes(note);
     }
 
     // SLIDE 11: Certification Analysis
     else if (slideId === 'slide11') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Certification Status Analysis', 'Summary of workforce readiness qualifications');
+      addSlideHeader(slide, 'Pass & Certification Eligibility Analysis', `Based on ${passMarkPercent}% passing score benchmark`);
 
-      // Cards representation of certified stats
+      const retestCount = Math.max(0, totalCount - passedCount);
+      const retestPct = totalCount > 0 ? Math.round((retestCount / totalCount) * 100) : 0;
       const certData = [
-        { label: 'CERTIFIED ASSOCIATES', count: passedCount, pct: `${certRate}%`, desc: 'Active deployment eligible', color: theme.green },
-        { label: 'PENDING RETRIAL', count: Math.round(totalCount * 0.1) || 2, pct: '10%', desc: 'Awaiting secondary attempt', color: theme.yellow },
-        { label: 'EXPIRED CREDENTIALS', count: Math.round(totalCount * 0.02) || 0, pct: '2%', desc: 'Refresher requirement overdue', color: theme.red }
+        { label: 'PASSED / ELIGIBLE', count: passedCount, pct: `${certRate}%`, desc: `Scored ≥ ${passMarkPercent}%`, color: theme.green },
+        { label: 'RE-TEST REQUIRED', count: retestCount, pct: `${retestPct}%`, desc: `Scored < ${passMarkPercent}%`, color: theme.yellow },
+        { label: 'TOTAL EVALUATED', count: totalCount, pct: '100%', desc: 'Session participants', color: theme.primary }
       ];
 
       certData.forEach((c, idx) => {
@@ -751,27 +849,31 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
         slide.addText(`${c.count} Learners  ·  ${c.desc}`, { x: xPos + 0.2, y: 3.8, w: 3.5, h: 0.6, fontSize: 10, color: '64748B', align: 'center' });
       });
 
-      // Audit compliance information panel
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 5.1, w: 12.3, h: 1.4, fill: { color: theme.card } });
-      slide.addText('🛡️ Audit Compliance Warning:\n• Deployment parameters require all on-field staff to maintain active certifications.\n• Currently, 88% of evaluated personnel satisfy workforce compliance requirements. Program managers should schedule makeup sessions for the remaining 12%.', {
+      slide.addText(`🛡️ Eligibility Summary:\n• ${passedCount} out of ${totalCount} evaluated participants (${certRate}%) meet the ${passMarkPercent}% passing requirement.\n• ${retestCount} participant(s) (${retestPct}%) require coaching and re-assessment before certification.`, {
         x: 0.8, y: 5.25, w: 11.7, h: 1.1,
         fontSize: 11, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Certification analysis: Certified workforce rate is ${certRate}%. Expired credentials stand at 2%.`;
+      const note = notesText || `Eligibility analysis: ${passedCount}/${totalCount} (${certRate}%) passed, ${retestCount} require re-test.`;
       slide.addNotes(note);
     }
 
     // SLIDE 12: Attendance Analytics
     else if (slideId === 'slide12') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'Attendance Analytics', 'Training attendance compared with quiz participation');
+      addSlideHeader(slide, 'Participation & Completion Analytics', 'Quiz participation and question completion metrics');
+
+      const attList = Array.isArray(sessionData.trainingAttendance) ? sessionData.trainingAttendance : [];
+      const fullCompleters = participants.filter(p => (parseFloat(String(p.completion || 100).replace(/%/g, '')) || 0) >= 100).length;
+      const fullCompRate = totalCount > 0 ? Math.round((fullCompleters / totalCount) * 100) : 0;
+      const partialCount = Math.max(0, totalCount - fullCompleters);
 
       const attendanceBlocks = [
-        { label: 'TRAINING ATTENDANCE', val: '95%', desc: 'Learners present in live webinar', color: theme.primary },
-        { label: 'EVALUATION PARTICIPATION', val: `${attendanceRate}%`, desc: 'Active quiz response submissions', color: theme.secondary },
-        { label: 'OVERALL DISCREPANCY', val: `${95 - attendanceRate}%`, desc: 'Webinar joins without evaluation', color: theme.red }
+        { label: 'MEETING ATTENDANCE', val: attList.length > 0 ? String(attList.length) : 'N/A', desc: attList.length > 0 ? 'Logged meeting attendees' : 'No live meeting log', color: theme.primary },
+        { label: 'AVG QUESTION COMPLETION', val: `${avgCompletionPct}%`, desc: `${totalCount} participants attempted`, color: theme.secondary },
+        { label: 'FULL QUIZ COMPLETERS', val: `${fullCompRate}%`, desc: `${fullCompleters} full · ${partialCount} partial`, color: fullCompRate >= 80 ? theme.green : theme.yellow }
       ];
 
       attendanceBlocks.forEach((a, idx) => {
@@ -780,57 +882,71 @@ export const generate15SlidePPT = async (sessionData, slideSettings = [], themeN
         slide.addShape(pptx.ShapeType.rect, { x: xPos, y: 1.8, w: 3.9, h: 0.15, fill: { color: a.color } });
 
         slide.addText(a.label, { x: xPos + 0.2, y: 2.1, w: 3.5, h: 0.4, fontSize: 11, bold: true, color: theme.subtext, align: 'center' });
-        slide.addText(a.val, { x: xPos + 0.2, y: 2.6, w: 3.5, h: 1.0, fontSize: 48, bold: true, color: theme.text, align: 'center' });
+        slide.addText(a.val, { x: xPos + 0.2, y: 2.6, w: 3.5, h: 1.0, fontSize: 44, bold: true, color: theme.text, align: 'center' });
         slide.addText(a.desc, { x: xPos + 0.2, y: 3.8, w: 3.5, h: 0.6, fontSize: 10, color: '64748B', align: 'center' });
       });
 
-      // Attendance discrepancy notes
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 5.1, w: 12.3, h: 1.4, fill: { color: theme.card } });
-      slide.addText('📊 Drop-off Breakdown:\n• Discrepancy analysis indicates approximately 3% of learners joined the webinar but failed to complete the quiz assessment. The trainer should follow up on network disconnects or late departures during future evaluation slots.', {
+      slide.addText(`📊 Completion Breakdown:\n• ${fullCompleters} of ${totalCount} participants completed 100% of questions; ${partialCount} submitted partial responses.\n• Follow up with partial respondents to ensure all assessment items are completed.`, {
         x: 0.8, y: 5.25, w: 11.7, h: 1.1,
         fontSize: 11, color: theme.text,
         fontFace: 'Arial'
       });
 
-      const note = notesText || `Attendance analytics: Training attendance 95%, Evaluation participation ${attendanceRate}%. Dropoff is 3%.`;
+      const note = notesText || `Participation analytics: ${fullCompleters}/${totalCount} full completion (${avgCompletionPct}% average completion).`;
       slide.addNotes(note);
     }
 
-    // SLIDE 13: AI Insights & Recommendations
+    // SLIDE 13: Data-Driven Insights & Recommendations
     else if (slideId === 'slide13') {
       const slide = pptx.addSlide();
-      addSlideHeader(slide, 'AI Insights & Recommendations', 'Smart commentary generated from evaluation results');
+      addSlideHeader(slide, 'Key Insights & Recommendations', 'Data-driven observations from session responses');
 
-      // Left Column - Commentary
+      const sortedQs = [...questionStats].sort((a, b) => a.correctVal - b.correctVal);
+      const weakestQ = sortedQs[0];
+      const strongestQ = sortedQs[sortedQs.length - 1];
+      const failedCount = Math.max(0, totalCount - passedCount);
+
       slide.addShape(pptx.ShapeType.rect, { x: 0.5, y: 1.8, w: 5.8, h: 4.6, fill: { color: theme.card }, line: { color: '334155' } });
-      slide.addText('🤖 AUTO-GENERATED COMMENTARY', { x: 0.8, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.primary });
-      
-      const aiCommentary = `Evaluation metrics demonstrate strong product concept familiarity, yielding an average accuracy of ${avgPercent}%. However, compliance response times suggest slower muscle-memory recall. A key operational pattern shows that participants who scored below the passing benchmark did not review study attachments.`;
-      
-      slide.addText(aiCommentary, { 
-        x: 0.8, y: 2.5, w: 5.2, h: 3.6, 
-        fontSize: 13, color: theme.text, 
-        lineSpacing: 22, fontFace: 'Arial' 
+      slide.addText('📊 COHORT PERFORMANCE SUMMARY', { x: 0.8, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.primary });
+
+      const aiCommentary = `Across ${totalCount} participants in ${sessionData.quizTitle || 'this assessment'}, the cohort achieved an average score of ${avgPercent}% (median ${medianPercent}%) and a ${passRate}% pass rate against the ${passMarkPercent}% benchmark. ${passedCount} participant(s) passed and ${failedCount} require follow-up coaching.`;
+
+      slide.addText(aiCommentary, {
+        x: 0.8, y: 2.5, w: 5.2, h: 3.6,
+        fontSize: 13, color: theme.text,
+        lineSpacing: 22, fontFace: 'Arial'
       });
 
-      // Right Column - Bulleted Recommendations
       slide.addShape(pptx.ShapeType.rect, { x: 7.0, y: 1.8, w: 5.8, h: 4.6, fill: { color: theme.card }, line: { color: '334155' } });
-      slide.addText('💡 AI REMEDIAL GUIDELINE INSIGHTS', { x: 7.3, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.secondary });
+      slide.addText('💡 ACTIONABLE HIGHLIGHTS', { x: 7.3, y: 2.0, w: 5.2, h: 0.4, fontSize: 14, bold: true, color: theme.secondary });
 
       const bulletInsights = [
-        { label: 'Strongest Topic:', desc: 'Product Launch Basics (92%)' },
-        { label: 'Weakest Topic:', desc: 'Technical Spacing Compliance (31%)' },
-        { label: 'Critical Question:', desc: 'Question #3 (lowest score)' },
-        { label: 'Remediation:', desc: 'Conduct refresher training within 15 days.' }
+        {
+          label: 'Strongest Question:',
+          desc: strongestQ ? `Q${strongestQ.qNum} (${strongestQ.correctVal}%): ${strongestQ.text.slice(0, 55)}` : 'N/A'
+        },
+        {
+          label: 'Weakest Question:',
+          desc: weakestQ ? `Q${weakestQ.qNum} (${weakestQ.correctVal}%): ${weakestQ.text.slice(0, 55)}` : 'N/A'
+        },
+        {
+          label: 'Top Scorer:',
+          desc: sortedParticipants[0] ? `${sortedParticipants[0].name} (${sortedParticipants[0].percentage}, ${sortedParticipants[0].score})` : 'N/A'
+        },
+        {
+          label: 'Remediation:',
+          desc: failedCount > 0 ? `Coach ${failedCount} below-benchmark participant(s) and re-test.` : 'All participants met the passing benchmark.'
+        }
       ];
 
       bulletInsights.forEach((bi, idx) => {
         const yOffset = 2.5 + (idx * 0.95);
         slide.addText(bi.label, { x: 7.3, y: yOffset, w: 5.2, h: 0.3, fontSize: 11, bold: true, color: theme.secondary });
-        slide.addText(bi.desc, { x: 7.3, y: yOffset + 0.3, w: 5.2, h: 0.5, fontSize: 12, color: theme.text });
+        slide.addText(bi.desc, { x: 7.3, y: yOffset + 0.3, w: 5.2, h: 0.55, fontSize: 11, color: theme.text });
       });
 
-      const note = notesText || `AI Summary notes: Strongest area: Launch Basics. Weakest area: Spacing guidelines. Action: conduct makeup module.`;
+      const note = notesText || `Insights: Avg ${avgPercent}%, Pass Rate ${passRate}%.`;
       slide.addNotes(note);
     }
 

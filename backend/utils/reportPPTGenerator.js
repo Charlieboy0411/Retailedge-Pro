@@ -786,8 +786,8 @@ async function generate14SlideManagementPPT(reportData) {
     const bracketRows = [
       [{ text: 'Bracket', options: { bold: true, fill: { color: 'F1F5F9' } } }, { text: 'Tier / Mastery', options: { bold: true, fill: { color: 'F1F5F9' } } }, { text: 'Count', options: { bold: true, fill: { color: 'F1F5F9' } } }],
       ['90 - 100%', 'Mastery / Distinction', String(b1)],
-      ['75 - 89%', 'Proficient / Above Average', String(b2)],
-      ['60 - 74%', 'Passing Threshold', String(b3)],
+      ['75 - 89%', 'Proficient', String(b2)],
+      ['60 - 74%', 'Developing', String(b3)],
       ['40 - 59%', 'At Risk (Action Needed)', String(b4)],
       ['< 40%', 'Critical Remediation', String(b5)]
     ];
@@ -798,7 +798,7 @@ async function generate14SlideManagementPPT(reportData) {
       border: { color: C_BORDER, pt: 0.5 }
     });
 
-    slide.addText(`Cohort Statistics: Highest: ${cleanPct(kpis.highestScore, '100%')} | Lowest: ${cleanPct(kpis.lowestScore, '0%')} | Average: ${cleanPct(avgScoreNum)}`, {
+    slide.addText(`Cohort Statistics: Highest: ${cleanPct(kpis.highestScore, '100%')} | Lowest: ${cleanPct(kpis.lowestScore, '0%')} | Average: ${cleanPct(avgScoreNum)} | Pass Mark: ${passingScore}%`, {
       x: 0.95, y: 5.2, w: 4.9, h: 0.8,
       fontSize: 9.5, bold: true, color: C_NAVY, fontFace: 'Arial'
     });
@@ -826,8 +826,11 @@ async function generate14SlideManagementPPT(reportData) {
       line: { color: C_BORDER, width: 1 }
     });
 
+    const passedInCohort = scores.filter(s => s >= passingScore).length;
+    const coachingNeeded = Math.max(0, scores.length - passedInCohort);
+
     // Bottom Insight
-    slide.addText(`Mastery Takeaway: ${(b1 + b2)} participants (${Math.round(((b1+b2)/totalWithScores)*100)}%) achieved proficient or distinction scores. ${(b4 + b5)} participants flagged for targeted coaching.`, {
+    slide.addText(`Mastery Takeaway: ${passedInCohort} of ${scores.length} participants (${Math.round((passedInCohort / totalWithScores) * 100)}%) met the ≥ ${passingScore}% passing benchmark. ${coachingNeeded} participant(s) flagged for targeted coaching.`, {
       x: 0.7, y: 6.45, w: 11.9, h: 0.5,
       fontSize: 10, bold: true, color: C_NAVY, fontFace: 'Arial'
     });
@@ -1135,10 +1138,10 @@ async function generate14SlideManagementPPT(reportData) {
     const priorCompVal = cleanNum(priorStats.completionRate, Math.max(30, compRateNum - 8));
     const currentCompVal = compRateNum;
 
-    const priorPassVal = cleanNum(priorStats.passRate, Math.max(30, passRateNum - 5));
+    const priorPassVal = cleanNum(priorStats.passRate, 0);
     const currentPassVal = passRateNum;
 
-    const priorScoreVal = cleanNum(priorStats.averageScore, Math.max(30, avgScoreNum - 4));
+    const priorScoreVal = cleanNum(priorStats.averageScore, 0);
     const currentScoreVal = avgScoreNum;
 
     // Left Column: 4 Dynamic Narrative Cards
